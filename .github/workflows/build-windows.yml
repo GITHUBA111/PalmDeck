@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -28,3 +31,16 @@ jobs:
           name: PalmDeck-Windows-exe
           path: dist/PalmDeck.exe
           if-no-files-found: error
+
+      # 仅在打 tag（发版）时创建 GitHub Release，exe 走
+      # https://github.com/GITHUBA111/PalmDeck/releases/latest/download/PalmDeck.exe
+      # 供 Windows 端自动更新下载
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/PalmDeck.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
