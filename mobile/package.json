@@ -1,0 +1,19 @@
+{
+  "name": "palmdeck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PalmDeck phone app shell",
+  "scripts": {
+    "sync": "npx cap copy && npx cap sync && node ensure-udp-plugin.js",
+    "android": "npx cap add android || true && npx cap copy android && npx cap open android",
+    "ios": "npx cap add ios || true && npx cap copy ios && node ensure-udp-plugin.js && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# 打包中间产物
+_palmdeck_win/
+PalmDeck-Windows.zip
+
+# 一次性截图
+1.png
+
+# Node（Capacitor 依赖）
+node_modules/
+mobile/node_modules/
+
+# CocoaPods（pod install 可恢复）
+Pods/
+mobile/ios/App/Pods/
+
+# Xcode 用户状态
+xcuserdata/
+*.xcuserstate
+**/DerivedData/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller 输出
+dist/
+build/
+*.spec.bak

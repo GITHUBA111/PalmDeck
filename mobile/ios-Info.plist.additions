@@ -1,0 +1,22 @@
+将下面这些键合并进 Xcode 工程的 Info.plist
+（路径一般是 ios/App/App/Info.plist）。
+
+NSMotionUsageDescription
+用于把 iPhone 倾斜映射成游戏摇杆。
+
+NSLocalNetworkUsageDescription
+PalmDeck 需要连接同一 Wi-Fi 上正在运行电脑端的 Mac 或 PC。
+
+NSBonjourServices
+_item array:
+  _http._tcp.
+  _ws._tcp.
+
+NSAppTransportSecurity
+  NSAllowsLocalNetworking = YES
+  NSAllowsArbitraryLoads = YES
+
+UIRequiresFullScreen = YES
+UISupportedInterfaceOrientations
+  UIInterfaceOrientationLandscapeLeft
+  UIInterfaceOrientationLandscapeRight

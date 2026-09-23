@@ -1,0 +1,11 @@
+{
+  "name": "PalmDeck",
+  "short_name": "PalmDeck",
+  "description": "把手机当成电脑游戏的驾驶杆",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#05070a",
+  "theme_color": "#05070a",
+  "lang": "zh-CN"
+}

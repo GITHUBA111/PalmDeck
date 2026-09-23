@@ -1,0 +1,16 @@
+{
+  "appId": "com.palmdeck.yoke",
+  "appName": "PalmDeck",
+  "webDir": "../web",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor",
+    "cleartext": true
+  },
+  "ios": {
+    "contentInset": "never",
+    "preferredContentMode": "mobile",
+    "scheme": "PalmDeck"
+  },
+  "packageClassList": ["PalmDeckUdpPlugin"]
+}

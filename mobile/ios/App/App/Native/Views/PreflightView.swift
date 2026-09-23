@@ -1,0 +1,240 @@
+import SwiftUI
+
+/// 首次引导（座舱前一屏）：三步卡片 + 状态条 + 超大主按钮。
+struct PreflightView: View {
+    @ObservedObject var ctrl: CockpitController
+    @ObservedObject var s: ControllerState
+    @State private var host: String = ""
+    @State private var showAdvanced = false
+    @StateObject private var discovery = Discovery()
+    var onEnter: () -> Void
+
+    init(ctrl: CockpitController, onEnter: @escaping () -> Void) {
+        self.ctrl = ctrl
+        self._s = ObservedObject(wrappedValue: ctrl.state)
+        self.onEnter = onEnter
+        _host = State(initialValue: ctrl.savedHostForUI)
+    }
+
+    var body: some View {
+        ZStack {
+            CockpitBackdrop()
+
+            HStack(spacing: 0) {
+                // ── 左：品牌 + 主按钮
+                VStack(alignment: .leading, spacing: 0) {
+                    Spacer()
+                    HStack(spacing: 12) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.cyan)
+                            .rotationEffect(.degrees(-45))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("PalmDeck").font(.system(size: 28, weight: .heavy)).foregroundColor(.white)
+                            Text("手机就是摇杆 / 方向盘").font(.system(size: 13)).foregroundColor(.cyan.opacity(0.85))
+                        }
+                    }
+                    Text("零硬件 · 可自定义 · 随身携带").font(.system(size: 11)).foregroundColor(.gray)
+                        .padding(.top, 6)
+
+                    Spacer()
+
+                    statusBar
+
+                    Button {
+                        Haptics.press()
+                        onEnter()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("进入座舱").font(.system(size: 19, weight: .bold))
+                            Image(systemName: "arrow.right").font(.system(size: 15, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(PrimaryButton())
+                    .padding(.top, 12)
+
+                    Text("不连电脑也能先进 → 连上后自动生效")
+                        .font(.system(size: 11)).foregroundColor(.gray.opacity(0.8))
+                        .padding(.top, 6)
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+                .frame(width: 300)
+
+                // 分隔线
+                Rectangle().fill(Color.white.opacity(0.06)).frame(width: 1)
+                    .padding(.vertical, 30)
+
+                // ── 右：三步卡片
+                VStack(alignment: .leading, spacing: 12) {
+                    Spacer(minLength: 0)
+                    Text("三步开始").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    stepCard(1, "desktopcomputer", "电脑装好 PalmDeck",
+                             "Windows 双击 start.bat · Mac 运行 python3 bridge.py")
+                    stepCard(2, "wifi", "手机连同一 Wi-Fi",
+                             discovery.found != nil ? "已自动发现电脑 ✓" : "和电脑连同一个路由器")
+                    stepCard(3, "gamecontroller", "进座舱直接玩",
+                             "在游戏里把 PalmDeck 当虚拟手柄绑一次即可")
+                    advanced
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear { discovery.start() }
+        .onDisappear { discovery.stop() }
+    }
+
+    // MARK: - 状态条
+    private var statusDotColor: Color {
+        if s.link == .live { return .green }
+        if discovery.found != nil { return .cyan }
+        return .gray
+    }
+
+    private var statusTitle: String {
+        if s.link == .live { return "已连接  \(ctrl.savedHostForUI)" }
+        if let d = discovery.found { return "发现电脑  \(d.ip)" }
+        return "正在搜索电脑…"
+    }
+
+    private var statusSub: String {
+        if s.link == .live { return "\(String(format: "%.0f", s.hz)) Hz · 可以开始玩了" }
+        if discovery.found != nil { return "点这里自动连接" }
+        return "确保电脑端已启动、手机在同一 Wi-Fi"
+    }
+
+    private var statusTitleColor: Color {
+        if s.link == .live { return .green }
+        if discovery.found != nil { return .cyan }
+        return .gray
+    }
+
+    private var statusBar: some View {
+        HStack(spacing: 10) {
+            Circle().fill(statusDotColor).frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(statusTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(statusTitleColor)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(statusSub).font(.system(size: 10)).foregroundColor(.gray)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 6)
+            statusButton
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .onTapGesture {
+            if s.link != .live, let d = discovery.found {
+                ctrl.connect(host: d.ip); Haptics.tap()
+            }
+        }
+    }
+
+    private var statusButton: some View {
+        Button(s.link == .live ? "断开" : "连接") {
+            if s.link == .live { ctrl.disconnect() }
+            else { ctrl.connect(host: discovery.found?.ip ?? host) }
+            Haptics.tap()
+        }
+        .buttonStyle(CardButton(active: false,
+                                accent: s.link == .live ? .red : .cyan,
+                                fillWidth: false, height: 34))
+        .frame(width: 76)
+    }
+
+    // MARK: - 三步卡片
+    private func stepCard(_ n: Int, _ icon: String, _ title: String, _ sub: String) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(Color.cyan.opacity(0.15)).frame(width: 40, height: 40)
+                Image(systemName: icon)
+                    .font(.system(size: 17)).foregroundColor(.cyan)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("\(n)").font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.cyan)
+                        .frame(width: 15, height: 15)
+                        .background(Circle().fill(Color.cyan.opacity(0.2)))
+                    Text(title).font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                }
+                Text(sub).font(.system(size: 11)).foregroundColor(.gray)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
+    }
+
+    // MARK: - 高级（手动 IP / 轴反向）
+    private var advanced: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation { showAdvanced.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11))
+                    Text("高级设置").font(.system(size: 12))
+                }
+                .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+
+            if showAdvanced {
+                HStack(spacing: 8) {
+                    TextField("电脑 IP", text: $host)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, design: .monospaced))
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(red: 0.16, green: 0.22, blue: 0.30)))
+                        .foregroundColor(.white)
+                        .keyboardType(.decimalPad)
+                    Button("连接") { ctrl.connect(host: host); Haptics.tap() }
+                        .buttonStyle(CardButton(active: false, accent: .cyan, fillWidth: false, height: 34))
+                        .frame(width: 70)
+                }
+                HStack(spacing: 6) {
+                    invBtn("反转横滚", $s.invX)
+                    invBtn("反转俯仰", $s.invY)
+                    invBtn("反转舵", $s.invYaw)
+                    invBtn("反转总距", $s.invColl)
+                }
+            }
+        }
+    }
+
+    private func invBtn(_ title: String, _ b: Binding<Bool>) -> some View {
+        Button(title) { b.wrappedValue.toggle(); Haptics.tap() }
+            .buttonStyle(CardButton(active: b.wrappedValue,
+                                    accent: .orange, fillWidth: false, height: 32))
+    }
+}
+
+/// 大主按钮样式
+struct PrimaryButton: ButtonStyle {
+    var accent: Color = .green
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(.white)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(configuration.isPressed ? accent.opacity(0.75) : accent)
+                    .shadow(color: accent.opacity(configuration.isPressed ? 0.2 : 0.45), radius: 10, y: 4)
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}

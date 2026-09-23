@@ -1,0 +1,7 @@
+# Optional backends — install the one you need
+# Windows flight sims:
+#   pyvjoy
+# Windows general games:
+#   vgamepad
+# Linux:
+#   evdev

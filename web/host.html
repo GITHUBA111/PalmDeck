@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PalmDeck 控制台</title>
+  <style>
+    :root { --bg:#070b12; --card:#101826; --line:#243044; --cyan:#5ce1ff; --green:#3dff9a; --amber:#ffbf3c; --muted:#8ea0b8; --text:#e8f1ff; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: radial-gradient(1200px 600px at 10% -10%, #123, var(--bg));
+      color: var(--text); font-family: "SF Pro Display", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 22px 60px; }
+    .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+    .mark {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: radial-gradient(circle at 30% 30%, #7af, #1a6aa0 55%, #0b2);
+      display: grid; place-items: center; color: #041018; font-weight: 800;
+    }
+    h1 { margin: 0; letter-spacing: .12em; font-size: 22px; }
+    .sub { color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: 280px 1fr; gap: 18px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+    .qr { width: 220px; height: 220px; background: #fff; border-radius: 12px; margin: 0 auto 12px; display: grid; place-items: center; }
+    .qr img { width: 200px; height: 200px; }
+    .url { font-size: 13px; color: var(--cyan); word-break: break-all; text-align: center; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1b2738; }
+    .row:last-child { border-bottom: 0; }
+    .k { color: var(--muted); }
+    .ok { color: var(--green); }
+    .bad { color: var(--amber); }
+    .err { color: #e04a3a; }
+    ol { color: var(--muted); line-height: 1.7; padding-left: 20px; }
+    button {
+      background: #162033; color: var(--text); border: 1px solid var(--line);
+      border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit;
+    }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark">P</div>
+      <div>
+        <h1>PALMDECK</h1>
+        <div class="sub">电脑控制台 · 让手机成为游戏里的杆</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="qr" id="qr"><span style="color:#333">生成二维码…</span></div>
+        <div class="url" id="phoneUrl">—</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+          <button id="copy">复制地址</button>
+          <button id="openPhone">预览手机页</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row"><span class="k">虚拟设备</span><span id="device">检测中…</span></div>
+        <div class="row"><span class="k">后端</span><span id="backend">—</span></div>
+        <div class="row"><span class="k">轴预设</span><span id="profile">hotas</span></div>
+        <div class="row"><span class="k">座舱模式</span><span id="cabin">unknown</span></div>
+        <div class="row"><span class="k">已连接手机</span><span id="phones">0</span></div>
+        <div class="row"><span class="k">收包频率</span><span id="hz">0 Hz</span></div>
+        <div class="row"><span class="k">传输</span><span id="transport">idle</span></div>
+        <div class="row"><span class="k">本机地址</span><span id="ip">—</span></div>
+        <ol>
+          <li>手机扫左边的码（同一 Wi-Fi）</li>
+          <li>飞机：倾斜当杆，左滑条油门，右滑条方向舵，苦力帽转视角</li>
+          <li>开车切「开车」；步兵继续用电脑键鼠</li>
+        </ol>
+        <p class="sub" id="hint"></p>
+      </div>
+    </div>
+  </div>
+  <script src="./qrcode.js"></script>
+  <script>
+    async function tick() {
+      const s = await fetch("/api/status").then((r) => r.json());
+      const phone = `http://${s.ip}:${s.http}/index.html`;
+      document.getElementById("phoneUrl").textContent = phone;
+      document.getElementById("device").textContent = s.device || "—";
+      document.getElementById("device").className = s.backend === "none" ? "bad" : "ok";
+      document.getElementById("backend").textContent = s.backend;
+      document.getElementById("phones").textContent = (s.phones ?? 0) + (s.phones > 1 ? " ⚠ 多手机会互相覆盖" : "");
+      const hzEl = document.getElementById("hz");
+      hzEl.textContent = (s.hz != null ? s.hz : 0) + " Hz"
+        + (s.last_ms != null ? " · " + s.last_ms + "ms" : " · —");
+      // Hz 健康色：≥55 绿 / 20-55 黄 / <20 红
+      const hz = s.hz || 0;
+      hzEl.className = hz >= 55 ? "ok" : hz >= 20 ? "bad" : (s.last_ms == null ? "" : "err");
+      document.getElementById("profile").textContent = s.axis_profile || "hotas";
+      document.getElementById("cabin").textContent = s.cockpit_mode || "unknown";
+      const tr = s.transport || "idle";
+      document.getElementById("transport").textContent = tr + (s.transport === "udp" ? " （UDP 调试）" : "");
+      document.getElementById("ip").textContent = s.ip + (s.udp ? " · UDP " + s.udp : "");
+      document.getElementById("hint").textContent = s.error || (s.backend === "none"
+        ? "还没检测到手柄。已装 vJoy 的话，用管理员再开一次 PalmDeck，它会自己配 Device 1。"
+        : "轴已自动对准。开车、开飞机用手机；地上走路用键鼠。");
+      const qr = document.getElementById("qr");
+      // 本地 QR：URL 变化就重画（修掉旧版依赖外网 CDN 且永不更新的洞）
+      if (qr.dataset.url !== phone) {
+        qr.dataset.url = phone;
+        try { drawQR(qr, phone); } catch (e) {
+          qr.innerHTML = '<div style="color:#333;font-size:11px;word-break:break-all;padding:8px">' + phone + "</div>";
+        }
+      }
+      document.getElementById("copy").onclick = async () => {
+        try { await navigator.clipboard.writeText(phone); } catch {}
+      };
+      document.getElementById("openPhone").onclick = () => window.open(phone, "_blank");
+    }
+    tick();
+    setInterval(tick, 1500);
+
+    // ---- 内联 QR 编码器（无外网依赖，MIT 风格精简实现）----
+    // 使用内联的 qrcode-generator（MIT, Kazuhiko Arase）生成二维码
+    function drawQR(container, text) {
+      const qr = qrcode(0, "M"); // 0 = 自动选择 version
+      qr.addData(text);
+      qr.make();
+      const n = qr.getModuleCount();
+      const quiet = 4, total = n + quiet * 2, scale = 200 / total;
+      const canvas = document.createElement("canvas");
+      canvas.width = 200; canvas.height = 200;
+      canvas.style.width = "200px"; canvas.style.height = "200px";
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = "#000";
+      const px = Math.ceil(scale);
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++)
+          if (qr.isDark(r, c))
+            ctx.fillRect(Math.round((c + quiet) * scale), Math.round((r + quiet) * scale), px, px);
+      container.innerHTML = "";
+      container.appendChild(canvas);
+    }
+  </script>
+</body>
+</html>
