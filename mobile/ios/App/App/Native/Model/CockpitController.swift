@@ -14,20 +14,17 @@ final class CockpitController: ObservableObject {
     private var retry = 0
     private var savedHost: String = ""
     private var lastTelem = Date.distantPast
+    private var autoReconnect = false   // 仅「意外断线」才自动重连；手动断开不重连
 
     @Published var pfConnState: String = ""
     @Published var pfMotionState: String = ""
     @Published var readout: String = "R +0.00  P +0.00  Y +0.00  T 35%"
 
     /// 界面绑定的电脑 IP（持久化到 UserDefaults）
-    @Published var savedHostForUI: String = UserDefaults.standard.string(forKey: "palmdeck_host") ?? ""
-
-    /// 若曾保存过地址，自动重连
-    func reconnectIfSaved() {
-        if !savedHostForUI.isEmpty && state.link != .live {
-            connect(host: savedHostForUI)
-        }
-    }
+    @Published var savedHostForUI: String = {
+        let h = UserDefaults.standard.string(forKey: "palmdeck_host") ?? ""
+        return isBogusIP(h) ? "" : h
+    }()
 
     init() {
         net.onOpen = { [weak self] in self?.handleOpen() }
@@ -41,12 +38,26 @@ final class CockpitController: ObservableObject {
 
     // MARK: - 连接
     func connect(host: String) {
-        guard !host.isEmpty else { return }
-        savedHost = host
-        savedHostForUI = host
-        UserDefaults.standard.set(host, forKey: "palmdeck_host")
+        let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty else { return }
+        // 拒绝回环/假地址（如 127.0.0.1），否则会连到手机自己
+        guard !isBogusIP(h) else {
+            if h == savedHostForUI {
+                savedHostForUI = ""
+                UserDefaults.standard.removeObject(forKey: "palmdeck_host")
+            }
+            pfConnState = "无效地址：\(h)"
+            state.link = .idle
+            Haptics.warning()
+            return
+        }
+        savedHost = h
+        savedHostForUI = h
+        UserDefaults.standard.set(h, forKey: "palmdeck_host")
+        autoReconnect = true
         state.link = .connecting
-        net.connect(host: host)
+        pfConnState = "正在连接 \(h)…"
+        net.connect(host: h)
     }
 
     func reconnect() {
@@ -54,29 +65,43 @@ final class CockpitController: ObservableObject {
         connect(host: savedHost)
     }
 
-    /// 断开连接（保留已保存的 IP）
+    /// 断开连接（保留已保存的 IP；手动断开后不再自动重连）
     func disconnect() {
+        autoReconnect = false
         net.disconnect()
         state.link = .idle
+        state.transport = "idle"
+        pfConnState = "已断开"
         Haptics.tap()
     }
 
     private func handleOpen() {
-        retry = 0
-        state.link = .live
-        Haptics.success()
-        pfConnState = "已连接"
-        // 上报当前模式
-        net.sendJSON(["type": "mode", "name": state.mode.rawValue])
+        // 回调来自 URLSession 后台队列，切回主线程改状态（否则 SwiftUI 竞态/卡死）
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.retry = 0
+            self.state.link = .live
+            Haptics.success()
+            self.pfConnState = "已连接"
+            // 上报当前模式
+            self.net.sendJSON(["type": "mode", "name": self.state.mode.rawValue])
+        }
     }
 
     private func handleClose() {
-        state.link = .lost
-        state.transport = "idle"
-        DispatchQueue.main.asyncAfter(deadline: .now() + min(4.0, 0.6 + Double(retry) * 0.4)) { [weak self] in
+        // 后台队列回调：切主线程改状态；仅在「意外断线」时按退避自动重连
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.retry += 1
-            self.reconnect()
+            self.state.link = .lost
+            self.state.transport = "idle"
+            self.pfConnState = self.autoReconnect ? "连接断开，重连中…" : "连接断开"
+            guard self.autoReconnect else { return }
+            let delay = min(4.0, 0.6 + Double(self.retry) * 0.4)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.autoReconnect else { return }
+                self.retry += 1
+                self.reconnect()
+            }
         }
     }
 

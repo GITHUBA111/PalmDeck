@@ -14,6 +14,8 @@ final class NetClient: NSObject {
     private var udpFD: Int32 = -1
     private var udpAddr = sockaddr_in()
     private let lock = NSLock()
+    /// 当前连接是否已通知过断开（didClose 与 receive 失败可能都触发，去重）
+    private var closedNotified = false
 
     var onOpen: (() -> Void)?
     var onClose: (() -> Void)?
@@ -26,10 +28,14 @@ final class NetClient: NSObject {
 
     // MARK: - 连接
     func connect(host: String, wsPort: UInt16 = 8765, udpPort: UInt16 = 7773) {
+        // 先拆旧连接：避免旧任务迟到的回调/重连叠加（重连风暴 → UI 卡死）
+        ws?.cancel(with: .goingAway, reason: nil)
+        ws = nil
         self.host = host
         self.wsPort = wsPort
         self.udpPort = udpPort
         openUDP()
+        closedNotified = false
         let url = URL(string: "ws://\(host):\(wsPort)")!
         let task = session.webSocketTask(with: url)
         ws = task
@@ -41,7 +47,8 @@ final class NetClient: NSObject {
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
         closeUDP()
-        onClose?()
+        // 主动断开：标记已通知，迟到的 didClose / receive 失败不再触发 onClose
+        closedNotified = true
     }
 
     // MARK: - 热路径
@@ -70,10 +77,13 @@ final class NetClient: NSObject {
     }
 
     private func listen() {
-        ws?.receive { [weak self] result in
+        guard let task = ws else { return }
+        task.receive { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let msg):
+                // 迟到的旧任务消息直接丢弃（期间可能已重连）
+                guard self.ws === task else { return }
                 if case .string(let s) = msg,
                    let d = s.data(using: .utf8),
                    let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
@@ -81,9 +91,16 @@ final class NetClient: NSObject {
                 }
                 self.listen()
             case .failure:
-                self.onClose?()
+                guard self.ws === task else { return }
+                self.notifyClose()
             }
         }
+    }
+
+    private func notifyClose() {
+        guard !closedNotified else { return }
+        closedNotified = true
+        onClose?()
     }
 
     // MARK: - UDP socket
@@ -108,10 +125,12 @@ final class NetClient: NSObject {
 extension NetClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol protocol: String?) {
+        guard webSocketTask === ws else { return }
         onOpen?()
     }
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        onClose?()
+        guard webSocketTask === ws else { return }
+        notifyClose()
     }
 }

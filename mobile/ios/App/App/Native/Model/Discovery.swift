@@ -1,11 +1,40 @@
 import Foundation
 
+/// 是否是可用的局域网 IPv4（排除回环 / 0.x / link-local / Clash fake-ip / 组播广播）
+func usableLanIP(_ ip: String) -> Bool {
+    let parts = ip.split(separator: ".")
+    guard parts.count == 4 else { return false }
+    guard let a = Int(parts[0]), let b = Int(parts[1]) else { return false }
+    if a == 0 || a == 127 { return false }
+    if a == 169 && b == 254 { return false }
+    if a == 198 && (18...19).contains(b) { return false }
+    if a >= 224 { return false }
+    return true
+}
+
+/// 连接前的轻校验：只拦明显连不上的回环/假地址；主机名等非 IPv4 放行
+func isBogusIP(_ host: String) -> Bool {
+    let parts = host.split(separator: ".")
+    guard parts.count == 4, let a = Int(parts[0]) else { return false }
+    if a == 0 || a == 127 { return true }
+    if let b = Int(parts[1]) {
+        if a == 169 && b == 254 { return true }
+        if a == 198 && (18...19).contains(b) { return true }
+    }
+    if a >= 224 { return true }
+    return false
+}
+
 /// 局域网自动发现（用 NetService，最兼容）。
 /// PC 端 Bonjour 注册 `_palmdeck._udp`，服务名形如 `PalmDeck-192-168-3-103`。
 /// 直接解析服务名里的 IP，无需 address resolve（最稳）。
 final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, NetServiceDelegate {
-    @Published private(set) var found: DiscoveredHost?
+    /// 所有可连接的电脑（已按发现顺序排列，过滤掉回环/假地址）
+    @Published private(set) var found: [DiscoveredHost] = []
     @Published private(set) var statusText = "搜索中…"
+
+    /// 最优先的一台（列表第一项）
+    var best: DiscoveredHost? { found.first }
 
     struct DiscoveredHost: Equatable {
         var ip: String
@@ -27,7 +56,7 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
         b.searchForServices(ofType: "_palmdeck._udp.", inDomain: "local.")
         browser = b
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            guard let self, self.found == nil else { return }
+            guard let self, self.found.isEmpty else { return }
             self.statusText = "没搜到电脑（需同一 Wi-Fi / 已授权本地网络）"
         }
     }
@@ -54,10 +83,11 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
         let name = service.name
         if name.hasPrefix("PalmDeck-") {
             let ip = String(name.dropFirst("PalmDeck-".count)).replacingOccurrences(of: "-", with: ".")
-            if ip.filter({ $0 == "." }).count == 3 {
+            // 名称已编码 IP；无效（如回环 127）不发布，也无需 resolve
+            if usableLanIP(ip) {
                 publish(ip: ip, name: "电脑")
-                return
             }
+            return
         }
         // 兜底：resolve 拿地址
         service.resolve(withTimeout: 4)
@@ -76,7 +106,7 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
                 }
                 return nil
             }
-            if let ip, !ip.isEmpty, ip != "127.0.0.1" {
+            if let ip, usableLanIP(ip) {
                 publish(ip: ip, name: sender.name)
                 return
             }
@@ -91,8 +121,10 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
 
     private func publish(ip: String, name: String) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.found?.ip != ip else { return }
-            self.found = DiscoveredHost(ip: ip, ws: 8765, udp: 7773, name: name)
+            guard let self else { return }
+            guard usableLanIP(ip) else { return }      // 忽略回环/假地址
+            guard !self.found.contains(where: { $0.ip == ip }) else { return }
+            self.found.append(DiscoveredHost(ip: ip, ws: 8765, udp: 7773, name: name))
             self.statusText = "已发现 \(ip)"
             Haptics.tap()
         }

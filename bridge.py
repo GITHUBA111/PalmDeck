@@ -65,6 +65,9 @@ def zeroconf_register(http_port: int, ws_port: int, udp_port: int) -> None:
         log("zeroconf 未安装（可选）：pip install zeroconf 可让 iOS 自动发现更可靠")
         return
     ip = lan_ip() or "127.0.0.1"
+    if not _usable_lan(ip):
+        log(f"bonjour: 本机无可用局域网 IP（lan_ip={ip}），跳过注册（手机无法连回环地址）")
+        return
     try:
         info = ServiceInfo(
             "_palmdeck._udp.local.",
@@ -92,6 +95,9 @@ def zeroconf_register(http_port: int, ws_port: int, udp_port: int) -> None:
 def beacon_loop(http_port: int, ws_port: int, udp_port: int, interval: float = 1.0) -> None:
     """每秒向局域网广播一次自身信息，手机 App 据此自动发现电脑。"""
     ip = lan_ip() or "127.0.0.1"
+    if not _usable_lan(ip):
+        log(f"beacon: 本机无可用局域网 IP（{ip}），跳过广播")
+        return
     payload = json.dumps({
         "palmdeck": 1,
         "ip": ip,
@@ -130,6 +136,14 @@ def _usable_lan(ip: str) -> bool:
     return True
 
 
+def _private_lan(ip: str) -> bool:
+    try:
+        a, b = (int(p) for p in ip.split(".")[:2])
+    except ValueError:
+        return False
+    return a == 10 or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31)
+
+
 def lan_ip() -> str:
     if sys.platform == "darwin":
         for iface in ("en0", "en1"):
@@ -144,16 +158,31 @@ def lan_ip() -> str:
                 continue
             if _usable_lan(out):
                 return out
+    # 通用候选（Windows/Linux）：默认路由探测 + 主机名解析 + addrinfo 枚举。
+    # 默认路由可能被 Clash/Surge TUN 劫持成 fake-ip，所以多收集几个候选再挑私有网段。
+    cands = []
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        if _usable_lan(ip):
-            return ip
+        cands.append(s.getsockname()[0])
     except OSError:
         pass
     finally:
         s.close()
+    try:
+        host = socket.gethostname()
+        cands.extend(socket.gethostbyname_ex(host)[2])
+        for info in socket.getaddrinfo(host, None, socket.AF_INET):
+            cands.append(info[4][0])
+    except OSError:
+        pass
+    # 优先真正能连的私有网段
+    for ip in cands:
+        if _usable_lan(ip) and _private_lan(ip):
+            return ip
+    for ip in cands:
+        if _usable_lan(ip):
+            return ip
     return "127.0.0.1"
 
 

@@ -213,20 +213,20 @@ struct CockpitView: View {
             .frame(width: 140)
         } else {
             Button {
-                let target = discovery.found?.ip ?? ctrl.savedHostForUI
+                let target = discovery.found.first?.ip ?? ctrl.savedHostForUI
                 if target.isEmpty { showSettings = true } else { ctrl.connect(host: target) }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 5) {
                     if s.link == .connecting { ProgressView().scaleEffect(0.6).tint(Theme.cyan) }
                     else {
-                        Image(systemName: discovery.found != nil ? "wifi" : "wifi.slash")
+                        Image(systemName: !discovery.found.isEmpty ? "wifi" : "wifi.slash")
                             .font(.system(size: 12))
-                            .foregroundColor(discovery.found != nil ? Theme.green : Theme.textFaint)
+                            .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                     }
-                    Text(s.link == .connecting ? "连接中…" : (discovery.found != nil ? "一键连接" : "连接"))
+                    Text(s.link == .connecting ? "连接中…" : (!discovery.found.isEmpty ? "一键连接" : "连接"))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(discovery.found != nil ? Theme.green : Theme.textFaint)
+                        .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                 }
             }
             .buttonStyle(CardButton(active: false, accent: Theme.cyan, fillWidth: false, height: height))
@@ -298,13 +298,13 @@ struct CockpitView: View {
     private var notConnectedBanner: some View {
         if s.link != .live && s.link != .connecting {
             Button {
-                let target = discovery.found?.ip ?? ctrl.savedHostForUI
+                let target = discovery.found.first?.ip ?? ctrl.savedHostForUI
                 if target.isEmpty { showSettings = true } else { ctrl.connect(host: target) }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: discovery.found != nil ? "wifi" : "exclamationmark.triangle.fill")
-                    Text(discovery.found != nil ? "点此连接电脑 \(discovery.found!.ip)" : "未连接电脑（先在电脑启动 PalmDeck）")
+                    Image(systemName: !discovery.found.isEmpty ? "wifi" : "exclamationmark.triangle.fill")
+                    Text(!discovery.found.isEmpty ? "点此连接电脑 \(discovery.found.first!.ip)" : "未连接电脑（先在电脑启动 PalmDeck）")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .padding(.horizontal, 14)
@@ -375,12 +375,16 @@ struct SettingsSheet: View {
                         Text(ctrl.savedHostForUI.isEmpty ? "未设置" : ctrl.savedHostForUI)
                             .foregroundColor(.gray)
                     }
-                    if let d = discovery?.found {
-                        Button("连接已发现的 \(d.ip)") { ctrl.connect(host: d.ip) }
-                    }
-                    Button(s.link == .live ? "断开连接" : "连接") {
-                        if s.link == .live { ctrl.disconnect() }
-                        else { ctrl.connect(host: discovery?.found?.ip ?? ctrl.savedHostForUI) }
+                    if s.link == .live {
+                        Button("断开连接") { ctrl.disconnect() }
+                    } else {
+                        ForEach(discovery?.found ?? [], id: \.ip) { d in
+                            Button("连接电脑 \(d.ip)") { ctrl.connect(host: d.ip) }
+                        }
+                        if !ctrl.savedHostForUI.isEmpty &&
+                            !(discovery?.found.contains { $0.ip == ctrl.savedHostForUI } ?? false) {
+                            Button("连接上次的 \(ctrl.savedHostForUI)") { ctrl.connect(host: ctrl.savedHostForUI) }
+                        }
                     }
                     Button("返回启动页（换 IP / 重新引导）") {
                         dismiss()

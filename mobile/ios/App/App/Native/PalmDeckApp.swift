@@ -13,7 +13,6 @@ struct PalmDeckApp: App {
                     entered = false
                     UserDefaults.standard.set(false, forKey: "palmdeck_entered")
                 })
-                    .onAppear { ctrl.reconnectIfSaved() }
             } else {
                 PreflightView(ctrl: ctrl) {
                     Haptics.prepare(); Haptics.success()

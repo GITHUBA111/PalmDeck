@@ -7,6 +7,7 @@ struct PreflightView: View {
     @State private var host: String = ""
     @State private var showAdvanced = false
     @StateObject private var discovery = Discovery()
+    @FocusState private var ipFocused: Bool
     var onEnter: () -> Void
 
     init(ctrl: CockpitController, onEnter: @escaping () -> Void) {
@@ -74,9 +75,10 @@ struct PreflightView: View {
                     stepCard(1, "desktopcomputer", "电脑装好 PalmDeck",
                              "Windows 双击 start.bat · Mac 运行 python3 bridge.py")
                     stepCard(2, "wifi", "手机连同一 Wi-Fi",
-                             discovery.found != nil ? "已自动发现电脑 ✓" : "和电脑连同一个路由器")
+                             !discovery.found.isEmpty ? "已发现 \(discovery.found.count) 台电脑 ✓" : "和电脑连同一个路由器")
                     stepCard(3, "gamecontroller", "进座舱直接玩",
                              "在游戏里把 PalmDeck 当虚拟手柄绑一次即可")
+                    if !discovery.found.isEmpty { discoveredList }
                     advanced
                     Spacer(minLength: 0)
                 }
@@ -87,30 +89,41 @@ struct PreflightView: View {
         .preferredColorScheme(.dark)
         .onAppear { discovery.start() }
         .onDisappear { discovery.stop() }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { ipFocused = false }
+            }
+        }
     }
 
     // MARK: - 状态条
     private var statusDotColor: Color {
         if s.link == .live { return .green }
-        if discovery.found != nil { return .cyan }
+        if s.link == .connecting { return .orange }
+        if !discovery.found.isEmpty { return .cyan }
         return .gray
     }
 
     private var statusTitle: String {
         if s.link == .live { return "已连接  \(ctrl.savedHostForUI)" }
-        if let d = discovery.found { return "发现电脑  \(d.ip)" }
+        if s.link == .connecting { return "正在连接…" }
+        if !discovery.found.isEmpty { return "发现 \(discovery.found.count) 台电脑" }
         return "正在搜索电脑…"
     }
 
     private var statusSub: String {
         if s.link == .live { return "\(String(format: "%.0f", s.hz)) Hz · 可以开始玩了" }
-        if discovery.found != nil { return "点这里自动连接" }
+        if s.link == .connecting { return ctrl.pfConnState.isEmpty ? "连接中…" : ctrl.pfConnState }
+        if !discovery.found.isEmpty { return "点下方电脑即可连接" }
+        if !ctrl.pfConnState.isEmpty { return ctrl.pfConnState }
         return "确保电脑端已启动、手机在同一 Wi-Fi"
     }
 
     private var statusTitleColor: Color {
         if s.link == .live { return .green }
-        if discovery.found != nil { return .cyan }
+        if s.link == .connecting { return .orange }
+        if !discovery.found.isEmpty { return .cyan }
         return .gray
     }
 
@@ -133,16 +146,16 @@ struct PreflightView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .onTapGesture {
-            if s.link != .live, let d = discovery.found {
+            if s.link != .live, let d = discovery.best {
                 ctrl.connect(host: d.ip); Haptics.tap()
             }
         }
     }
 
     private var statusButton: some View {
-        Button(s.link == .live ? "断开" : "连接") {
+        Button(s.link == .live ? "断开" : (s.link == .connecting ? "…" : "连接")) {
             if s.link == .live { ctrl.disconnect() }
-            else { ctrl.connect(host: discovery.found?.ip ?? host) }
+            else if s.link != .connecting { ctrl.connect(host: discovery.best?.ip ?? host) }
             Haptics.tap()
         }
         .buttonStyle(CardButton(active: false,
@@ -182,6 +195,7 @@ struct PreflightView: View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
                 withAnimation { showAdvanced.toggle() }
+                if !showAdvanced { ipFocused = false }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
@@ -201,10 +215,20 @@ struct PreflightView: View {
                         .frame(height: 34)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(red: 0.16, green: 0.22, blue: 0.30)))
                         .foregroundColor(.white)
-                        .keyboardType(.decimalPad)
-                    Button("连接") { ctrl.connect(host: host); Haptics.tap() }
+                        .keyboardType(.numbersAndPunctuation)
+                        .focused($ipFocused)
+                        .submitLabel(.done)
+                        .onSubmit { connectManual() }
+                    Button("连接") { connectManual() }
                         .buttonStyle(CardButton(active: false, accent: .cyan, fillWidth: false, height: 34))
                         .frame(width: 70)
+                }
+                // 手动连接反馈：成功/失败/无效地址一目了然
+                if !ctrl.pfConnState.isEmpty && s.link != .live {
+                    Text(ctrl.pfConnState)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(ctrl.pfConnState.contains("无效") || ctrl.pfConnState.contains("断开") ? .red : .orange)
+                        .lineLimit(2)
                 }
                 HStack(spacing: 6) {
                     invBtn("反转横滚", $s.invX)
@@ -212,6 +236,42 @@ struct PreflightView: View {
                     invBtn("反转舵", $s.invYaw)
                     invBtn("反转总距", $s.invColl)
                 }
+            }
+        }
+    }
+
+    private func connectManual() {
+        ipFocused = false
+        let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty else { return }
+        ctrl.connect(host: h)
+        Haptics.tap()
+    }
+
+    /// 扫描到的所有电脑（点一下连接）
+    private var discoveredList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("发现的电脑（点一下连接）").font(.system(size: 12, weight: .semibold)).foregroundColor(.gray)
+            ForEach(discovery.found, id: \.ip) { d in
+                let isCurrent = s.link == .live && ctrl.savedHostForUI == d.ip
+                Button {
+                    ctrl.connect(host: d.ip); Haptics.tap()
+                } label: {
+                    HStack(spacing: 8) {
+                        Circle().fill(isCurrent ? Color.green : Color.cyan).frame(width: 7, height: 7)
+                        Image(systemName: "desktopcomputer").font(.system(size: 12)).foregroundColor(.cyan)
+                        Text(d.ip).font(.system(size: 13, design: .monospaced)).foregroundColor(.white)
+                        Spacer()
+                        Text(isCurrent ? "已连 ✓" : "连接")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(isCurrent ? .green : .cyan)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(isCurrent ? Color.green.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
         }
     }
