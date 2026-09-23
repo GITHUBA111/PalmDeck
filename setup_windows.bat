@@ -26,7 +26,7 @@ echo.
 REM ---------- 2. 安装依赖 ----------
 echo [2/4] 安装依赖（vgamepad / pyvjoy / zeroconf / qrcode）...
 python -m pip install --quiet --upgrade pip >nul 2>nul
-python -m pip install --quiet vgamepad pyvjoy zeroconf qrcode
+python -m pip install --quiet pyvjoy zeroconf qrcode
 echo       完成
 echo.
 

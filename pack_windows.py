@@ -22,7 +22,7 @@ FILES = [
     "使用说明.txt",
     os.path.join("packaging", "PalmDeck.spec"),
 ]
-DIRS = ["web"]
+DIRS = ["web", "vendor"]
 
 OUT_DIR = os.path.join(HERE, "_palmdeck_win", "PalmDeck")
 ZIP_PATH = os.path.join(HERE, "PalmDeck-Windows.zip")

@@ -20,6 +20,12 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# vgamepad 内置在 vendor/（详见 hotas.py 顶部注释），无需 pip 安装
+if not getattr(sys, "frozen", False):
+    _vendor = os.path.join(HERE, "vendor")
+    if os.path.isdir(_vendor) and _vendor not in sys.path:
+        sys.path.insert(0, _vendor)
+
 
 def pip_install(*pkgs: str) -> bool:
     for pkg in pkgs:
@@ -39,22 +45,15 @@ def ensure_deps() -> None:
     print("[1/3] 检查依赖 …")
     # 基础：标准库足够。虚拟设备后端按平台推荐。
     if os.name == "nt":
-        have = False
         try:
             import vgamepad  # noqa: F401
-            print("  OK  vgamepad（推荐，虚拟 Xbox 手柄）")
-            have = True
+            print("  OK  vgamepad（内置，虚拟 Xbox 手柄）")
         except Exception:
-            pass
+            print("  ! vgamepad 加载失败（检查 vendor/ 是否完整）")
         try:
             import pyvjoy  # noqa: F401
             print("  OK  pyvjoy（虚拟摇杆）")
-            have = True
         except Exception:
-            pass
-        if not have:
-            print("  没发现虚拟手柄后端，尝试安装 vgamepad（需已装 ViGEmBus）…")
-            pip_install("vgamepad")
             pip_install("pyvjoy")
     else:
         print("  （非 Windows：按需安装 evdev / vgamepad）")

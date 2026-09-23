@@ -7,6 +7,13 @@ import subprocess
 import sys
 from typing import Optional
 
+# vgamepad 已内置到 vendor/（纯 Python + DLL）。PyPI 上那个包会在 pip 安装时
+# 自动跑 ViGEmBus 的 msiexec 安装程序，导致安装/构建卡死，所以改走本地副本。
+if not getattr(sys, "frozen", False):
+    _vendor = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor")
+    if os.path.isdir(_vendor) and _vendor not in sys.path:
+        sys.path.insert(0, _vendor)
+
 
 def _clamp(v: float, lo: float = -1.0, hi: float = 1.0) -> float:
     return lo if v < lo else hi if v > hi else v

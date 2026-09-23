@@ -3,7 +3,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 title PalmDeck 打包 exe
 echo 正在安装 PyInstaller 与后端依赖...
-python -m pip install --quiet pyinstaller vgamepad pyvjoy zeroconf qrcode
+python -m pip install --quiet pyinstaller pyvjoy zeroconf qrcode
 echo 打包中（几分钟，请勿关闭）...
 python -m PyInstaller --clean --noconfirm packaging\PalmDeck.spec
 echo.
