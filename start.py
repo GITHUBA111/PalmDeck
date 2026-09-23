@@ -23,7 +23,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # 打包进 exe 的本地版本号；发新版时同步改这里 + 打 tag vX.Y.Z
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 # vgamepad 内置在 vendor/（详见 hotas.py 顶部注释），无需 pip 安装
 if not getattr(sys, "frozen", False):

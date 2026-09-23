@@ -136,12 +136,20 @@ def _usable_lan(ip: str) -> bool:
     return True
 
 
-def _private_lan(ip: str) -> bool:
+def _lan_rank(ip: str) -> int:
+    """分值越低越优先：真局域网几乎都是 192.168.* / 10.*；
+    172.16-31.* 常是 Docker/WSL/Hyper-V 虚拟网卡，放到最后（手机连不到）。"""
     try:
         a, b = (int(p) for p in ip.split(".")[:2])
     except ValueError:
-        return False
-    return a == 10 or (a == 192 and b == 168) or (a == 172 and 16 <= b <= 31)
+        return 9
+    if a == 192 and b == 168:
+        return 0
+    if a == 10:
+        return 1
+    if a == 172 and 16 <= b <= 31:
+        return 3
+    return 2
 
 
 def lan_ip() -> str:
@@ -176,14 +184,18 @@ def lan_ip() -> str:
             cands.append(info[4][0])
     except OSError:
         pass
-    # 优先真正能连的私有网段
+    # 在可用 IP 里挑“最像真局域网”的：192.168.* / 10.* 优先，
+    # 172.16-31.*（Docker/WSL/Hyper-V 虚拟网卡）最后，避免手机连到虚拟网卡。
+    best, best_rank = "", 9
+    seen = set()
     for ip in cands:
-        if _usable_lan(ip) and _private_lan(ip):
-            return ip
-    for ip in cands:
-        if _usable_lan(ip):
-            return ip
-    return "127.0.0.1"
+        if not _usable_lan(ip) or ip in seen:
+            continue
+        seen.add(ip)
+        r = _lan_rank(ip)
+        if r < best_rank:
+            best, best_rank = ip, r
+    return best or "127.0.0.1"
 
 
 # Binary stick packet (little-endian, 22 bytes) — FBW-style UDP hot path.
