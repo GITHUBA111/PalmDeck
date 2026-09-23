@@ -29,6 +29,7 @@ final class CockpitController: ObservableObject {
     init() {
         net.onOpen = { [weak self] in self?.handleOpen() }
         net.onClose = { [weak self] in self?.handleClose() }
+        net.onConnectTimeout = { [weak self] in self?.handleConnectTimeout() }
         net.onJSON = { [weak self] obj in self?.handleJSON(obj) }
         startLoop()
         Haptics.prepare()
@@ -97,6 +98,23 @@ final class CockpitController: ObservableObject {
             self.pfConnState = self.autoReconnect ? "连接断开，重连中…" : "连接断开"
             guard self.autoReconnect else { return }
             let delay = min(4.0, 0.6 + Double(self.retry) * 0.4)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.autoReconnect else { return }
+                self.retry += 1
+                self.reconnect()
+            }
+        }
+    }
+
+    private func handleConnectTimeout() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.state.link = .lost
+            self.state.transport = "idle"
+            self.pfConnState = "连接超时：请检查电脑防火墙（放行 8765）"
+            Haptics.warning()
+            guard self.autoReconnect else { return }
+            let delay = min(8.0, 1.0 + Double(self.retry) * 0.5)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, self.autoReconnect else { return }
                 self.retry += 1

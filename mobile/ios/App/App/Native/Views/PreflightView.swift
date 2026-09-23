@@ -101,6 +101,7 @@ struct PreflightView: View {
     private var statusDotColor: Color {
         if s.link == .live { return .green }
         if s.link == .connecting { return .orange }
+        if s.link == .lost { return .red }
         if !discovery.found.isEmpty { return .cyan }
         return .gray
     }
@@ -108,21 +109,22 @@ struct PreflightView: View {
     private var statusTitle: String {
         if s.link == .live { return "已连接  \(ctrl.savedHostForUI)" }
         if s.link == .connecting { return "正在连接…" }
+        if s.link == .lost { return "连接失败" }
         if !discovery.found.isEmpty { return "发现 \(discovery.found.count) 台电脑" }
         return "正在搜索电脑…"
     }
 
     private var statusSub: String {
         if s.link == .live { return "\(String(format: "%.0f", s.hz)) Hz · 可以开始玩了" }
-        if s.link == .connecting { return ctrl.pfConnState.isEmpty ? "连接中…" : ctrl.pfConnState }
-        if !discovery.found.isEmpty { return "点下方电脑即可连接" }
         if !ctrl.pfConnState.isEmpty { return ctrl.pfConnState }
+        if !discovery.found.isEmpty { return "点下方电脑即可连接" }
         return "确保电脑端已启动、手机在同一 Wi-Fi"
     }
 
     private var statusTitleColor: Color {
         if s.link == .live { return .green }
         if s.link == .connecting { return .orange }
+        if s.link == .lost { return .red }
         if !discovery.found.isEmpty { return .cyan }
         return .gray
     }

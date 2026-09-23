@@ -16,9 +16,12 @@ final class NetClient: NSObject {
     private let lock = NSLock()
     /// 当前连接是否已通知过断开（didClose 与 receive 失败可能都触发，去重）
     private var closedNotified = false
+    /// 连接超时定时器（8s 没连上就报超时，避免“连接中”卡死）
+    private var connectTimeoutWork: DispatchWorkItem?
 
     var onOpen: (() -> Void)?
     var onClose: (() -> Void)?
+    var onConnectTimeout: (() -> Void)?
     var onJSON: (([String: Any]) -> Void)?
 
     override init() {
@@ -41,9 +44,21 @@ final class NetClient: NSObject {
         ws = task
         task.resume()
         listen()
+        // 8 秒连不上 → 超时（多半是电脑防火墙拦了 TCP 8765，而不是没开机）
+        connectTimeoutWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.ws === task else { return }
+            self.closedNotified = true
+            self.ws?.cancel(with: .goingAway, reason: nil)
+            self.onConnectTimeout?()
+        }
+        connectTimeoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
     }
 
     func disconnect() {
+        connectTimeoutWork?.cancel()
+        connectTimeoutWork = nil
         ws?.cancel(with: .goingAway, reason: nil)
         ws = nil
         closeUDP()
@@ -126,6 +141,8 @@ extension NetClient: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol protocol: String?) {
         guard webSocketTask === ws else { return }
+        connectTimeoutWork?.cancel()
+        connectTimeoutWork = nil
         onOpen?()
     }
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
