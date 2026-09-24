@@ -505,6 +505,21 @@ v3 合同：
 
 **边角**：开车时 yaw/look 为 0，除非以后加视角球。切到开车清 yaw，避免上一局舵量变成 Xbox 右摇杆。
 
+> **v4 修订（开车真值表，取代上表相关行）**：v4 iOS 驾驶皮肤把 `pitch` 字段改作
+> **离合**（踏板），另加**视角板**。电脑侧 `remap_vjoy` 不变（`Y=-pitch`），
+> 因此离合走 vJoy `Y`：滑条 0 → 中位，1 → −1 到底。`yaw` 仍为 0。
+>
+> | 控件 | 语义字段 | 包字段 | vJoy（`hotas`） | Xbox（drive live） |
+> |---|---|---|---|---|
+> | 方向盘 | `roll` | `roll` | X | LS X |
+> | 离合踏板 | `clutch` | `pitch` | Y（`-pitch`） | LS Y |
+> | 油门踏板 | `throttle` | `thr=throttle`，且 `rt=throttle` | Z | RT |
+> | 刹车踏板 | `brake` | `lt` | Sl0 | LT |
+> | 视角板 | `look` | `look_x`/`look_y` | Rx/Ry | RS |
+> | —（清 yaw） | `yaw` | 0 | Rz=0 | RS x 回 0 |
+> | 档杆升/降 | 脉冲 | `btnMask` b6/b5 | btn 6/5 | RB/LB |
+>
+
 ---
 
 ### 7. 双虚拟设备与 WARDOGS 绑定

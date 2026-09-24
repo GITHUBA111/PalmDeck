@@ -30,3 +30,6 @@ __pycache__/
 dist/
 build/
 *.spec.bak
+
+# 无线部署脚本的构建目录
+mobile/ios/.deploy-dd/

@@ -2,17 +2,26 @@
 
 | 文件 | 主题 | 状态 |
 |---|---|---|
+| `PalmDeck-v4-redesign.md` | **v4 总纲**：只保留 Windows 常驻服务（自带网页控制台）+ iOS App；手机 Web 座舱作废 | **P1–P6 已落地** |
+| `PalmDeck-v4-app-interaction.md` | **App 端功能与交互规格**：信息架构 / 连接 / 三皮肤 / 触摸手感 / 触觉 / 设置 / 持久化；P7 加固 | **P7 已落地** |
 | `PalmDeck-v3-feature-design.md` | **电脑侧**：HID / vJoy+Xbox / PD v1 协议 / Hub 锁 / allowlist / failsafe / 轴预设 | 已落地（代码 + 测试对齐） |
 | `PalmDeck-v3-cockpit-design.md` | **手机座舱**：横屏完整飞行杆的产品/像素级布局/体感管道/滑条手感/状态机/三种模式皮肤 | PR1–PR5 已实现（见下） |
 | `PalmDeck-v3-cockpit-design.summary.md` | 座舱设计总结（关键决策 + PR 施工顺序摘要） | 配套 |
 | `PalmDeck-v3-cockpit-design.review.md` | 座舱设计的审查报告（13 条 open issue） | 配套 — 待逐条修订 |
+| `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
 
+- **新功能/改造先写方案**：按 `PalmDeck-proposal-template.md` 落成文档，评审通过再动代码。
+- **`PalmDeck-v4-redesign.md` 为当前总纲**：产品只剩 Windows 常驻服务 + iOS App，
+  手机 Web 座舱（`web/index.html`）已删除；服务端 `/` 一律指向控制台 `web/host.html`。
+  下文关于 `web/index.html` 的座舱描述仅作历史参考。
+- **`PalmDeck-v4-app-interaction.md` 为 App 交互权威规格**：屏幕/状态机、三皮肤交互、
+  触摸手感模型、触觉词汇、设置与持久化键、P7 差距清单。
 - `PalmDeck-v3-feature-design.md` 冻结**电脑侧协议**，座舱设计**不得重开** HID / PD v1 / `awaitModeAck` / failsafe / 轴预设。
 - `PalmDeck-v3-cockpit-design.md` 冻结**手机座舱**，其实现必须遵守 v3 电脑侧合同；若 UX 不需要新字段，禁止改包。
 
-## 座舱实现状态（`web/index.html`）
+## 座舱实现状态（`web/index.html`，v3 历史，v4 已删除）
 
 已按文档 PR1–PR5 落地：
 
@@ -25,32 +34,33 @@
 补充：原生 Taptic 震动（`PalmDeckUdpPlugin.haptic`，iOS WKWebView 不支持 `navigator.vibrate`）、
 品牌 App 图标 + 启动图、`host.html` 本地 QR（内联 `qrcode.js`）。
 
-review 报告里的 13 条 issue 已在设计文档 KD14–17 与本文实现中吸收（hat 改真帽垫、竖屏冻结、
+review 报告（现标为历史文档）里的 13 条 issue 已在设计文档 KD14–17 与当时实现中吸收（hat 改真帽垫、竖屏冻结、
 步兵流闩、HUD 截断、packageClassList 已核实）。
 
 ## 原生 iOS 端实现状态（`mobile/ios/App/App/Native/`）
 
-web 版是 A 路线（Safari 加到主屏幕）；原生端是 B 路线（Capacitor + SwiftUI/SceneKit），
-协议与电脑侧完全一致，但 UI 是纯原生 SwiftUI，不走 `web/index.html`。
+v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不走任何 WebView。
+（历史：v3 曾同时提供 Safari 网页座舱与 Capacitor 外壳，均已作废。）
 
 ### 入口与结构
 - `PalmDeckApp.swift` — `@main`，首启走 `PreflightView`（三步引导/手动 IP/轴反向），之后进 `CockpitView`（`palmdeck_entered` 持久化）；首次进座舱自动弹「速览教程」（`palmdeck_tutored` 持久化，设置 → 帮助可重开）。
-- `Model/`：`ControllerState`（共享状态 + 语义轴 + EMA 平滑 + 遥测选源）、`CockpitController`（60Hz 热路径 `CADisplayLink` + 连接/心跳/遥测）、`NetClient`（WS 8765 控制面 + UDP 7773 热路径）、`Packet`（22 字节 `<2sBB8hH` 与 `bridge.py` 对齐）、`Discovery`（Bonjour `_palmdeck._udp`）、`Haptics`。
-- `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部遥测条 ROL/PIT/YAW/THR/LINK/MODE/SRC + 仪表取景框）、`AttitudeBall`（PFD 姿态球）、`HelicopterScene`（SceneKit 3D 直升机 + 地面网格/停机坪/天空渐变）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
+- `Model/`：`ControllerState`（共享状态 + 语义轴 + EMA 平滑）、`CockpitController`（60Hz 热路径 `CADisplayLink` + 连接/心跳 + 布局同步）、`NetClient`（WS 8765 控制面 + UDP 7773 热路径）、`Packet`（22 字节 `<2sBB8hH` 与 `bridge.py` 对齐）、`Discovery`（Bonjour `_palmdeck._udp`）、`Haptics`。
+- `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
-### 三种模式（与 web 版同皮肤语义）
-- **飞机 heli**：姿态球（左）+ 3D 直升机（右，并排不重叠）+ 左列油门/横滚/俯仰/苦力帽 + 右列摇杆/开火/方向舵/武器键 + 中下两行 10 键。
-- **开车 drive**：方向盘 + 油门/刹车/离合滑条 + 升/降档 + 视角触摸板 + 底部功能键（转向灯/喇叭/雨刷/远光等）。
-- **步兵 infantry**：休息屏（键鼠操作，轴停发不干扰鼠标），仍可布局加开火/投弹等触控键。
+v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+LT/RT）。
+
+### 三种模式（v4 硬件皮肤）
+- **飞机 heli**：`FlightDeckView` —— 总距杆（IDLE/FLY/MAX 止动）+ 脚舵 + 周期变距杆 + 仪表板（COLL/TRQ 弧形 + 姿态球 PFD + ROL/PIT/YAW 条）+ 硬件按键（开火/投弹/起落架/灯光/悬停/视角）。
+- **开车 drive**：`DriveDeck` —— 方向盘（多圈+回正）+ 离合/刹车/油门三踏板 + 序列式档杆 + 转速表与中控仪表盘 + 视角板 + 按键簇。
+- **游戏手柄 gamepad**：默认 `GamepadDeck` 硬件手柄；可在设置里切「自定义组件布局」（`palmdeck_gamepad_custom`）回到 `WidgetCanvas`，并由 `/api/layouts` 同步。此时轴停发，不抢电脑键鼠。
 
 ### 组件系统（模块化/乐高式）
 - 7 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球，各绑定一个语义轴或 vJoy 键。
-- 编辑模式：顶栏组件库添加、拖拽移动、右下角缩放手柄、✕ 删除、一键清空/恢复默认；布局按模式持久化（`palmdeck_widgets_v7`）。
+- 编辑模式：顶栏组件库添加、拖拽移动、右下角缩放手柄、✕ 删除、一键清空/恢复默认；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
 
-### 遥测（已接）
-- 电脑侧 `bridge.py` 按 `--telemetry http/udp` + `--telemetry-url/--telemetry-udp/--telemetry-map` 轮询姿态，广播 `{"type":"attitude",roll,pitch,yaw}`。
-- 手机侧 `CockpitController` 收 `attitude` 写入 `telemRoll/Pitch/Yaw`，`ControllerState.display*` 按「3D 显示源」选本地杆位或遥测；姿态球与 3D 直升机、读数同源；**1.5s 无包自动 `telemValid=false` 回退杆位**。
-- `telemetry.py` 提供通用 `HttpJsonTelemetry` / `UdpJsonTelemetry`，WARDOGS 若确认有遥测接口，补专用读取器即可，App 无需再改。
+### 无遥测
+姿态球与飞行仪表板只显示本机发往电脑的**平滑杆位**（`smRoll/smPitch/smYaw`），
+不做游戏遥测回读（v4 已移除 `telemetry.py` 与 `--telemetry*` 参数，见 `docs/TODO.md`）。
 
 ### 待办
-见 `docs/TODO.md`（当前仅剩 WARDOGS 遥测字段确认 + 专用读取器）。
+见 `docs/TODO.md`。

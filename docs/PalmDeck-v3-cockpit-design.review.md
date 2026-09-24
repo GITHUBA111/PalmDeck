@@ -1,3 +1,7 @@
+> **历史文档（v4 已取代）**：本文审阅的是 v3 Web 座舱（`web/index.html`），该实现已删除。
+> 文中「Status: open」为当时的审阅快照；相关结论已由 `docs/README.md` 所述实现吸收，
+> 并最终由 `PalmDeck-v4-redesign.md`（iOS 硬件皮肤）取代。保留仅作历史记录。
+
 ## Design Document Review: PalmDeck 座舱：完整虚拟飞行控制器
 
 ### Summary

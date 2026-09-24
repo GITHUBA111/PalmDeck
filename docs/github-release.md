@@ -41,4 +41,4 @@ git push -u origin main
 ## 备注
 
 - `preview/` 里是设计截图（约 1.7 MB），会一并上传，不影响。
-- 若不想传 iOS 源码，可只提交电脑侧文件（`bridge.py hotas.py telemetry.py palmdeck_config.py web/ packaging/ .github/`），22 MB 里大部分是 `mobile/`。
+- 若不想传 iOS 源码，可只提交电脑侧文件（`bridge.py hotas.py palmdeck_config.py palmdeck_layouts.py updater.py web/ packaging/ .github/`），22 MB 里大部分是 `mobile/`。
