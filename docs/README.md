@@ -8,11 +8,13 @@
 | `PalmDeck-v3-cockpit-design.md` | **手机座舱**：横屏完整飞行杆的产品/像素级布局/体感管道/滑条手感/状态机/三种模式皮肤 | PR1–PR5 已实现（见下） |
 | `PalmDeck-v3-cockpit-design.summary.md` | 座舱设计总结（关键决策 + PR 施工顺序摘要） | 配套 |
 | `PalmDeck-v3-cockpit-design.review.md` | 座舱设计的审查报告（13 条 open issue） | 配套 — 待逐条修订 |
+| `PalmDeck-v4-game-profiles.md` | **方案（待评审）**：游戏预设 —— 电脑侧轴映射表 + App 侧手感 + 布局，一键切游戏 | 待评审 |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
 
 - **新功能/改造先写方案**：按 `PalmDeck-proposal-template.md` 落成文档，评审通过再动代码。
+  当前待评审：`PalmDeck-v4-game-profiles.md`（游戏预设，G0–G4 分阶段）。
 - **`PalmDeck-v4-redesign.md` 为当前总纲**：产品只剩 Windows 常驻服务 + iOS App，
   手机 Web 座舱（`web/index.html`）已删除；服务端 `/` 一律指向控制台 `web/host.html`。
   下文关于 `web/index.html` 的座舱描述仅作历史参考。
