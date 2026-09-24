@@ -24,7 +24,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # 打包进 exe 的本地版本号；发新版时同步改这里 + 打 tag vX.Y.Z
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 
 GITHUB_API = "https://api.github.com/repos/GITHUBA111/PalmDeck/releases/latest"
 GITHUB_EXE = "https://github.com/GITHUBA111/PalmDeck/releases/latest/download/PalmDeck.exe"
