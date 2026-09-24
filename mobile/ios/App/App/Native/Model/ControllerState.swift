@@ -1,16 +1,8 @@
 import Foundation
 import Combine
 
-/// 座舱模式
-/// 持久化键（P7 手感参数）
+/// 持久化键（P7 手感参数；G1 起手感参数**按模式分键**，见 `ShapingKeys`）
 private enum PKey {
-    static let sensX = "palmdeck_sens_x"
-    static let sensY = "palmdeck_sens_y"
-    static let dz = "palmdeck_dz"
-    static let invX = "palmdeck_inv_x"
-    static let invY = "palmdeck_inv_y"
-    static let invYaw = "palmdeck_inv_yaw"
-    static let invColl = "palmdeck_inv_coll"
     static let stickReturn = "palmdeck_stick_return"
     static let wheelMaxDeg = "palmdeck_wheel_max_deg"
     static let wheelReturn = "palmdeck_wheel_return"
@@ -46,6 +38,7 @@ final class ControllerState: ObservableObject {
     @Published var btnMask: UInt16 = 0     // bit0..bit9 = b1..b10
 
     // ---- 模式 / 连接 ----
+    /// 模式（`palmdeck_mode`）。属性初始化早于 `self` 可用，所以先算静态值。
     @Published var mode: CockpitMode = CockpitMode.parse(
         UserDefaults.standard.string(forKey: "palmdeck_mode"))
     @Published var link: LinkState = .idle
@@ -66,27 +59,29 @@ final class ControllerState: ObservableObject {
     var onButton: ((Int, Bool) -> Void)?
     var onHat: ((UInt8) -> Void)?
 
-    // ---- 参数（全部持久化：改一次，重启仍在）----
-    @Published var sensX: Double = ControllerState.loadDouble(PKey.sensX, 1.0) {
-        didSet { UserDefaults.standard.set(sensX, forKey: PKey.sensX) }
+    // ---- 手感参数（G1：全部**按模式分键**持久化）----
+    // 初始值是兜底常量；真正的读取只走 `reloadShaping()` 一条路径，
+    // 免得「默认值写在属性上、读取写在 init 里」两处会漂。
+    @Published var sensX: Double = 1.0 {
+        didSet { ShapingParams.set(shapingStore, sensX, ShapingKeys.sensX, mode) }
     }
-    @Published var sensY: Double = ControllerState.loadDouble(PKey.sensY, 1.0) {
-        didSet { UserDefaults.standard.set(sensY, forKey: PKey.sensY) }
+    @Published var sensY: Double = 1.0 {
+        didSet { ShapingParams.set(shapingStore, sensY, ShapingKeys.sensY, mode) }
     }
-    @Published var dz: Double = ControllerState.loadDouble(PKey.dz, 0.06) {
-        didSet { UserDefaults.standard.set(dz, forKey: PKey.dz) }
+    @Published var dz: Double = 0.06 {
+        didSet { ShapingParams.set(shapingStore, dz, ShapingKeys.dz, mode) }
     }
-    @Published var invX: Bool = ControllerState.loadBool(PKey.invX, false) {   // 反转横滚
-        didSet { UserDefaults.standard.set(invX, forKey: PKey.invX) }
+    @Published var invX: Bool = false {   // 反转横滚
+        didSet { ShapingParams.set(shapingStore, invX, ShapingKeys.invX, mode) }
     }
-    @Published var invY: Bool = ControllerState.loadBool(PKey.invY, false) {   // 反转俯仰
-        didSet { UserDefaults.standard.set(invY, forKey: PKey.invY) }
+    @Published var invY: Bool = false {   // 反转俯仰
+        didSet { ShapingParams.set(shapingStore, invY, ShapingKeys.invY, mode) }
     }
-    @Published var invYaw: Bool = ControllerState.loadBool(PKey.invYaw, false) {  // 反转方向舵
-        didSet { UserDefaults.standard.set(invYaw, forKey: PKey.invYaw) }
+    @Published var invYaw: Bool = false {  // 反转方向舵
+        didSet { ShapingParams.set(shapingStore, invYaw, ShapingKeys.invYaw, mode) }
     }
-    @Published var invColl: Bool = ControllerState.loadBool(PKey.invColl, false) { // 反转总距
-        didSet { UserDefaults.standard.set(invColl, forKey: PKey.invColl) }
+    @Published var invColl: Bool = false { // 反转总距
+        didSet { ShapingParams.set(shapingStore, invColl, ShapingKeys.invColl, mode) }
     }
     @Published var stickReturn: Bool = ControllerState.loadBool(PKey.stickReturn, true) {
         didSet { UserDefaults.standard.set(stickReturn, forKey: PKey.stickReturn) }
@@ -96,6 +91,42 @@ final class ControllerState: ObservableObject {
     }
     @Published var wheelMaxDeg: Double = ControllerState.loadDouble(PKey.wheelMaxDeg, 540) {  // 满舵角度
         didSet { UserDefaults.standard.set(wheelMaxDeg, forKey: PKey.wheelMaxDeg) }
+    }
+
+    /// 手感参数的落盘位置（G1）。默认就是 `UserDefaults.standard`；
+    /// 测试注入字典替身，这样跑测试不会往真实偏好设置里写东西。
+    let shapingStore: ShapingStore
+
+    init(shapingStore: ShapingStore = UserDefaults.standard) {
+        self.shapingStore = shapingStore
+        // G1 迁移：旧的全局手感键 → 三个模式各自一份，然后删旧键。
+        // 先跑迁移再读，所以不会漏掉老用户的值。
+        ShapingMigration.run(shapingStore)
+        reloadShaping()
+    }
+
+    /// 把**当前模式**的手感参数读进来。初始化与切模式共用这一条路径。
+    ///
+    /// 赋值会触发 `didSet`，把值写回同一个键 —— 等于把默认值也落成显式值，
+    /// 于是每个模式从一开始就各有一份完整参数（读的时候不用再想兜底）。
+    private func reloadShaping() {
+        let ud = shapingStore
+        sensX = ShapingParams.double(ud, ShapingKeys.sensX, mode, 1.0)
+        sensY = ShapingParams.double(ud, ShapingKeys.sensY, mode, 1.0)
+        dz = ShapingParams.double(ud, ShapingKeys.dz, mode, 0.06)
+        invX = ShapingParams.bool(ud, ShapingKeys.invX, mode, false)
+        invY = ShapingParams.bool(ud, ShapingKeys.invY, mode, false)
+        invYaw = ShapingParams.bool(ud, ShapingKeys.invYaw, mode, false)
+        invColl = ShapingParams.bool(ud, ShapingKeys.invColl, mode, false)
+    }
+
+    /// 切模式：换成本模式自己的手感参数（G1）。
+    ///
+    /// 先换 `mode` 再读值 —— `didSet` 的保存键跟着 `mode` 走，
+    /// 所以写回去的就是刚读出来的那个键，**不会把旧模式的参数写进新模式**。
+    func applyMode(_ m: CockpitMode) {
+        mode = m
+        reloadShaping()
     }
 
     private static func loadDouble(_ key: String, _ def: Double) -> Double {

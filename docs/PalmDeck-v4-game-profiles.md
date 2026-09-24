@@ -270,9 +270,9 @@ AXIS_TABLE_KEYS = ("x", "y", "z", "rx", "ry", "rz", "sl0")
 **兼容性**：`axis_profile` 键保留原义（= 当前生效的预设名），
 `hotas` / `fbw` 作为内置预设名**永不删除**（老用户 `config.json` 里写着的值继续work）。
 
-### 3.3 App 侧：手感参数按模式分离（**独立于预设，先修**）
+### 3.3 App 侧：手感参数按模式分离（**已实施：G1**）
 
-键名加模式后缀，一次性迁移：
+键名加模式后缀，启动时一次性迁移：
 
 ```
 palmdeck_sens_x            →  palmdeck_sens_x.heli / .drive / .gamepad
@@ -281,10 +281,15 @@ palmdeck_inv_x/_y/_yaw/_coll →  palmdeck_inv_*.<mode>
 ```
 
 迁移规则：**读不到带后缀的键时，回落读旧键**（老用户升级后参数不丢），
-然后写回新键、删旧键。`ControllerState.yawDeadzone` 常量不动。
+把旧值写到**三个模式**各自的键上，然后删旧键（已有新键的不覆盖）。
+`ControllerState.yawDeadzone` 常量不动。
+
+实现：`Model/ShapingKeys.swift`（纯逻辑）+ `ControllerState(shapingStore:)`
+（存储可注入，测试不碰真实偏好设置）。
 
 > 这一条**不依赖预设也能单独成立**，且它是「飞机 0.06 死区污染赛车」的直接修复。
 > 所以它排在 G1，可以独立验收。
+> 完整说明见 `docs/PalmDeck-v4-app-interaction.md` §12。
 
 ### 3.4 App 侧：预设 = 布局 + 手感 + 轴表名（G2）
 
@@ -546,7 +551,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 协议 PKT（22B `<2sBB8hH`） | **不改**。字段名 roll/pitch/yaw/thr 保持冻结 |
 | 协议 WS 文本 | **暂不改**。原计划 G3 新增 `{"type":"profile"}` + `caps: profile_select`，但§2.7 证明两个目标游戏都不需要，已降级（§7） |
 | 电脑侧 | **G0+G1+G2 不改电脑侧任何文件**。（若将来做 G3：`hotas.py` `remap_vjoy` 改查表、`palmdeck_config.py` 新 `axes_presets`、`bridge.py` WS 分支 + `caps`） |
-| App 侧 | `ControllerState.swift`（PKey 加模式后缀 + 迁移、`wheelMaxDeg` 默认）、`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（新 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告） |
+| App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告） |
 | 文档 | 本文件、`docs/PalmDeck-v4-app-interaction.md`（持久化键表 + 预设交互）、`docs/PalmDeck-v4-redesign.md`（P8）、`docs/README.md` |
 
 ---
@@ -561,8 +566,19 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
   `tests/test_game_profiles.py`：已知名/未知名/`caps`；`tests/test_config.py`：`axes_presets` 往返。
 
 **App 侧（`swiftc` + `python3 -m unittest`，沿用 `tests/test_ios_axis.py` 的路子）**
-- `GameProfile` 编解码往返；旧格式缺字段时的回落。
-- 手感参数迁移：先写旧键 → 初始化 → 断言新键拿到旧值、旧键被清。
+- `GameProfile` 编解码往返；旧格式缺字段时的回落。（G2）
+- **G1 回归（已实现，两层）**：
+  - **算法层** `tests/ios/AxisCoreTests.swift`：键名拼接用 `rawValue` 不用 `label`；
+    七个旧键**逐个**都被搬家（每个键给不同值，防「只搬了一个也能过」）；
+    迁移**不改手感**（三个模式都拿到旧的那一份值）；不覆盖已有的新键、幂等、不碰无关键。
+  - **接线层** `tests/ios/ControllerStateKeysTests.swift`：用真的 `ControllerState`
+    （存储注入字典替身），验证它真的调了迁移、`applyMode` 真的换一套、
+    写入只落当前模式的键、干净安装也把默认值落成显式值。
+    只测算法抳不住「算法对、接线错」——而那正是这类 bug 的形状。
+  - **守卫** `tests/test_ios_axis.py`：全仓库不得再出现无后缀的全局手感键；
+    `setMode` 不得绕过 `applyMode`。
+  - **真机/模拟器**：旧容器的 `palmdeck_dz=0.09` + `palmdeck_inv_y=true` → 启动一次后
+    `palmdeck_dz.{heli,drive,gamepad} = 0.09`、`palmdeck_inv_y.* = true`，旧键消失（实测）。
 - 预设应用后 `layouts[mode]` 等于预设里的 `widgets`、`revision` 自增。
 - **E1 回归**（已实现）：`tests/test_deck_bindings.py` 把 Swift 源码和 `hotas.py` 的
   `X360` 表**对账** —— 手柄皮肤每个 `title:` 旁的 `.vjoyN` → `X360[bN]` 必须等于该标签的
@@ -616,7 +632,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | **G0a** | 删 Capacitor 残骸（`public/` 84 KB、插件、`Main.storyboard`、`SceneDelegate`、`config.xml`） | **S** | 无 | ✅ 新增 3 条防腐测试 |
 | **G0b** | 摘掉 CocoaPods（含构建命令 `-workspace` → `-project`） | **S** | G0a | ✅ 干净克隆能直接构建 |
 | **E1** | 修 §3.7 的 **5 条** App 侧缺陷（b5 撞车 / b11–16 死键 / LB·RB 标签反 / b9·b10 假 LT·RT / RT 滑条绑空轴） | **S** | 无 | ✅ 新增 `tests/test_deck_bindings.py`（13 条）+ hat 链路 2 条 |
-| **G1** | 手感参数按模式分离 + 迁移 | **S** | 无 | ✅ ETS2 与 WARDOGS 参数互不污染 |
+| **G1** | 手感参数按模式分离 + 迁移（修「飞机 0.06 死区污染赛车」） | **S** | 无 | ✅ 算法 58 + 接线 33 条断言 + 4 条守卫；模拟器迁移实测 |
 | **G2** | `GameProfile` + 预设 UI | **M** | G1 | ✅ 两个预设一键来回切 |
 | **G4** | 两个预设的**具体值**（§3.6） | **XS** | G2 | ✅ 打开即有「WARDOGS」「欧洲卡车模拟」 |
 | ~~G3~~ | ~~电脑侧声明式轴表 + WS `profile`~~ | ~~M~~ | — | **暂不做**（§2.7 证明用不上） |

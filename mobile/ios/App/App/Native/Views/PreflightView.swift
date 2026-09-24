@@ -235,6 +235,14 @@ struct PreflightView: View {
                         .foregroundColor(ctrl.pfConnState.contains("无效") || ctrl.pfConnState.contains("断开") ? .red : .orange)
                         .lineLimit(2)
                 }
+                // 反向开关是**按模式**保存的（G1）—— 不标出当前模式就会让用户以为
+                // 自己改的是全局，实际改的是「现在这个模式」的那一份。
+                HStack(spacing: 6) {
+                    Text("轴反向 · \(s.mode.label)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                    Spacer(minLength: 0)
+                }
                 HStack(spacing: 6) {
                     invBtn("反转横滚", $s.invX)
                     invBtn("反转俯仰", $s.invY)

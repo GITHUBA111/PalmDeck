@@ -263,6 +263,20 @@ Capacitor 打包壳引用，标为 deprecated，后续删除。
 
 ---
 
+### G1（已完成）— 手感参数按模式分键
+
+- 修掉的 bug：七个手感参数（灵敏度 X/Y、死区、四个反向）此前是**三个模式共用一份**，
+  为飞机调出的 `dz=0.06` 一直跟着赛车走（ETS2 自带死区，叠上去就是中位多一段死行程）。
+- `palmdeck_dz` → `palmdeck_dz.heli` / `.drive` / `.gamepad`（其余同理）；
+  旧的全局键启动时一次性迁移到三个模式并删除（`Model/ShapingKeys.swift`）。
+- 迁移**不改变任何手感**（三个模式拿到同一个旧值）；已有新键的不覆盖。
+- `ControllerState(shapingStore:)` 存储可注入 —— 测试跑真对象但不碰真实 `UserDefaults`。
+- `CockpitController.setMode` 改走 `state.applyMode(m)`（只赋 `state.mode` 会跳过参数重读）。
+- 设置里两个分组的标题与脚注都标出**当前模式**。
+- 详情见 `PalmDeck-v4-app-interaction.md` §12、`PalmDeck-v4-game-profiles.md` §3.3。
+
+---
+
 ## 5. 不变量（不得破坏）
 
 - 热路径包：`PKT = struct.Struct("<2sBB8hH")`（22 字节，little-endian），

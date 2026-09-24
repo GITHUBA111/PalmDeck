@@ -182,7 +182,8 @@ final class CockpitController: ObservableObject {
     // MARK: - 模式
     func setMode(_ m: CockpitMode) {
         if m != state.mode { Haptics.press() }
-        state.mode = m
+        // G1：手感参数按模式分开存，切模式要把本模式那一份读回来
+        state.applyMode(m)
         UserDefaults.standard.set(m.rawValue, forKey: "palmdeck_mode")
         state.resetAxes()
         state.hat = 255

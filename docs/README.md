@@ -55,10 +55,12 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   | `AxisMap.swift` | 模式 → 8 个 i16 轴的真值表（全函数：入参先夹到 [-1,1]） |
   | `PacketFormat.swift` | 22 字节包 `<2sBB8hH` 的偏移 / 小端序 / `[-32767,32767]` 标度 |
   | `CockpitMode.swift` | 模式枚举 + `infantry → gamepad` 旧值兼容 |
+  | `ShapingKeys.swift` | 手感参数的键名（`palmdeck_dz` → `palmdeck_dz.<mode>`）+ 旧键一次性迁移 |
   | `Packet.swift` | 只做「`ControllerState` → 纯数据」的适配，调上面两个 |
 
   注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
-  `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现。
+  `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现，
+  也会拦住无后缀的全局手感键（G1 起手感参数按模式分键）。
 - `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
 v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表+十字键视角）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+L3/R3）。
@@ -79,15 +81,20 @@ v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚�
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 76 项
+python3 -m unittest discover -s tests -t .      # 106 项
 ```
 
-其中 `tests/test_ios_axis.py` 用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**
-并跑 1300+ 条断言（曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、
-包长/偏移/小端序/量化边界）。不引入 Xcode unit-test target ——
-被测对象全是**纯函数**，手写 target 要同时改 `project.pbxproj` 的
-target/scheme/构建设置，风险大于收益；`swiftc` 足够了，而且能跟着
-`python3 -m unittest` 一起跑。没有 `swiftc` 的环境自动 skip。
+其中两个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：
+
+| 文件 | 跑什么 |
+| --- | --- |
+| `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
+| `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
+
+不引入 Xcode unit-test target —— 被测对象全是**纯函数 / 纯状态**，
+手写 target 要同时改 `project.pbxproj` 的 target/scheme/构建设置，
+风险大于收益；`swiftc` 足够了，而且能跟着 `python3 -m unittest` 一起跑。
+没有 `swiftc` 的环境自动 skip。
 
 ### 待办
 见 `docs/TODO.md`。

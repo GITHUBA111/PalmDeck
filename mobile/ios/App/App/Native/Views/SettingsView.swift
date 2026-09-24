@@ -574,9 +574,9 @@ struct SettingsView: View {
             Toggle("反转方向舵 Yaw", isOn: $s.invYaw)
             Toggle("反转总距 Collective", isOn: $s.invColl)
         } header: {
-            SettingsHeader("轴反向")
+            SettingsHeader("轴反向 · \(s.mode.label)")
         } footer: {
-            Text("与游戏内设置二选一即可，避免双重反转。")
+            Text("与游戏内设置二选一即可，避免双重反转。\n\n**随模式分开保存**：在「\(s.mode.label)」下改，只影响「\(s.mode.label)」。")
         }
 
         Section {
@@ -592,9 +592,9 @@ struct SettingsView: View {
                       format: { String(format: "%.0f", $0 * 100) },
                       parse: { Double($0.replacingOccurrences(of: ",", with: ".")).map { $0 / 100 } })
         } header: {
-            SettingsHeader("灵敏度与死区")
+            SettingsHeader("灵敏度与死区 · \(s.mode.label)")
         } footer: {
-            Text("灵敏度 > 1 更跟手（更容易到满舵）；死区滤掉手指微抖。**点数值可直接输入精确值。**")
+            Text("灵敏度 > 1 更跟手（更容易到满舵）；死区滤掉手指微抖。**点数值可直接输入精确值。**\n\n**随模式分开保存**：飞机调出来的死区不会再跟着赛车走 —— 在「\(s.mode.label)」下改，只影响「\(s.mode.label)」。")
         }
 
         Section {

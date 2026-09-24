@@ -282,6 +282,130 @@ func testPacketIsDeterministicAndZeroed() {
     expect(z == PacketFormat.encode(hat: 0, axes: AxisOutputs(), buttons: 0), "同输入同输出")
 }
 
+// MARK: - ShapingKeys / ShapingMigration：手感参数按模式分键（G1）
+
+/// `ShapingStore` 的字典替身 —— 迁移逻辑不该为了可测去碰真实 UserDefaults。
+final class DictStore: ShapingStore {
+    var d: [String: Any]
+    init(_ d: [String: Any] = [:]) { self.d = d }
+    func object(forKey key: String) -> Any? { d[key] }
+    func set(_ value: Any?, forKey key: String) { d[key] = value }
+    func removeObject(forKey key: String) { d.removeValue(forKey: key) }
+}
+
+func testShapingKeyScoping() {
+    expect(ShapingKeys.scoped("palmdeck_dz", .heli) == "palmdeck_dz.heli", "heli 后缀")
+    expect(ShapingKeys.scoped("palmdeck_dz", .drive) == "palmdeck_dz.drive", "drive 后缀")
+    expect(ShapingKeys.scoped("palmdeck_dz", .gamepad) == "palmdeck_dz.gamepad", "gamepad 后缀")
+    // 后缀必须用 rawValue，不能是 label（label 是中文，会随文案变）
+    for m in CockpitMode.allCases {
+        expect(!ShapingKeys.scoped("k", m).contains(m.label),
+               "键名不能含 label：\(m.label)")
+    }
+    expect(ShapingKeys.legacyKeys.count == 7, "受模式影响的旧键共 7 个")
+}
+
+func testMigrationMovesEveryLegacyKey() {
+    // 每个旧键都用**不同**的值，确保不是「只搬了其中一个」也能过
+    var seed: [String: Any] = [:]
+    for (i, k) in ShapingKeys.legacyDoubles.enumerated() { seed[k] = Double(i + 1) / 10 }
+    for (i, k) in ShapingKeys.legacyBools.enumerated() { seed[k] = (i % 2 == 0) }
+    let store = DictStore(seed)
+
+    let moved = ShapingMigration.run(store)
+    expect(moved.count == 7, "七个旧键都要被搬走，实际 \(moved.count)")
+
+    for m in CockpitMode.allCases {
+        for k in ShapingKeys.legacyDoubles {
+            let got = store.object(forKey: ShapingKeys.scoped(k, m)) as? Double
+            expect(got != nil && abs(got! - (seed[k] as! Double)) < 1e-12,
+                   "\(k) 未搬到 \(m.rawValue)")
+        }
+        for k in ShapingKeys.legacyBools {
+            let got = store.object(forKey: ShapingKeys.scoped(k, m)) as? Bool
+            expect(got == (seed[k] as! Bool), "\(k) 未搬到 \(m.rawValue)（或类型丢了）")
+        }
+    }
+    // 旧键必须删干净，否则下次启动还会再搬一遍
+    for k in ShapingKeys.legacyKeys {
+        expect(store.object(forKey: k) == nil, "旧键 \(k) 应已删除")
+    }
+}
+
+func testMigrationDoesNotChangeFeel() {
+    // 这就是「迁移本身不改变手感」的那条性质：
+    // 升级前三个模式共用一份值，迁移后三个模式各拿一份**同一个值**。
+    let store = DictStore(["palmdeck_dz": 0.11, "palmdeck_inv_x": true])
+    let legacyShared = (store.d["palmdeck_dz"] as! Double, store.d["palmdeck_inv_x"] as! Bool)
+    ShapingMigration.run(store)
+
+    for m in CockpitMode.allCases {
+        let dz = ShapingParams.double(store, ShapingKeys.dz, m, 0.06)
+        let inv = ShapingParams.bool(store, ShapingKeys.invX, m, false)
+        expect(abs(dz - legacyShared.0) < 1e-12, "\(m.rawValue) 死区被改了：\(dz)")
+        expect(inv == legacyShared.1, "\(m.rawValue) 反转被改了")
+    }
+}
+
+func testMigrationDoesNotOverwriteExistingScopedValue() {
+    let store = DictStore([
+        "palmdeck_dz": 0.11,
+        ShapingKeys.scoped("palmdeck_dz", .drive): 0.0,   // 用户已在新版里调过
+    ])
+    ShapingMigration.run(store)
+    expect(ShapingParams.double(store, ShapingKeys.dz, .drive, -1) == 0.0, "已有值不能被覆盖")
+    expect(abs(ShapingParams.double(store, ShapingKeys.dz, .heli, -1) - 0.11) < 1e-12, "其它模式照搬")
+    expect(store.object(forKey: "palmdeck_dz") == nil, "旧键仍要删除")
+}
+
+func testMigrationIsIdempotent() {
+    let store = DictStore(["palmdeck_dz": 0.11])
+    let first = ShapingMigration.run(store)
+    let snapshot = store.d
+    let second = ShapingMigration.run(store)
+    expect(first.count == 1, "第一次搬 1 个")
+    expect(second.isEmpty, "第二次无事可做")
+    expect(NSDictionary(dictionary: store.d).isEqual(to: snapshot), "第二次不得改动任何键")
+}
+
+func testMigrationOnEmptyStoreIsNoop() {
+    let store = DictStore()
+    expect(ShapingMigration.run(store).isEmpty, "空存储什么都不搬")
+    expect(store.d.isEmpty, "空存储不得凭空写出键")
+}
+
+func testMigrationLeavesUnrelatedKeysAlone() {
+    let store = DictStore([
+        "palmdeck_stick_return": false,
+        "palmdeck_mode": "drive",
+        "palmdeck_layout_templates_v1": "x",
+    ])
+    ShapingMigration.run(store)
+    expect(store.d.count == 3, "无关键不得被写/删，实际 \(store.d.count)")
+    expect(store.object(forKey: "palmdeck_stick_return") as? Bool == false, "回中开关保持")
+}
+
+func testScopedReadsDoNotBleedAcrossModes() {
+    // G1 要修的 bug 本体：飞机调出来的死区不得跟着赛车走。
+    let store = DictStore([
+        ShapingKeys.scoped("palmdeck_dz", .heli): 0.06,
+        ShapingKeys.scoped("palmdeck_dz", .drive): 0.0,
+    ])
+    expect(abs(ShapingParams.double(store, ShapingKeys.dz, .heli, -1) - 0.06) < 1e-12, "飞机读 0.06")
+    expect(ShapingParams.double(store, ShapingKeys.dz, .drive, -1) == 0.0, "开车读 0.0")
+    // 没设过的模式回落默认，而不是拿别的模式的值
+    expect(ShapingParams.double(store, ShapingKeys.dz, .gamepad, 0.06) == 0.06, "未设过的模式回落默认")
+}
+
+func testShapingParamsSetWritesOnlyThatMode() {
+    let store = DictStore()
+    ShapingParams.set(store, 0.2, ShapingKeys.sensX, .drive)
+    expect(store.d.count == 1, "只写一个键，实际 \(store.d.count)")
+    expect(store.object(forKey: ShapingKeys.scoped("palmdeck_sens_x", .drive)) as? Double == 0.2,
+           "写到 drive 的键上")
+    expect(ShapingParams.double(store, ShapingKeys.sensX, .heli, 1.0) == 1.0, "heli 不受影响")
+}
+
 // MARK: - 跑
 
 testClampUnit()
@@ -303,6 +427,15 @@ testModeParse()
 testPacketLayout()
 testQuantize()
 testPacketIsDeterministicAndZeroed()
+testShapingKeyScoping()
+testMigrationMovesEveryLegacyKey()
+testMigrationDoesNotChangeFeel()
+testMigrationDoesNotOverwriteExistingScopedValue()
+testMigrationIsIdempotent()
+testMigrationOnEmptyStoreIsNoop()
+testMigrationLeavesUnrelatedKeysAlone()
+testScopedReadsDoNotBleedAcrossModes()
+testShapingParamsSetWritesOnlyThatMode()
 
 if failures.isEmpty {
     print("OK  \(checks) checks passed")

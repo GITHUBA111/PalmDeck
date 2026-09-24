@@ -13,6 +13,7 @@
 		0A0B21D5ABA1ED3191C9ECF1 /* CockpitController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */; };
 		F00BD81A580487FD8AB3ECB8 /* ControllerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */; };
 		F1D2E3A4B5C67890D1E2F3B4 /* PacketFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */; };
+		F1D2E3A4B5C67890D1E2F3B6 /* ShapingKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B7 /* ShapingKeys.swift */; };
 		F1D2E3A4B5C67890D1E2F3B2 /* AxisMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */; };
 		F1D2E3A4B5C67890D1E2F3B0 /* CockpitMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */; };
 		F1D2E3A4B5C67890D1E2F3AE /* AxisCurve.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */; };
@@ -44,6 +45,7 @@
 		9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CockpitController.swift; path = Native/Model/CockpitController.swift; sourceTree = "<group>"; };
 		EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ControllerState.swift; path = Native/Model/ControllerState.swift; sourceTree = "<group>"; };
 		F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketFormat.swift; path = Native/Model/PacketFormat.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3B7 /* ShapingKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShapingKeys.swift; path = Native/Model/ShapingKeys.swift; sourceTree = "<group>"; };
 		F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AxisMap.swift; path = Native/Model/AxisMap.swift; sourceTree = "<group>"; };
 		F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CockpitMode.swift; path = Native/Model/CockpitMode.swift; sourceTree = "<group>"; };
 		F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AxisCurve.swift; path = Native/Model/AxisCurve.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */,
 				EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */,
 				F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */,
+				F1D2E3A4B5C67890D1E2F3B7 /* ShapingKeys.swift */,
 				F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */,
 				F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */,
 				F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */,
@@ -211,6 +214,7 @@
 				0A0B21D5ABA1ED3191C9ECF1 /* CockpitController.swift in Sources */,
 				F00BD81A580487FD8AB3ECB8 /* ControllerState.swift in Sources */,
 				F1D2E3A4B5C67890D1E2F3B4 /* PacketFormat.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3B6 /* ShapingKeys.swift in Sources */,
 				F1D2E3A4B5C67890D1E2F3B2 /* AxisMap.swift in Sources */,
 				F1D2E3A4B5C67890D1E2F3B0 /* CockpitMode.swift in Sources */,
 				F1D2E3A4B5C67890D1E2F3AE /* AxisCurve.swift in Sources */,

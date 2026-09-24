@@ -1,6 +1,6 @@
 # PalmDeck v4 · App 端功能与交互设计
 
-> 状态：**设计稿 + P7 实施**（本文档为 iOS App 的权威交互规格）
+> 状态：**设计稿 + P7 / G1 实施**（本文档为 iOS App 的权威交互规格）
 > 范围：`mobile/ios/App/App/Native/`（纯原生 SwiftUI）。电脑侧见
 > `docs/PalmDeck-v3-feature-design.md`；总纲见 `docs/PalmDeck-v4-redesign.md`。
 > 原则：**App 是“杆”，不是演示页**——手感、确定性、零误触优先于功能堆砌。
@@ -288,6 +288,7 @@ y = 0                                              |x| <  dz
 | G6 | `Discovery.found.ws/udp` 未用 | 只取 `.ip` | 中 | ✅ P7.4 TXT + 传递 |
 | G7 | 总距卡位无触觉 | `CollectiveLever` 无 detent 反馈 | 中 | ✅ P7.3 卡位震 |
 | G8 | 档位不持久化，切模式归零 | `DriveDeck` `@State gearIndex` | 中 | ✅ P7.5 落盘 |
+| G9 | 手感参数三模式共用一份 | `ControllerState` 全局键 | **高** | ✅ **G1** 按模式分键 |
 | G9 | 模式单击即切（误触风险） | `setMode` 无防抖 | 低 | 记录，暂不改 |
 | G10 | `LayoutStore` 仍为 heli/drive 生成默认布局（已不用） | `Layout.swift` defaults | 低 | 记录，暂不改 |
 | G11 | `haveCenter/paused` 已删，无校准流程 | — | — | 已解决 |
@@ -310,12 +311,16 @@ y = 0                                              |x| <  dz
 | `palmdeck_layout_undo_v1` | Data | `{}` | 撤销槽 `{mode: [DeckWidget]}`，单格/按模式 |
 | `palmdeck_gear` | Int | 2 | 开车档位（P7 新增） |
 | `palmdeck_haptics` | Bool | true | 触觉开关（P7 新增） |
-| `palmdeck_sens_x/y` | Double | 1.0 | 灵敏度（P7 新增） |
-| `palmdeck_dz` | Double | 0.06 | 死区（P7 新增） |
-| `palmdeck_inv_x/y/yaw/coll` | Bool | false | 轴反向（P7 新增） |
+| `palmdeck_sens_x/y` | Double | 1.0 | 灵敏度（P7 新增；**G1 起带模式后缀**） |
+| `palmdeck_dz` | Double | 0.06 | 死区（P7 新增；**G1 起带模式后缀**） |
+| `palmdeck_inv_x/y/yaw/coll` | Bool | false | 轴反向（P7 新增；**G1 起带模式后缀**） |
 | `palmdeck_stick_return` | Bool | true | 摇杆回中（P7 新增） |
 | `palmdeck_wheel_max_deg` | Double | 540 | 满舵角（P7 新增） |
 | `palmdeck_wheel_return` | Double | 720 | 回正速度（P7 新增） |
+
+> **G1：手感参数按模式分键。** 上表里带 *(G1)* 标记的键实际存为
+> `palmdeck_dz.heli` / `palmdeck_dz.drive` / `palmdeck_dz.gamepad`（其余同理），
+> 见 §12。旧的无后缀键在启动时**一次性迁移**到三个模式并删除。
 
 ---
 
@@ -336,7 +341,42 @@ y = 0                                              |x| <  dz
 
 ---
 
-## 12. 不做 / 明确边界
+## 12. G1 实施：手感参数按模式分键
+
+**要修的 bug**：上述七个手感参数（灵敏度 X/Y、死区、四个反向）此前是**三个模式共用一份**。
+为飞机调出的 `dz=0.06` 会一直跟着赛车走 —— 开车本来不需要死区（ETS2 自带一份），
+叠上去就是中位多一段死行程。反过来在赛车下调的参数也会污染飞机。
+
+**键名**：`palmdeck_dz` → `palmdeck_dz.heli` / `.drive` / `.gamepad`（其余同理）。
+后缀用 `CockpitMode.rawValue`（英文），不用 `label`（中文文案会变）。
+
+**迁移**（`ShapingMigration.run`，启动时跑一次）：
+
+1. 读到旧的无后缀键 → 把**它的值写到三个模式各自的键上**，然后删掉旧键；
+2. 已经存在的新键不覆盖（用户可能已在新版里调过），旧键仍删。
+
+> 迁移**不改变任何手感**：升级前三个模式共用一个值，迁移后三个模式各拿一份同一个值，
+> 行为逐位相同。这条是迁移能安全上线的全部理由，所以它有专门的测试。
+
+**切模式**：`CockpitController.setMode` 走 `state.applyMode(m)` —— 先换 `mode`，
+再 `reloadShaping()` 读本模式那一份。`didSet` 的保存键跟着 `mode` 走，
+所以写回去的就是刚读出来的那个键，不会把旧模式的参数写进新模式。
+
+**实现位置**：`Model/ShapingKeys.swift`（纯逻辑：键名拼接、迁移、读写）、
+`ControllerState.shapingStore`（**可注入**，默认 `UserDefaults.standard`；
+测试注入字典替身，跑测试不碰真实偏好设置）。
+
+**测试**（两层，缺一不可 —— 只测算法抳不住“接线错”）：
+
+| 层 | 文件 | 测什么 |
+| --- | --- | --- |
+| 算法 | `tests/ios/AxisCoreTests.swift` | 键名拼接、每个旧键都搬家、不覆盖已有值、幂等、不碰无关键 |
+| 接线 | `tests/ios/ControllerStateKeysTests.swift` | 真的 `ControllerState`：真跑了迁移、`applyMode` 真的换一套、写入只落当前模式的键 |
+| 守卫 | `tests/test_ios_axis.py` | 全仓库不得再出现无后缀的全局手感键；`setMode` 不得绕过 `applyMode` |
+
+---
+
+## 13. 不做 / 明确边界
 
 - 不恢复 v3 的“整机倾斜体感”“锁定/校准 HUD”（v4 为触控硬件皮肤）。
 - 不做手机端游戏遥测回读（见 `docs/TODO.md`）。

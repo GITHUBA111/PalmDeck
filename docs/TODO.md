@@ -44,10 +44,12 @@
 - 无。
 
 ## 其它
-- **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）
-  → **G1**（手感参数按模式分离，修掉「飞机 0.06 死区污染赛车」）
+- **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）→ ~~**G1**~~（已施工）
   → **G2**（`GameProfile` + 预设 UI）→ **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
   取证与理由见 `docs/PalmDeck-v4-game-profiles.md`。
+- **G1 起手感参数带模式后缀**：`palmdeck_dz` → `palmdeck_dz.<mode>` 等七个键；
+  旧键启动时一次性迁移（`Model/ShapingKeys.swift`）。
+  新增持久化键时注意：未带后缀的写法会被 `tests/test_ios_axis.py` 拦住。
 - ~~**`CockpitView.swift:58` 一条 Swift 警告**（`'weak' ownership of capture 'layout'`）
   —— 外层闭包已隐式强引用 `layout`，内层再 `[weak layout]` 语义矛盾。~~
   已随 E1 修掉（先落局部变量再弱引用）。

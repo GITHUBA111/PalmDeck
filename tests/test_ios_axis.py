@@ -9,12 +9,14 @@
   - Native/Model/AxisMap.swift     ← 模式 → 8 个轴的真值表
   - Native/Model/CockpitMode.swift ← 模式枚举 + 旧值兼容
   - Native/Model/PacketFormat.swift← 22 字节包布局
+  - Native/Model/ShapingKeys.swift← G1 手感键名与旧值迁移
 
 注意：Swift 的 top-level 代码只允许出现在 `main.swift`，
 所以测试源码会被复制到临时目录并改名 `main.swift` 再编译。
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -31,6 +33,7 @@ SOURCES = [
     "AxisMap.swift",
     "CockpitMode.swift",
     "PacketFormat.swift",
+    "ShapingKeys.swift",
 ]
 
 TEST_SRC = os.path.join(HERE, "ios", "AxisCoreTests.swift")
@@ -128,6 +131,79 @@ class TestCurveHasSingleImplementation(unittest.TestCase):
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         self.assertIn("AxisCurve.output(", text, "响应曲线预览必须调用 AxisCurve.output")
+
+
+class TestShapingParamsAreModeScoped(unittest.TestCase):
+    """G1：手感参数必须按模式分开存。
+
+    这个 bug 的特征是「改了 A 模式，B 模式跟着变」—— 不崩、不报错，
+    只是手感静默地不对，所以靠人眼看代码是拦不住的。
+    """
+
+    SWIFT_DIRS = ("Model", "Views")
+
+    def _swift_files(self):
+        base = os.path.join(ROOT, "mobile", "ios", "App", "App", "Native")
+        for sub in self.SWIFT_DIRS:
+            d = os.path.join(base, sub)
+            for name in sorted(os.listdir(d)):
+                if name.endswith(".swift"):
+                    yield os.path.join(d, name)
+
+    def test_shaping_keys_file_is_compiled_by_this_suite(self):
+        self.assertIn("ShapingKeys.swift", SOURCES,
+                      "迁移逻辑必须跑在纯逻辑测试里，否则没人验证它")
+
+    def test_no_global_shaping_key_survives(self):
+        path = os.path.join(MODEL, "ShapingKeys.swift")
+        with open(path, encoding="utf-8") as fh:
+            keys_src = fh.read()
+        legacy = sorted(set(re.findall(r'static let \w+ = "(palmdeck_[a-z_]+)"', keys_src)))
+        self.assertEqual(
+            legacy,
+            sorted([
+                "palmdeck_sens_x", "palmdeck_sens_y", "palmdeck_dz",
+                "palmdeck_inv_x", "palmdeck_inv_y", "palmdeck_inv_yaw", "palmdeck_inv_coll",
+            ]),
+            "ShapingKeys.swift 里的旧键清单变了一一请同步更新这里的断言",
+        )
+        self.assertRegex(keys_src, r"legacyKeys = legacyDoubles \+ legacyBools",
+                         "legacyKeys 必须是两个子清单的并集，不能另写一份")
+
+        offenders = []
+        for path in self._swift_files():
+            if os.path.basename(path) == "ShapingKeys.swift":
+                continue
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            for key in legacy:
+                if f'"{key}"' in text:
+                    offenders.append(f"{os.path.relpath(path, ROOT)} 用了全局键 \"{key}\"")
+        self.assertEqual(
+            offenders, [],
+            "手感参数又变回全局键了（应该走 ShapingKeys.scoped(_, mode)）：\n  "
+            + "\n  ".join(offenders),
+        )
+
+    def test_controller_state_has_one_load_path(self):
+        with open(os.path.join(MODEL, "ControllerState.swift"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("ShapingMigration.run(", text, "启动时必须跑一次迁移")
+        self.assertIn("private func reloadShaping()", text, "读取只能有一条路径")
+        self.assertIn("func applyMode(", text, "切模式必须重新读该模式的参数")
+        # 读取路径唯一：ShapingParams.double/bool 只出现在 reloadShaping 里
+        self.assertEqual(
+            len(re.findall(r"ShapingParams\.(?:double|bool)\(", text)), 7,
+            "七个受模式影响的手感参数各读一次（读多了就说明有两处读取会滞）",
+        )
+
+    def test_set_mode_goes_through_apply_mode(self):
+        with open(os.path.join(MODEL, "CockpitController.swift"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("state.applyMode(m)", text,
+                      "切模式必须走 applyMode，不能只改 state.mode（那样手感参数不会跟着换）")
+        self.assertNotIn("state.mode = m", text,
+                         "直接赋 state.mode 会跳过手感参数重读")
 
 
 if __name__ == "__main__":
