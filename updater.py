@@ -13,8 +13,16 @@ import subprocess
 import sys
 import urllib.request
 
-# 打包进 exe 的本地版本号；发新版时同步改这里 + 打 tag vX.Y.Z
-APP_VERSION = "0.3.2"
+# 发版版本号（唯一来源）。托盘、网页控制台、自更新比较都用它。
+#
+# 与 bridge.PROTOCOL_VERSION 的关系：**主版本号必须相同**。
+#   APP_VERSION    = 发版号      → "4.0.0"  → 用户看到的 / 自更新比较的
+#   PROTOCOL_VERSION = 协议/hello 号 → "4.0"    → 写入 hello 帧，App 侧据此协商
+# 两者分开是因为：改协议不一定发版（内部迭代），但对外不能出现“程序 v4.0 说协议 3.2”
+# 这种自相矛盾。不一致会被 tests/test_version.py 拦下。
+#
+# 发新版时同步改这里 + 打 tag vX.Y.Z（例如 v4.0.0）。
+APP_VERSION = "4.0.0"
 
 GITHUB_API = "https://api.github.com/repos/GITHUBA111/PalmDeck/releases/latest"
 GITHUB_EXE = "https://github.com/GITHUBA111/PalmDeck/releases/latest/download/PalmDeck.exe"
@@ -33,7 +41,7 @@ def _ver_tuple(v: str) -> tuple:
 
 
 def check_update() -> str:
-    """返回远端最新版本号（如 0.4.0）；无更新/离线/出错返回空串。"""
+    """返回远端最新版本号（如 4.1.0）；无更新/离线/出错返回空串。"""
     if os.environ.get("PALMDECK_NO_UPDATE"):
         return ""
     try:

@@ -70,7 +70,7 @@ Capacitor 打包壳引用，标为 deprecated，后续删除。
 {
   "product": "PalmDeck",
   "bundle": 1,
-  "app_version": "0.3.2",
+  "app_version": "4.0.0",
   "exported_at": "2026-09-24T02:28:11Z",
   "config": { ...全部服务配置... },
   "layouts": { "heli": [ ... ], "drive": [ ... ], "gamepad": [ ... ] }
@@ -154,6 +154,20 @@ Capacitor 打包壳引用，标为 deprecated，后续删除。
 ---
 
 ## 4. 实施状态
+
+### P0 — 版本号语义（已完成）
+
+两个号分工不同，但**主版本必须一致**（`tests/test_version.py` 守卫）：
+
+| 常量 | 位置 | 值 | 用途 |
+|---|---|---|---|
+| `APP_VERSION` | `updater.py:22` | `4.0.0` | 发版号：托盘 / 网页 / 自更新比较基准 |
+| `PROTOCOL_VERSION` | `bridge.py:234` | `4.0` | 写入 `hello.version`，App 据此告警 |
+| `MARKETING_VERSION` | `project.pbxproj` | `4.0` | iOS 「设置 → 关于 → App 版本」 |
+
+- 修掉的原状：`APP_VERSION` 停在 `0.3.2`，而 `hello.version` 写着 `4.0` ——
+  控制台自报 v0.3.2、自更新基准也是 0.3.2，发版忘了改就**推不出更新**。
+- 设置 → 关于新增「电脑端版本」（取 `hello.version`）；与 App 主版本不一致时橙色告警。
 
 ### P1（已完成）
 

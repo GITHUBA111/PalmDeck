@@ -230,6 +230,10 @@ HAT_NAME = {0: "hat_up", 1: "hat_right", 2: "hat_down", 3: "hat_left"}
 MODES = ("heli", "drive", "gamepad")
 MODE_ALIASES = {"infantry": "gamepad", "gamepad": "gamepad"}
 
+# 协议 / hello 版本号。App 用它判断对端能力（配合 caps / layout_schema）。
+# 主版本号必须与 updater.APP_VERSION 的主版本号一致，由 tests/test_version.py 守卫。
+PROTOCOL_VERSION = "4.0"
+
 
 def canonical_mode(name: str) -> str:
     return MODE_ALIASES.get((name or "").strip(), (name or "").strip())
@@ -735,7 +739,7 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
             {
                 "type": "hello",
                 "product": "PalmDeck",
-                "version": "4.0",
+                "version": PROTOCOL_VERSION,
                 "udp": HUB.udp_port,
                 "axis_profile": HUB.axis_profile,
                 "http": HUB.http_port,
