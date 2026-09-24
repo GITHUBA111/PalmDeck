@@ -54,9 +54,12 @@ struct CockpitView: View {
         }
         .onAppear {
             discovery.start()
-            // 电脑端下发布局 → 写入 LayoutStore
-            ctrl.onLayouts = { [weak layout] raw in layout?.applyServer(raw: raw) }
-            // 首次进入座舱自动弹一次速览（可在设置里重新打开）；延迟一帧确保能正常弹出
+            // 电脑端下发布局 → 写入 LayoutStore。
+            // 先落到局部变量再弱引用：直接写 [weak layout] 会同时把 self 强引用起来
+            // （闭包里的 discovery / showSettings 等），Swift 会报
+            // “'weak' ownership of capture 'layout' differs from implicitly-captured strong reference”。
+            let store = layout
+            ctrl.onLayouts = { [weak store] raw in store?.applyServer(raw: raw) }            // 首次进入座舱自动弹一次速览（可在设置里重新打开）；延迟一帧确保能正常弹出
             if !UserDefaults.standard.bool(forKey: "palmdeck_tutored") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showTutorial = true }
             }
@@ -372,7 +375,17 @@ struct LibrarySheet: View {
                 }
                 Section("绑定功能") {
                     Picker("绑定", selection: $binding) {
-                        ForEach(WidgetBinding.allCases, id: \.self) { b in Text(b.label).tag(b) }
+                        ForEach(WidgetBinding.allCases, id: \.self) { b in
+                            Text(b.onlyOnVJoy ? "\(b.label) · 仅飞行" : b.label).tag(b)
+                        }
+                    }
+                }
+                if binding.onlyOnVJoy {
+                    Section {
+                        Label("第 11–16 号键只存在于 vJoy。Xbox 虚拟手柄只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，开车和手柄模式里选它不会生效。",
+                              systemImage: "exclamationmark.triangle")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.amber)
                     }
                 }
                 Section {

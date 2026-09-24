@@ -44,11 +44,10 @@
 - 无。
 
 ## 其它
-- **拆方案待施工（按已定顺序）**：**E1**（drive 模式「视角键」与「降档」撞同一个
-  b5=LB；手柄模式 b11–b16 是死按钮；`Layout.swift:299-300` 的 LB/RB 标签反了）
+- **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）
   → **G1**（手感参数按模式分离，修掉「飞机 0.06 死区污染赛车」）
   → **G2**（`GameProfile` + 预设 UI）→ **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
   取证与理由见 `docs/PalmDeck-v4-game-profiles.md`。
-- **`CockpitView.swift:58` 一条 Swift 警告**（`'weak' ownership of capture 'layout'`）
-  —— 外层闭包已隐式强引用 `layout`，内层再 `[weak layout]` 语义矛盾。
-  随 E1 一并处理。
+- ~~**`CockpitView.swift:58` 一条 Swift 警告**（`'weak' ownership of capture 'layout'`）
+  —— 外层闭包已隐式强引用 `layout`，内层再 `[weak layout]` 语义矛盾。~~
+  已随 E1 修掉（先落局部变量再弱引用）。

@@ -291,13 +291,15 @@ final class LayoutStore: ObservableObject {
             .make(.stick,  .roll,     .r(0.05, 0.30, 0.20, 0.34), label: "左摇杆"),
             .make(.pad,    .look,     .r(0.75, 0.30, 0.20, 0.34), label: "右摇杆"),
             .make(.slider, .brake,    .r(0.29, 0.70, 0.18, 0.13), label: "LT"),
-            .make(.slider, .throttle, .r(0.51, 0.70, 0.18, 0.13), label: "RT"),
+            .make(.slider, .rt,       .r(0.51, 0.70, 0.18, 0.13), label: "RT"),
             .make(.button, .vjoy1,    .r(0.74, 0.70, 0.10, 0.10), label: "A"),
             .make(.button, .vjoy2,    .r(0.855, 0.70, 0.10, 0.10), label: "B"),
             .make(.button, .vjoy3,    .r(0.74, 0.82, 0.10, 0.10), label: "X"),
             .make(.button, .vjoy4,    .r(0.855, 0.82, 0.10, 0.10), label: "Y"),
-            .make(.button, .gearUp,   .r(0.04, 0.70, 0.11, 0.09), label: "LB"),
-            .make(.button, .gearDown, .r(0.16, 0.70, 0.11, 0.09), label: "RB"),
+            // gearUp → pulse(5) → b6 → X360["b6"] = RIGHT_SHOULDER = RB
+            // gearDown → pulse(4) → b5 → X360["b5"] = LEFT_SHOULDER = LB
+            .make(.button, .gearUp,   .r(0.04, 0.70, 0.11, 0.09), label: "RB"),
+            .make(.button, .gearDown, .r(0.16, 0.70, 0.11, 0.09), label: "LB"),
             .make(.button, .vjoy7,    .r(0.04, 0.82, 0.11, 0.09), label: "视图"),
             .make(.button, .vjoy8,    .r(0.16, 0.82, 0.11, 0.09), label: "菜单"),
             .make(.button, .fire,     .r(0.30, 0.85, 0.12, 0.09), label: "开火"),

@@ -321,7 +321,15 @@ struct DriveDeck: View {
             DeckButton(title: "雨刷", active: isActive(.vjoy8)) { toggle(.vjoy8) }
             DeckButton(title: "大灯", active: isActive(.vjoy9), accent: Theme.amber) { toggle(.vjoy9) }
             DeckButton(title: "远光", active: isActive(.vjoy10), accent: Theme.amber) { toggle(.vjoy10) }
-            DeckButton(title: "视角键", active: isActive(.vjoy5)) { toggle(.vjoy5) }
+            // 视角不再占 vjoy5 —— 那正好和「降档」撞同一个键（都是 b5 = LB），
+            // 按一次降档会连带跳一次镜头。改走十字键（hat → Xbox D-pad），
+            // 按住才看、松手回正前方，也更接近真车的后视镜/回头看一眼。
+            DeckHoldButton(title: "视角 ↑", active: s.hat == 0, accent: Theme.cyan,
+                           onDown: { glance(0) }, onUp: { glanceEnd() })
+            DeckHoldButton(title: "左视 ←", active: s.hat == 3, accent: Theme.cyan,
+                           onDown: { glance(3) }, onUp: { glanceEnd() })
+            DeckHoldButton(title: "右视 →", active: s.hat == 1, accent: Theme.cyan,
+                           onDown: { glance(1) }, onUp: { glanceEnd() })
         }
     }
 
@@ -329,6 +337,10 @@ struct DriveDeck: View {
     private func shift(_ dir: Int) {
         pulse(dir > 0 ? 5 : 4)   // b6 = 升档(RB) / b5 = 降档(LB)
     }
+
+    // MARK: 视角（走十字键 hat，PC 侧映射到 D-pad；不占任何按钮位）
+    private func glance(_ dir: UInt8) { s.hat = dir }
+    private func glanceEnd() { s.hat = 255 }
 
     private func isActive(_ b: WidgetBinding) -> Bool {
         if let idx = b.vjoyIndex { return (s.btnMask & (1 << idx)) != 0 }
@@ -351,5 +363,47 @@ struct DriveDeck: View {
             s.btnMask &= ~bit
             s.onButton?(idx + 1, false)
         }
+    }
+}
+
+/// 「按住生效、松手复位」的瞬时键。
+///
+/// `DeckButton` 是点按开关（toggle），用在十字键上会留下一个一直按住的 D-pad 方向；
+/// 视角这类瞬时动作必须用按下/抬起两个明确事件。
+struct DeckHoldButton: View {
+    var title: String
+    var active: Bool = false
+    var accent: Color = Theme.cyan
+    var onDown: () -> Void
+    var onUp: () -> Void
+
+    @State private var held = false
+
+    private var lit: Bool { held || active }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(RoundedRectangle(cornerRadius: 8)
+                .fill(lit ? accent.opacity(0.32) : Theme.panelHi))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .stroke(lit ? accent : Theme.border, lineWidth: 1))
+            .foregroundColor(lit ? accent : Theme.textDim)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !held else { return }
+                        held = true
+                        Haptics.tap()
+                        onDown()
+                    }
+                    .onEnded { _ in
+                        guard held else { return }
+                        held = false
+                        onUp()
+                    }
+            )
     }
 }

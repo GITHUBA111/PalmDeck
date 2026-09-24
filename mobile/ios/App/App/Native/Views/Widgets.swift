@@ -26,7 +26,7 @@ enum WidgetKind: String, Codable, CaseIterable {
 /// 组件绑定的功能（轴或按钮）
 enum WidgetBinding: String, Codable, CaseIterable {
     // 轴
-    case roll, pitch, yaw, throttle, brake, clutch, look
+    case roll, pitch, yaw, throttle, brake, clutch, rt, look
     // 按钮
     case vjoy1, vjoy2, vjoy3, vjoy4, vjoy5, vjoy6, vjoy7, vjoy8
     case vjoy9, vjoy10, vjoy11, vjoy12, vjoy13, vjoy14, vjoy15, vjoy16
@@ -39,8 +39,9 @@ enum WidgetBinding: String, Codable, CaseIterable {
         case .pitch: return "俯仰"
         case .yaw: return "方向舵"
         case .throttle: return "油门"
-        case .brake: return "刹车"
+        case .brake: return "刹车（LT）"
         case .clutch: return "离合"
+        case .rt: return "右扳机（RT）"
         case .look: return "视角"
         case .gearUp: return "升档"
         case .gearDown: return "降档"
@@ -53,13 +54,20 @@ enum WidgetBinding: String, Codable, CaseIterable {
 
     var isAxis: Bool {
         switch self {
-        case .roll, .pitch, .yaw, .throttle, .brake, .clutch, .look: return true
+        case .roll, .pitch, .yaw, .throttle, .brake, .clutch, .rt, .look: return true
         default: return false
         }
     }
     var vjoyIndex: Int? {
         if rawValue.hasPrefix("vjoy"), let n = Int(rawValue.dropFirst(4)) { return n - 1 }
         return nil
+    }
+
+    /// vjoy11–vjoy16 只存在于 vJoy。Xbox 虚拟手柄（`hotas.py` 的 `X360` 字典）到
+    /// b10 = 右摇杆按下为止，所以开车/手柄模式里选它等于选了一个什么都不做的键。
+    var onlyOnVJoy: Bool {
+        guard let idx = vjoyIndex else { return false }
+        return idx >= 10
     }
 }
 
@@ -93,7 +101,7 @@ struct WidgetView: View {
                           onTouch: { ctrl.setTouchActive($0) })
         case .slider:
             switch widget.binding {
-            case .throttle, .brake, .clutch:
+            case .throttle, .brake, .clutch, .rt:
                 VStack(spacing: 2) {
                     Text(widget.title).font(.system(size: 10)).foregroundColor(Theme.textFaint)
                     UniSlider(value: bindAxis(widget.binding), accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
@@ -124,6 +132,7 @@ struct WidgetView: View {
         case .throttle: return Theme.green
         case .brake: return Theme.red
         case .clutch: return Theme.orange
+        case .rt: return Theme.orange
         default: return Theme.cyan
         }
     }
@@ -137,6 +146,7 @@ struct WidgetView: View {
         case .throttle: return $s.throttle
         case .brake: return $s.lt
         case .clutch: return $s.clutch
+        case .rt: return $s.rt
         default: return $s.roll
         }
     }

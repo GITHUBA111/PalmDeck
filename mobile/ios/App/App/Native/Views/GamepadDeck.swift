@@ -61,9 +61,9 @@ struct GamepadDeck: View {
             let W = geo.size.width
             let H = geo.size.height
             HStack(spacing: 10) {
-                // 左手：LT / 左摇杆 / LB
+                // 左手：L3 / 左摇杆 / LB
                 VStack(spacing: 10) {
-                    TriggerBtn(title: "LT", active: isActive(.vjoy9), accent: Theme.orange) { toggle(.vjoy9) }
+                    TriggerBtn(title: "L3", active: isActive(.vjoy9), accent: Theme.orange) { toggle(.vjoy9) }
                         .frame(height: H * 0.15)
                     StickControl(x: $s.roll, y: $s.pitch,
                                  returnToCenter: s.stickReturn,
@@ -89,9 +89,9 @@ struct GamepadDeck: View {
                 }
                 .frame(maxWidth: .infinity)
 
-                // 右手：RT / 右摇杆 / RB
+                // 右手：R3 / 右摇杆 / RB
                 VStack(spacing: 10) {
-                    TriggerBtn(title: "RT", active: isActive(.vjoy10), accent: Theme.orange) { toggle(.vjoy10) }
+                    TriggerBtn(title: "R3", active: isActive(.vjoy10), accent: Theme.orange) { toggle(.vjoy10) }
                         .frame(height: H * 0.15)
                     LookPad(lookX: $s.lookX, lookY: $s.lookY, accent: Theme.cyan)
                         .frame(maxHeight: .infinity)

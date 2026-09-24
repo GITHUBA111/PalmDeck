@@ -61,7 +61,7 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现。
 - `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
-v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+LT/RT）。
+v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表+十字键视角）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+L3/R3）。
 
 ### 三种模式（v4 硬件皮肤）
 - **飞机 heli**：`FlightDeckView` —— 总距杆（IDLE/FLY/MAX 止动）+ 脚舵 + 周期变距杆 + 仪表板（COLL/TRQ 弧形 + 姿态球 PFD + ROL/PIT/YAW 条）+ 硬件按键（开火/投弹/起落架/灯光/悬停/视角）。

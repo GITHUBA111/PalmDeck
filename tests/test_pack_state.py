@@ -78,6 +78,58 @@ def pack_full(
                     i16(look_x), i16(look_y), i16(thr), i16(lt), i16(rt), buttons)
 
 
+def pack_hat(hat: int, buttons: int = 0) -> bytes:
+    return PKT.pack(b"PD", 1, hat, 0, 0, 0, 0, 0, 0, 0, 0, buttons)
+
+
+class DriveHatTests(unittest.TestCase):
+    """E1：开车模式的视角键不再占 vjoy5（和降档撞 b5 = LB），改走 hat。
+
+    hat 字节本来就在 22 字节包里（`magic | ver | hat | 8*i16 | buttons`），
+    PC 侧 `HAT_NAME` → `tap_button` → Xbox `DPAD_*`，全程零协议改动。
+    """
+
+    HAT_NAME = {0: "hat_up", 1: "hat_right", 2: "hat_down", 3: "hat_left"}
+
+    def hub(self):
+        from bridge import Hub
+        from tests.fakes import FakeHotas
+
+        hub = Hub(hotas=FakeHotas())
+        hub.udp_allowlist = False
+        return hub
+
+    def test_hat_directions_are_dispatched_and_released(self) -> None:
+        hub = self.hub()
+        hub.apply_packet(pack_hat(255), src="ws", ip="127.0.0.1")
+        hub.hotas.buttons.clear()
+        for hat, name in self.HAT_NAME.items():
+            hub.hotas.buttons.clear()
+            hub.apply_packet(pack_hat(hat), src="ws", ip="127.0.0.1")
+            self.assertEqual(hub.hotas.buttons, [(name, True)], "hat=%d → %s" % (hat, name))
+            hub.hotas.buttons.clear()
+            hub.apply_packet(pack_hat(255), src="ws", ip="127.0.0.1")
+            self.assertEqual(hub.hotas.buttons, [(name, False)], "回中要松开 %s" % name)
+
+    def test_unchanged_hat_is_not_resent(self) -> None:
+        hub = self.hub()
+        hub.apply_packet(pack_hat(3), src="ws", ip="127.0.0.1")
+        hub.hotas.buttons.clear()
+        # 同一个 hat + 一个新按下的键：包被处理了，但不应重发 hat 事件
+        hub.apply_packet(pack_hat(3, buttons=(1 << 4)), src="ws", ip="127.0.0.1")
+        self.assertIn(("b5", True), hub.hotas.buttons, "这一包没被处理？")
+        self.assertEqual(
+            [n for n, _ in hub.hotas.buttons if n.startswith("hat_")],
+            [],
+            "hat 没变就不该重复发",
+        )
+
+    def test_hat_and_buttons_travel_in_the_same_packet(self) -> None:
+        hub = self.hub()
+        hub.apply_packet(pack_hat(3, buttons=(1 << 4)), src="ws", ip="127.0.0.1")
+        self.assertIn(("b5", True), hub.hotas.buttons)
+        self.assertIn(("hat_left", True), hub.hotas.buttons)
+
 class DriveAxisTests(unittest.TestCase):
     """开车拨杆约定（iOS Packet.swift）：
     方向盘=左摇杆 X，离合=左摇杆 Y（0 → 中位，1 → -1），视角触屏=右摇杆。

@@ -116,7 +116,7 @@ idle ──connect()──► connecting ──open──► live
 |---|---|---|---|
 | 左上 | `DashPanel` 转速表+档位 | 只读 | 红区红线、油门/刹车/离合/转向条 |
 | 中上 | 方向盘 `SteeringWheel` | `roll`(→X) | 多圈（可调满舵 180–900°）；回正速度可调（0=保持） |
-| 右 | 视角板 `LookPad` + 3×3 键簇 | `lookX/Y` + vJoy | 视角触碰板；左右转/危险灯/喇叭/手刹/雨刷/大灯/远光 |
+| 右 | 视角板 `LookPad` + 3×3 键簇 + 3 个十字键 | `lookX/Y` + vJoy + `hat` | 视角触碰板；左右转/危险灯/喇叭/手刹/雨刷/大灯/远光；**视角 ↑/左视 ←/右视 →** 走 `hat`（按下生效，松手回中） |
 | 左下 | 三踏板 `DrivePedals` | 离合 Y / 刹车 Sl0 / 油门 Z&RT | 独立按住，互不影响 |
 | 右下 | 序列式档杆 `GearLever` | 脉冲 b6 升 / b5 降 | 拖动选档，每次换位发一次脉冲 |
 
@@ -124,7 +124,9 @@ idle ──connect()──► connecting ──open──► live
 
 ### 3.4 手柄 gamepad — `GamepadDeck` / `WidgetCanvas`
 - 默认硬件皮肤 `GamepadDeck`：左摇杆(roll/pitch) · 右摇杆(look) · 十字键(hat) ·
-  ABXY(vjoy1-4) · LB/RB(vjoy5/6) · 视图/菜单(vjoy7/8) · LT/RT(vjoy9/10)。
+  ABXY(vjoy1-4) · LB/RB(vjoy5/6) · 视图/菜单(vjoy7/8) · L3/R3(vjoy9/10)。
+  （**不是 LT/RT**：Xbox 的 LT/RT 是模拟轴 `lt`/`rt`，不在按键表里；
+  `X360["b9"] = LEFT_THUMB`、`X360["b10"] = RIGHT_THUMB`。）
 - 开关 `palmdeck_gamepad_custom`：切到 `WidgetCanvas` 自定义组件布局（P3 同步）。
 - 服务端在 gamepad 停 `thr/lt/rt`，App 停发轴 → **不抢电脑键鼠**。
 

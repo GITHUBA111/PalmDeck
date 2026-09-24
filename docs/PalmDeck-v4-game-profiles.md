@@ -360,7 +360,24 @@ struct GameProfile: Codable, Equatable {
 | **方向盘转角 `wheelMaxDeg`** | **900**（默认 540） | 默认 540 是 `ControllerState.swift:97` 定的；真实卡车/ETS2 的 lock-to-lock 是 900°，触发点不对齐时「打满」感觉会怪 |
 | 回正速度 `wheelReturnSpeed` | 720（默认） | 卡车方向盘不应快速回正，可再调低 |
 | 布局 | `DriveDeck`（固定布局） | 已有转灯/危险灯/喇叭/手刹/雨刷/大灯/远光/视角，**本来就是按卡车做的** |
-| 按钮标签 | 沿用 `DriveDeck.swift:316–324` 的中文名 | |
+| 按钮标签 | 沿用 `DriveDeck` 的中文名 | |
+
+ETS2 里建议的键位对应（都是 Xbox 手柄侧）：
+
+| 皮肤上的键 | 发出去的键 | ETS2 里绑什么 |
+|---|---|---|
+| 左转 / 右转 | b1 / b2 | 左转向灯 / 右转向灯 |
+| 危险灯 | b3 | 危险警示灯 |
+| 喇叭 | b4 | 喇叭 |
+| 手刹 | b7 | 驻车制动 |
+| 雨刷 | b8 | 雨刮 |
+| 大灯 | b9 | 近光/大灯 |
+| 远光 | b10 | 远光闪 |
+| 视角 ↑ / 左视 ← / 右视 → | D-pad 上/左/右 | 车内视角上/左/右看（**按住才看，松手回正**） |
+| 档杆上推 / 下拉 | b6 = RB / b5 = LB | Shift Up / Shift Down |
+
+> 视角走 D-pad 是修复后（E1 第 1 条）的行为；修复前「视角键」占的是 LB，
+> 和降档撞在一起。
 
 #### ETS2 的两条必须在游戏内确认的事
 
@@ -384,39 +401,96 @@ ETS2 的 H-pattern（H 档）**本方案不支持**——那需要 6 个独立�
 > 这两条都是「按常规」写的，**不是在本项目里验证过的**（我没有 ETS2 环境）。
 > 请你在游戏里对一遍，有出入告诉我改。
 
-### 3.7 取证时顺带发现的三个 App 侧缺陷
+### 3.7 取证时顺带发现的 App 侧缺陷（E1，实际是 5 条不是 3 条）
 
-这三个都不是「游戏适配」，是现在就错的。ETS2 恰好会踩到第 1 个。
+这几条都不是「游戏适配」，是**现在就错的**——皮肤上写的是一个键，实际发出去的是另一个。
+ETS2 恰好会踩到第 1 条。
 
 #### (1) drive 模式：视角键与降档撞同一个按钮（b5 = LB）
 
-`DriveDeck.swift:324` 视角键用 `.vjoy5` ⇒ `vjoyIndex = 4` ⇒ 发 **b5**；
+`DriveDeck.swift` 视角键用 `.vjoy5` ⇒ `vjoyIndex = 4` ⇒ 发 **b5**；
 `DriveDeck.swift` `shift(-1)` ⇒ `pulse(4)` ⇒ 也发 **b5**。
 PC 侧两者都映射到 `X360["b5"] = LEFT_SHOULDER = LB`（`hotas.py:293`）。
 
 ⇒ **按降档会同时触发镜头。**
 卡车里降档是高频操作（上坡/减速），而镜头跳一下是直接干扰驾驶的。
 
-#### (2) 手柄模式下 b11–b16 是死按钮
+**修法**：视角不走按钮位，改走 **十字键**（`hat`）。
+
+理由：22 字节包里**本来就有 `hat` 字段**（`bridge.py:224` `PKT = struct.Struct("<2sBB8hH")`，
+偏移 3），PC 侧 `HAT_NAME = {0:"hat_up",1:"hat_right",2:"hat_down",3:"hat_left"}`（`bridge.py:227`）
+→ `tap_button(...)` → `X360["hat_left"] = DPAD_LEFT`（`hotas.py:301`）。**全程零协议改动、零电脑侧改动。**
+
+而且十字键本来就是「看」的键位：开车时按住左/右看一眼后视镜，比一个 toggle 的「视角键」更接近真车。
+换档留在 LB/RB：那是**两个独立的键位 bit**，可以重叠脉冲；
+`hat` 是**单值**，快速上下拨档时先发的脉冲会被后发的覆盖 —— 手感上不能接受。
+
+落地：`DriveDeck.swift` 新增 `DeckHoldButton`（按住生效 / 松手复位，`DeckButton` 是 toggle 不合适），
+按键簇变成 8 个 toggle + 3 个 D-pad（视角 ↑ / 左视 ← / 右视 →）。
+
+#### (2) 手柄模式的 b11–b16 在 Xbox 侧是死键
 
 `hotas.py X360` 字典到 `b10` 为止，**没有 `b11`–`b16`**；
 但 `Widgets.swift:32` 的组件库提供 `vjoy11`–`vjoy16` 可选。
-在 flight（vJoy）下它们是好的（`VJOY_BTN` 有 `:321`），在 drive/gamepad（Xbox）下按下去**没有任何反应**。
+在 flight（vJoy）下它们是好的（`VJOY_BTN`），在 drive/gamepad（Xbox）下按下去**没有任何反应**。
 
-⇒ 组件库里用户能选到一个「什么都不做」的绑定。
+**修法**：留着能用（vJoy 侧确实有人用），但不让用户闷声踩坑——
+`WidgetBinding.onlyOnVJoy`（阈值由 `hotas.py` 实际键数推出，不是写死的魔法数），
+`LibrarySheet` 在选中时把 `仅飞行` 写进标题并给一条黄字警告。
 
 #### (3) `defaultGamepad()` 的 LB/RB 标签反了
 
-`Layout.swift:299` 把 `.gearUp` 标成 `"LB"`，`:300` 把 `.gearDown` 标成 `"RB"`。
+`Layout.swift` 把 `.gearUp` 标成 `"LB"`、`.gearDown` 标成 `"RB"`。
 但 `Widgets.swift:157` `gearUp → pulse(5) → b6 → X360["b6"] = RIGHT_SHOULDER`（`hotas.py:294`），
-`gearDown → pulse(4) → b5 → LEFT_SHOULDER`。
-**标签与真实按键正好相反。**
+`gearDown → pulse(4) → b5 → LEFT_SHOULDER`。**标签与真实按键正好相反。**
 
 （同一张表里 `.vjoy7` 标 `"视图"`、`.vjoy8` 标 `"菜单"`，而 `b7`/`b8` 是 BACK/START，
 这个偏离是合理的，不算缺陷。）
 
-> 这三条**建议单独成 commit（E1）**，不混进预设功能——
-> 它们是修复，与「游戏预设」这个新功能无因果关系。
+#### (4) `GamepadDeck` 把 b9/b10 标成了 LT/RT —— 实际是 L3/R3
+
+`GamepadDeck.swift` 左右两列顶上标 `"LT"`/`"RT"`，绑的是 `.vjoy9`/`.vjoy10`。
+但 `X360["b9"] = LEFT_THUMB`、`X360["b10"] = RIGHT_THUMB`（`hotas.py:296-297`）
+—— **摇杆按下**，不是扳机。Xbox 的 LT/RT 是**模拟轴**（`hotas.py:240` `left_trigger_float` / `right_trigger_float`），
+根本不在按键表里。
+
+⇒ 一个 Xbox 皮肤，写的字和按下去的效果是两回事。**改成 `L3`/`R3`。**
+
+#### (5) `defaultGamepad()` 的 RT 滑条绑到了一个 Xbox 不读的轴
+
+同一张默认布局里 `.make(.slider, .throttle, ... label: "RT")`。
+但 Xbox 写轴路径（`hotas.py:236-240`）是
+`LS=(roll,-pitch) RS=(look_x or yaw,-look_y) LT=lt RT=rt` —— **`throttle` 根本没用上**
+（只在 heli 降级时才被当作 RT，见 `hotas.py:216` `xbox_rt = throttle if heli_degraded else right_t`）。
+
+⇒ 手柄模式下拖「RT」滑条没有任何反应。而且 `WidgetBinding` 里**压根没有 `rt` 这个轴**，
+想绑也绑不了。
+
+**修法**：`WidgetBinding` 增加 `case rt`（`$s.rt`，单极滑条），默认布局的 RT 改用 `.rt`。
+轴字段 `rt` 本来就在包里（偏移 18），**不加协议、不加电脑侧代码**。
+
+#### 顺手修掉的编译警告（不算缺陷）
+
+`CockpitView.swift` 的 `ctrl.onLayouts = { [weak layout] raw in ... }` 报
+`'weak' ownership of capture 'layout' differs from implicitly-captured strong reference`
+—— 同一个闭包里 `discovery` / `showSettings` 把 `self` 强引用住了。
+改成先落局部变量再弱引用。
+
+#### E1 的回归测试
+
+这些都是**源码级对应关系**，XCTest 表达不了（要编译整个 SwiftUI 视图层），
+所以 `tests/test_deck_bindings.py` 直接读 Swift 源码 + 读 `hotas.py` 的 `X360` 表对账：
+
+- 手柄皮肤每个标签 → `X360[bN]` 必须等于标准 Xbox 键名；
+- 同一皮肤内不能有两个标签撞同一个键；
+- 开车模式「按键簇 toggle 的键号」与「换档 pulse 的键号」必须不相交；
+- 开车模式所有键号必须 ≤ 10（Xbox 只有 b1–b10）。
+
+再加 `tests/test_hotas_hat.py`（hat → Xbox `DPAD_*`）和 `tests/test_pack_state.py`
+（22 字节包里的 `hat` 端到端派发/回中）两条运行期验证。
+
+> 这五条**单独成 commit（E1）**，不混进预设功能——
+> 它们是修复，与「游戏预设」这个新功能无因果关系，必须能单独回滚。
 
 ### 3.8 Capacitor 残骸（G0）—— 比预想的大，而且是个阻塞项
 
@@ -472,7 +546,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 协议 PKT（22B `<2sBB8hH`） | **不改**。字段名 roll/pitch/yaw/thr 保持冻结 |
 | 协议 WS 文本 | **暂不改**。原计划 G3 新增 `{"type":"profile"}` + `caps: profile_select`，但§2.7 证明两个目标游戏都不需要，已降级（§7） |
 | 电脑侧 | **G0+G1+G2 不改电脑侧任何文件**。（若将来做 G3：`hotas.py` `remap_vjoy` 改查表、`palmdeck_config.py` 新 `axes_presets`、`bridge.py` WS 分支 + `caps`） |
-| App 侧 | `ControllerState.swift`（PKey 加模式后缀 + 迁移、`wheelMaxDeg` 默认）、`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（新 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift` / `GamepadDeck.swift` / `Layout.swift` 的按钮绑定 |
+| App 侧 | `ControllerState.swift`（PKey 加模式后缀 + 迁移、`wheelMaxDeg` 默认）、`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（新 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告） |
 | 文档 | 本文件、`docs/PalmDeck-v4-app-interaction.md`（持久化键表 + 预设交互）、`docs/PalmDeck-v4-redesign.md`（P8）、`docs/README.md` |
 
 ---
@@ -490,9 +564,13 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 - `GameProfile` 编解码往返；旧格式缺字段时的回落。
 - 手感参数迁移：先写旧键 → 初始化 → 断言新键拿到旧值、旧键被清。
 - 预设应用后 `layouts[mode]` 等于预设里的 `widgets`、`revision` 自增。
-- **E1 回归**：断言 `GamepadDeck` / `DriveDeck` 的每个按钮绑定的 `vjoyIndex`
-  在本模式下**互不重复**（这是那个 b5 撞车的直接守卫——
-  手工数按键不可靠，要机器数）。
+- **E1 回归**（已实现）：`tests/test_deck_bindings.py` 把 Swift 源码和 `hotas.py` 的
+  `X360` 表**对账** —— 手柄皮肤每个 `title:` 旁的 `.vjoyN` → `X360[bN]` 必须等于该标签的
+  标准 Xbox 键名；同一皮肤内不能有两个标签撞同一个键号；开车模式「按键簇 `toggle` 的键号」
+  与「换档 `pulse` 的键号」必须**不相交**（这就是 b5 撞车的直接守卫）；开车模式所有键号 ≤ 10；
+  `defaultGamepad()` 的 gear 标签与实际 pulse 下标一致、RT 滑条绑 `.rt`。
+  另加两条运行期验证：`tests/test_hotas_hat.py`（`hat_left` → `XUSB_GAMEPAD_DPAD_LEFT`）、
+  `tests/test_pack_state.py::DriveHatTests`（22 字节包里的 `hat` 端到端派发/回中）。
 
 **手工（两个游戏各跑一遍）**
 1. WARDOGS（heli）：确认与**改动前一致的杆感**——这是「G1 可逆」的回归线。
@@ -537,7 +615,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 |---|---|---|---|---|
 | **G0a** | 删 Capacitor 残骸（`public/` 84 KB、插件、`Main.storyboard`、`SceneDelegate`、`config.xml`） | **S** | 无 | ✅ 新增 3 条防腐测试 |
 | **G0b** | 摘掉 CocoaPods（含构建命令 `-workspace` → `-project`） | **S** | G0a | ✅ 干净克隆能直接构建 |
-| **E1** | 修 §3.7 的三个 App 侧缺陷（b5 撞车 / b11–16 死键 / LB-RB 标签反） | **S** | 无 | ✅ 新增「绑定不重复」测试 |
+| **E1** | 修 §3.7 的 **5 条** App 侧缺陷（b5 撞车 / b11–16 死键 / LB·RB 标签反 / b9·b10 假 LT·RT / RT 滑条绑空轴） | **S** | 无 | ✅ 新增 `tests/test_deck_bindings.py`（13 条）+ hat 链路 2 条 |
 | **G1** | 手感参数按模式分离 + 迁移 | **S** | 无 | ✅ ETS2 与 WARDOGS 参数互不污染 |
 | **G2** | `GameProfile` + 预设 UI | **M** | G1 | ✅ 两个预设一键来回切 |
 | **G4** | 两个预设的**具体值**（§3.6） | **XS** | G2 | ✅ 打开即有「WARDOGS」「欧洲卡车模拟」 |
