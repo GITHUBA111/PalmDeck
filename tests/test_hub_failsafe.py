@@ -61,8 +61,8 @@ class FailsafeTests(unittest.TestCase):
         self.assertAlmostEqual(self.hub.hotas.axes["rt"], 1.0, places=2)
         self.assertAlmostEqual(self.hub.hotas.axes["throttle"], 20000 / 32767, places=2)
 
-    def test_infantry_phones_zero_releases_buttons_only(self) -> None:
-        self.hub.cockpit_mode = "infantry"
+    def test_gamepad_phones_zero_releases_buttons_only(self) -> None:
+        self.hub.cockpit_mode = "gamepad"
         self.hub.apply_packet(
             __import__("bridge").PKT.pack(b"PD", 1, 255, 0, 0, 0, 0, 0, 0, 0, 0, 4),
             src="ws",

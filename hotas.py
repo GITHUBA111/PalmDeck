@@ -29,9 +29,7 @@ def remap_vjoy(
     look_x: float,
     look_y: float,
 ) -> dict:
-    """vJoy axis values in [-1, 1]. Unknown profile logs as hotas."""
-    if profile != "fbw":
-        profile = "hotas"
+    """vJoy axis values in [-1, 1]. Unknown profile falls back to hotas."""
     if profile == "fbw":
         return {
             "x": roll,

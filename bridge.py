@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import collections
 import hashlib
 import json
 import os
@@ -25,10 +26,26 @@ import threading
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
+from urllib.parse import parse_qs, urlparse
+
+import palmdeck_layouts as layouts
 
 from hotas import Hotas
-from palmdeck_config import load_config
-import telemetry
+from palmdeck_config import (
+    DEFAULTS,
+    LIVE_KEYS,
+    RESTART_KEYS,
+    config_path,
+    load_config,
+    save_config,
+)
+from updater import (
+    APP_VERSION,
+    apply_update,
+    can_self_update,
+    check_update,
+    restart_after_update,
+)
 
 def _base_dir() -> str:
     if getattr(sys, "frozen", False):
@@ -119,8 +136,14 @@ def beacon_loop(http_port: int, ws_port: int, udp_port: int, interval: float = 1
         sock.close()
 
 
+# 最近日志（供网页控制台 /api/logs 查看）
+_LOG_RING: "collections.deque[str]" = collections.deque(maxlen=400)
+
+
 def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+    line = f"[{time.strftime('%H:%M:%S')}] {msg}"
+    print(line, flush=True)
+    _LOG_RING.append(line)
 
 
 def _usable_lan(ip: str) -> bool:
@@ -203,6 +226,14 @@ def lan_ip() -> str:
 PKT = struct.Struct("<2sBB8hH")
 HAT_NAME = {0: "hat_up", 1: "hat_right", 2: "hat_down", 3: "hat_left"}
 
+# v4 座舱模式（canonical）。`infantry` 仅作旧客户端兼容别名，对外一律回 `gamepad`。
+MODES = ("heli", "drive", "gamepad")
+MODE_ALIASES = {"infantry": "gamepad", "gamepad": "gamepad"}
+
+
+def canonical_mode(name: str) -> str:
+    return MODE_ALIASES.get((name or "").strip(), (name or "").strip())
+
 
 class RateMeter:
     def __init__(self) -> None:
@@ -254,7 +285,6 @@ class Hub:
         driver_err = "" if self.hotas.backend != "none" else "未检测到 vJoy / ViGEm / uinput，游戏里不会出现设备"
         if driver_err:
             self._error_kind = "driver"
-        self.telemetry_enabled = False
         self.status = {
             "connected": self.hotas.backend != "none",
             "mode": "pc",
@@ -266,7 +296,6 @@ class Hub:
             "error": driver_err,
             "cockpit_mode": "unknown",
             "axis_profile": "hotas",
-            "telemetry": "none",
         }
         log(f"HOTAS backend={self.hotas.backend} · {self.hotas.name}")
 
@@ -279,8 +308,7 @@ class Hub:
             st["cockpit_mode"] = self.cockpit_mode
             st["axis_profile"] = self.axis_profile
             st["park_ms"] = int(self.park_ms * 1000)
-            st["caps"] = ["failsafe", "profile", "allowlist", "telemetry"]
-            st["telemetry"] = telemetry.ACTIVE.name
+            st["caps"] = ["failsafe", "profile", "allowlist"]
             last = self.rate.last
             st["last_ms"] = None if last is None else int((time.monotonic() - last) * 1000)
             now = time.monotonic()
@@ -292,6 +320,11 @@ class Hub:
                 st["transport"] = "ws"
             else:
                 st["transport"] = "idle"
+            # 输入监测：最近一帧的轴/按键/帽子
+            st["axes"] = dict(self.last_axes) if self.last_axes else None
+            st["buttons"] = self._btn
+            st["hat"] = self._hat
+            st["dropped_udp"] = self.dropped_udp
             return st
 
     def broadcast(self, msg: dict) -> None:
@@ -398,12 +431,13 @@ class Hub:
             if "vjoy" in kinds:
                 return {"vjoy"}
             return set(kinds)
-        if mode == "infantry":
+        if mode == "gamepad":
             return set()
         return set(kinds)
 
     def set_cockpit_mode(self, name: str, ip: Optional[str] = None) -> None:
-        if name not in ("heli", "drive", "infantry"):
+        name = canonical_mode(name)
+        if name not in MODES:
             return
         with self.lock:
             self.cockpit_mode = name
@@ -411,8 +445,8 @@ class Hub:
             self.status["cockpit_mode"] = name
             new_live = self.live_for_mode(name)
             unused = self._available_kinds() - new_live
-            if name == "infantry":
-                self.park_infantry_all_zero()
+            if name == "gamepad":
+                self.park_gamepad_all_zero()
             else:
                 for kind in unused:
                     self.hotas.park_backend(kind)
@@ -444,21 +478,21 @@ class Hub:
                 lt=max(0.0, min(1.0, lt / scale)),
                 rt=max(0.0, min(1.0, rt / scale)),
             )
-            infantry = self.cockpit_mode == "infantry"
-            if infantry:
+            gamepad = self.cockpit_mode == "gamepad"
+            if gamepad:
                 axes = dict(roll=0, pitch=0, yaw=0, look_x=0, look_y=0, throttle=0, brakes=0, lt=0, rt=0)
-            analog_idle = infantry and abs(axes["roll"]) + abs(axes["pitch"]) + abs(axes["throttle"]) + abs(axes["rt"]) == 0
-            skip = infantry and analog_idle and buttons == self._btn and hat == self._hat
+            analog_idle = gamepad and abs(axes["roll"]) + abs(axes["pitch"]) + abs(axes["throttle"]) + abs(axes["rt"]) == 0
+            skip = gamepad and analog_idle and buttons == self._btn and hat == self._hat
             if not skip:
                 btn_targets = None
-                if infantry:
+                if gamepad:
                     kinds = self._available_kinds()
                     btn_targets = {"vjoy"} if "vjoy" in kinds else ({"uinput"} if "uinput" in kinds else None)
                     self.hotas.set_axes(
                         **axes,
                         profile=self.axis_profile,
                         targets=btn_targets,
-                        mode="infantry",
+                        mode="gamepad",
                     )
                 elif self.live_targets:
                     self.hotas.set_axes(
@@ -565,10 +599,10 @@ class Hub:
         self._btn = 0
         self._hat = 255
 
-    def park_infantry_all_zero(self) -> None:
+    def park_gamepad_all_zero(self) -> None:
         zeros = dict(roll=0, pitch=0, yaw=0, look_x=0, look_y=0, throttle=0, brakes=0, lt=0, rt=0)
         kinds = self._available_kinds()
-        self.hotas.set_axes(**zeros, profile=self.axis_profile, targets=kinds or None, mode="infantry")
+        self.hotas.set_axes(**zeros, profile=self.axis_profile, targets=kinds or None, mode="gamepad")
         self.hotas.center_hat()
         self._hat = 255
         self.last_axes = dict(zeros)
@@ -586,7 +620,7 @@ class Hub:
             gap = time.monotonic() - self.rate.last
             if self.phones != 0 or gap <= self.park_ms or self.last_parked:
                 return
-            if self.cockpit_mode == "infantry":
+            if self.cockpit_mode == "gamepad":
                 self.release_buttons_only()
                 self.last_parked = True
                 return
@@ -701,12 +735,14 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
             {
                 "type": "hello",
                 "product": "PalmDeck",
-                "version": "3.0",
+                "version": "4.0",
                 "udp": HUB.udp_port,
                 "axis_profile": HUB.axis_profile,
                 "http": HUB.http_port,
                 "park_ms": int(HUB.park_ms * 1000),
-                "caps": ["failsafe", "profile", "allowlist"],
+                "modes": list(MODES),
+                "layout_schema": layouts.SCHEMA,
+                "caps": ["failsafe", "profile", "allowlist", "layouts"],
             }
         )
         client.send({"type": "status", **HUB.snapshot_status()})
@@ -732,6 +768,24 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
                 HUB.button(str(msg.get("name") or ""), msg.get("down"), ip=ip)
             elif kind == "mode":
                 HUB.set_cockpit_mode(str(msg.get("name") or ""), ip=ip)
+            elif kind == "layouts_get":
+                client.send({
+                    "type": "layouts",
+                    "schema": layouts.SCHEMA,
+                    "modes": list(layouts.MODES),
+                    "layouts": layouts.load_layouts(),
+                })
+            elif kind == "layouts_put":
+                mode = str(msg.get("mode") or "")
+                if mode in layouts.MODES:
+                    layouts.save_layout(mode, msg.get("layout"))
+                    log(f"layout from app: {mode}")
+                    client.send({
+                        "type": "layouts",
+                        "schema": layouts.SCHEMA,
+                        "modes": list(layouts.MODES),
+                        "layouts": layouts.load_layouts(),
+                    })
             elif kind == "ping":
                 client.send({"type": "pong", "t": msg.get("t")})
     except Exception as exc:
@@ -788,60 +842,238 @@ def accept_ws(host: str, port: int) -> None:
                 pass
 
 
+# ---------------------------------------------------------------- 网页控制台 API
+# 手机 Web 座舱已废弃（v4 只保留 iOS App + Windows 网页控制台），
+# `/` 一律指向 host.html。
+
+def _send_json(handler, obj: dict, code: int = 200) -> None:
+    body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+    handler.send_response(code)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# 配置导出/导入包版本（升级时若结构不兼容需 +1）
+BUNDLE_VERSION = 1
+
+
+def _send_download(handler, obj: dict, filename: str) -> None:
+    """把 JSON 作为附件下发（浏览器直接下载为文件）。"""
+    body = json.dumps(obj, indent=2, ensure_ascii=False).encode("utf-8")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _read_json_body(handler) -> Optional[dict]:
+    try:
+        n = int(handler.headers.get("Content-Length") or 0)
+    except ValueError:
+        n = 0
+    if n <= 0:
+        return {}
+    if n > 1_000_000:
+        return None
+    try:
+        return json.loads(handler.rfile.read(n).decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _info_payload() -> dict:
+    return {
+        "app": "PalmDeck",
+        "version": APP_VERSION,
+        "python": sys.version.split()[0],
+        "platform": sys.platform,
+        "frozen": bool(getattr(sys, "frozen", False)),
+        "can_self_update": can_self_update(),
+        "config_path": str(config_path()),
+    }
+
+
+def _config_payload(cfg: Optional[dict] = None) -> dict:
+    return {
+        "config": cfg if cfg is not None else load_config(),
+        "defaults": DEFAULTS,
+        "live": list(LIVE_KEYS),
+        "restart": list(RESTART_KEYS),
+    }
+
+
+def _apply_live_config(cfg: dict) -> None:
+    """把可热生效的配置应用到运行中的 Hub。"""
+    if "axis_profile" in cfg:
+        HUB.axis_profile = cfg["axis_profile"]
+        HUB.status["axis_profile"] = HUB.axis_profile
+    if "failsafe_throttle" in cfg:
+        HUB.failsafe_throttle = cfg["failsafe_throttle"]
+    if "udp_allowlist" in cfg:
+        HUB.udp_allowlist = bool(cfg["udp_allowlist"])
+    if "park_ms" in cfg:
+        HUB.park_ms = max(0.2, float(cfg["park_ms"]) / 1000.0)
+    if "allowlist_ttl_ms" in cfg:
+        HUB.allow_ttl = max(0.5, float(cfg["allowlist_ttl_ms"]) / 1000.0)
+
+
+def export_bundle() -> dict:
+    """把当前服务配置 + App 布局打成一个可备份/迁移的 JSON 包。"""
+    return {
+        "product": "PalmDeck",
+        "bundle": BUNDLE_VERSION,
+        "app_version": APP_VERSION,
+        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "config": load_config(),
+        "layouts": layouts.load_layouts(),
+    }
+
+
+def apply_bundle(obj) -> dict:
+    """导入配置包：写回 config.json + layouts.json，并让可热生效项立即生效。
+
+    返回 `{ok, config, layouts, restart_required}`；失败时 `{ok: False, error}`。
+    """
+    if not isinstance(obj, dict):
+        return {"ok": False, "error": "包格式错误：根节点必须是 JSON 对象"}
+    if obj.get("bundle") != BUNDLE_VERSION:
+        return {"ok": False,
+                "error": f"不支持的包版本：{obj.get('bundle')!r}（需要 {BUNDLE_VERSION}）"}
+    cfg_raw = obj.get("config")
+    if not isinstance(cfg_raw, dict):
+        return {"ok": False, "error": "包内缺少 config 对象"}
+    before = load_config()
+    cfg = save_config(cfg_raw)          # 未知键丢弃、越界值夹紧
+    _apply_live_config(cfg)
+    layout_raw = obj.get("layouts")
+    if isinstance(layout_raw, dict):
+        layouts.replace_layouts(layout_raw)
+    restart_required = any(before.get(k) != cfg.get(k) for k in RESTART_KEYS)
+    return {"ok": True, "config": cfg, "layouts": layouts.load_layouts(),
+            "restart_required": restart_required}
+
+
 class CockpitHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
 
     def log_message(self, fmt: str, *args) -> None:
-        if "api/status" in (fmt % args):
+        line = fmt % args
+        if "api/status" in line:
             return
-        log("http " + (fmt % args))
+        log("http " + line)
+
+    def _status(self) -> dict:
+        return {
+            **HUB.snapshot_status(),
+            "ip": lan_ip(),
+            "http": getattr(self.server, "palm_http", 8080),
+            "ws": getattr(self.server, "palm_ws", 8765),
+        }
 
     def do_GET(self):
-        if self.path.split("?")[0] == "/api/status":
-            body = json.dumps(
-                {
-                    **HUB.snapshot_status(),
-                    "ip": lan_ip(),
-                    "http": getattr(self.server, "palm_http", 8080),
-                    "ws": getattr(self.server, "palm_ws", 8765),
-                },
-                ensure_ascii=False,
-            ).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if self.path in ("/", "/host", "/host.html"):
-            # PC console is host.html; phones use /phone
-            if self.path == "/" and self.headers.get("User-Agent", "").lower().find("mobile") >= 0:
-                self.path = "/index.html"
-            elif self.path in ("/", "/host", "/host.html"):
-                self.path = "/host.html"
+        path = self.path.split("?")[0]
+        if path == "/api/status":
+            return _send_json(self, self._status())
+        if path == "/api/info":
+            return _send_json(self, _info_payload())
+        if path == "/api/config":
+            return _send_json(self, _config_payload())
+        if path == "/api/config/export":
+            return _send_download(self, export_bundle(), "palmdeck-config.json")
+        if path == "/api/logs":
+            return _send_json(self, {"lines": list(_LOG_RING)})
+        if path == "/api/layouts":
+            q = parse_qs(urlparse(self.path).query)
+            mode = (q.get("mode") or [""])[0]
+            if mode:
+                if mode not in layouts.MODES:
+                    return _send_json(self, {"ok": False, "error": "bad mode"}, 400)
+                return _send_json(
+                    self, {**layouts.meta(), "mode": mode, "layout": layouts.get_layout(mode)})
+            return _send_json(self, {**layouts.meta(), "layouts": layouts.load_layouts()})
+        if path == "/api/update/check":
+            return _send_json(self, {
+                "current": APP_VERSION,
+                "latest": check_update(),
+                "can_self_update": can_self_update(),
+            })
+        if path in ("/", "/host", "/host.html"):
+            self.path = "/host.html"
         return SimpleHTTPRequestHandler.do_GET(self)
+
+    def do_POST(self):
+        path = self.path.split("?")[0]
+        body = _read_json_body(self)
+        if body is None:
+            return _send_json(self, {"ok": False, "error": "invalid JSON body"}, 400)
+        if path == "/api/config":
+            cfg = save_config(body)
+            _apply_live_config(cfg)
+            log(f"config updated: {sorted(k for k in body if k in DEFAULTS)}")
+            return _send_json(self, {"ok": True, **_config_payload(cfg)})
+        if path == "/api/config/import":
+            res = apply_bundle(body)
+            if not res.get("ok"):
+                return _send_json(self, res, 400)
+            log(f"config imported (restart_required={res['restart_required']})")
+            return _send_json(self, {
+                "ok": True, **_config_payload(res["config"]),
+                "layouts": res["layouts"], "restart_required": res["restart_required"],
+            })
+        if path == "/api/layouts":
+            if isinstance(body.get("layouts"), dict):
+                saved = layouts.save_layouts(body["layouts"])
+                log(f"layouts updated: {sorted(saved.keys())}")
+                return _send_json(self, {"ok": True, "layouts": saved})
+            mode = str(body.get("mode") or "")
+            if mode not in layouts.MODES:
+                return _send_json(self, {"ok": False, "error": "bad mode"}, 400)
+            saved = layouts.save_layout(mode, body.get("layout"))
+            log(f"layout updated: {mode} ({len(saved or [])} widgets)")
+            return _send_json(self, {"ok": True, "mode": mode, "layout": saved})
+        if path == "/api/mode":
+            raw = str(body.get("name") or "")
+            name = canonical_mode(raw)
+            if name not in MODES:
+                return _send_json(self, {"ok": False, "error": "bad mode"}, 400)
+            HUB.set_cockpit_mode(name)
+            return _send_json(self, {"ok": True, "status": HUB.snapshot_status()})
+        if path == "/api/update/apply":
+            if not can_self_update():
+                return _send_json(
+                    self, {"ok": False, "error": "仅打包版 Windows 支持自助更新"}, 400)
+            latest = check_update()
+            if not latest:
+                return _send_json(self, {"ok": False, "error": f"已是最新版本 v{APP_VERSION}"})
+            if not apply_update(latest):
+                return _send_json(self, {"ok": False, "error": "下载失败，请稍后再试"}, 500)
+            _send_json(self, {"ok": True, "version": latest, "restarting": True})
+            threading.Timer(0.8, restart_after_update).start()
+            return
+        return _send_json(self, {"ok": False, "error": "not found"}, 404)
+
+    def do_DELETE(self):
+        path = self.path.split("?")[0]
+        if path == "/api/layouts":
+            q = parse_qs(urlparse(self.path).query)
+            mode = (q.get("mode") or [""])[0]
+            if mode not in layouts.MODES:
+                return _send_json(self, {"ok": False, "error": "bad mode"}, 400)
+            layouts.delete_layout(mode)
+            log(f"layout reset: {mode}")
+            return _send_json(self, {"ok": True, "mode": mode, "layout": None})
+        return _send_json(self, {"ok": False, "error": "not found"}, 404)
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
-
-
-def telemetry_loop() -> None:
-    """定期读取游戏遥测并广播给手机（若开启且来源可用）。"""
-    while True:
-        time.sleep(1.0 / 30.0)  # 30Hz 姿态足够平滑
-        if not HUB.telemetry_enabled:
-            continue
-        try:
-            att = telemetry.poll()
-        except Exception as exc:
-            log(f"telemetry: {exc}")
-            continue
-        if att:
-            HUB.broadcast({"type": "attitude", **att})
 
 
 def failsafe_loop() -> None:
@@ -871,7 +1103,6 @@ def serve_http(host: str, port: int, ws_port: int) -> None:
     httpd.palm_http = port
     httpd.palm_ws = ws_port
     log(f"console  http://127.0.0.1:{port}/")
-    log(f"phone    http://{lan_ip()}:{port}/index.html")
     httpd.serve_forever()
 
 
@@ -888,35 +1119,11 @@ def main(argv: Optional[list] = None) -> None:
     parser.add_argument("--park-ms", type=int, default=cfg["park_ms"])
     parser.add_argument("--allowlist-ttl-ms", type=int, default=cfg["allowlist_ttl_ms"])
     parser.add_argument("--beacon", action="store_true", default=cfg["beacon"])
-    parser.add_argument("--no-beacon", action="store_true", help="关闭 UDP 广播（手机自动发现）")
+    parser.add_argument("--no-beacon", action="store_true", help="关闭 UDP 广播（App 自动发现）")
+    parser.add_argument("--bonjour", action="store_true", default=cfg["bonjour"])
+    parser.add_argument("--no-bonjour", action="store_true", help="关闭 Bonjour/mDNS 注册")
     parser.add_argument("--no-browser", action="store_true")
-    # 游戏遥测（可选）：默认关闭。支持 http-json / udp-json 两种通用来源。
-    parser.add_argument("--telemetry", choices=("none", "http", "udp"), default="none",
-                        help="游戏遥测来源；默认 none")
-    parser.add_argument("--telemetry-url", default="",
-                        help="http 来源：定期 GET 该 URL 取 JSON（如 http://127.0.0.1:8111/）")
-    parser.add_argument("--telemetry-udp", type=int, default=0,
-                        help="udp 来源：监听该本地端口收 JSON 姿态包")
-    parser.add_argument("--telemetry-map", default="",
-                        help="字段映射，如 roll=state.roll,pitch=state.pitch,yaw=state.heading")
     args = parser.parse_args(argv)
-    # 装配遥测源
-    fmap = {}
-    if args.telemetry_map:
-        for pair in args.telemetry_map.split(","):
-            if "=" in pair:
-                k, v = pair.split("=", 1)
-                fmap[k.strip()] = v.strip()
-    if args.telemetry == "http" and args.telemetry_url:
-        telemetry.set_source(telemetry.HttpJsonTelemetry(args.telemetry_url, fmap))
-        HUB.telemetry_enabled = True
-        log(f"telemetry: http {args.telemetry_url}")
-    elif args.telemetry == "udp" and args.telemetry_udp:
-        telemetry.set_source(telemetry.UdpJsonTelemetry(args.telemetry_udp, fmap))
-        HUB.telemetry_enabled = True
-        log(f"telemetry: udp :{args.telemetry_udp}")
-    else:
-        HUB.telemetry_enabled = False
     HUB.udp_port = args.udp
     HUB.http_port = args.http
     HUB.status["udp"] = args.udp
@@ -930,41 +1137,48 @@ def main(argv: Optional[list] = None) -> None:
         log("UDP allowlist off")
     log(f"axis_profile={HUB.axis_profile}")
     ip = lan_ip() or "127.0.0.1"
-    url = f"http://{ip}:{args.http}/"
+    console_url = f"http://127.0.0.1:{args.http}/"
+    app_link = f"palmdeck://connect?host={ip}&http={args.http}&ws={args.ws}&udp={args.udp}"
     backend = HUB.hotas.backend or "none"
     backend_note = {
         "none": "!! 未创建虚拟设备（只做演示，游戏读不到）",
         "": "!! 未创建虚拟设备（只做演示，游戏读不到）",
     }.get(backend, f"OK  {HUB.hotas.name}")
+    if args.no_beacon:
+        args.beacon = False
+    if args.no_bonjour:
+        args.bonjour = False
 
     print(
         f"""
 +----------------------------------------------+
-|   PalmDeck  掌舵舱 · 手机就是摇杆             |
+|   PalmDeck  掌舵舱 · 手机就是控制器           |
 +----------------------------------------------+
    虚拟设备 : {backend_note}
+   电脑控制台 : {console_url}
    局域网IP : {ip}
-   手机地址 : {url}
-   自动发现 : 已广播 (手机 App 可自动找到本机)
+   手机配对 : {app_link}
+   自动发现 : beacon={"on" if args.beacon else "off"} · bonjour={"on" if args.bonjour else "off"}
 
-   手机端：App 里点“连接”，或自动发现后一键连。
+   手机端：iOS App 自动发现，或扫描上面的配对码。
+   设置：浏览器打开电脑控制台，可配置轴/按键/布局/更新。
    游戏端：控制器设置里绑定上面这只虚拟设备。
    保持本窗口开着。Ctrl+C 退出。
 """
     )
-    _print_qr(url)
+    _print_qr(app_link)
     threading.Thread(target=serve_http, args=(args.host, args.http, args.ws), daemon=True).start()
     threading.Thread(target=accept_ws, args=(args.host, args.ws), daemon=True).start()
     threading.Thread(target=serve_udp, args=(args.host, args.udp), daemon=True).start()
     threading.Thread(target=failsafe_loop, daemon=True).start()
-    threading.Thread(target=telemetry_loop, daemon=True).start()
-    # 始终广播，方便手机自动发现（--no-beacon 可关）
-    if not args.no_beacon:
+    # 广播 / Bonjour 由配置决定（控制台可改，改动后需重启）
+    if args.beacon:
         threading.Thread(target=beacon_loop,
                          args=(args.http, args.ws, args.udp), daemon=True).start()
+        log(f"beacon: UDP :{BEACON_PORT} (App 可自动发现)")
+    if args.bonjour:
         threading.Thread(target=zeroconf_register,
                          args=(args.http, args.ws, args.udp), daemon=True).start()
-        log(f"beacon: UDP :{BEACON_PORT} + bonjour (手机可自动发现)")
     if not args.no_browser:
         import webbrowser
 

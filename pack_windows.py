@@ -11,7 +11,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = [
     "bridge.py",
     "hotas.py",
-    "telemetry.py",
     "palmdeck_config.py",
     "start.py",
     "start.bat",

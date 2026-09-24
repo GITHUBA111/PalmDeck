@@ -30,13 +30,19 @@ class ModeParkTests(unittest.TestCase):
         self.assertIn(("park", "vjoy"), self.hub.hotas.calls)
         self.assertEqual(self.hub.live_targets, {"vgamepad"})
 
-    def test_infantry_skips_identical_heartbeat(self) -> None:
-        self.hub.set_cockpit_mode("infantry", ip="192.168.1.8")
+    def test_gamepad_skips_identical_heartbeat(self) -> None:
+        self.hub.set_cockpit_mode("gamepad", ip="192.168.1.8")
         self.hub.hotas.calls.clear()
         self.hub.apply_packet(pd(buttons=0), src="ws", ip="192.168.1.8")
         first = len(self.hub.hotas.calls)
         self.hub.apply_packet(pd(buttons=0), src="ws", ip="192.168.1.8")
         self.assertEqual(len(self.hub.hotas.calls), first)
+
+    def test_legacy_infantry_alias_canonicalizes_to_gamepad(self) -> None:
+        self.hub.set_cockpit_mode("infantry", ip="192.168.1.8")
+        self.assertEqual(self.hub.cockpit_mode, "gamepad")
+        self.assertEqual(self.hub.snapshot_status()["cockpit_mode"], "gamepad")
+        self.assertEqual(self.hub.live_targets, set())
 
     def test_a5_status_after_mode(self) -> None:
         seen = []
