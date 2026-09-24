@@ -17,6 +17,12 @@ root = os.path.abspath(os.path.join(SPECPATH, ".."))
 hiddenimports = [
     "bridge",
     "hotas",
+    # 这两个是 v4 新增的 bridge 依赖（配置 / 布局 / 自更新）。
+    # Analysis 通常会顺着 start.py→bridge.py 找到，但显式列出更保险：
+    # 漏了的话打出来的 exe 一启动就 ImportError。
+    "palmdeck_config",
+    "palmdeck_layouts",
+    "updater",
     # 系统托盘（Windows 后端动态 import，需显式收进来）
     "pystray._win32",
     # vendored vgamepad（vendor/ 在 pathex 里）

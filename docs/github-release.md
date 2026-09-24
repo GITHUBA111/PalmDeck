@@ -40,5 +40,8 @@ git push -u origin main
 
 ## 备注
 
-- `preview/` 里是设计截图（约 1.7 MB），会一并上传，不影响。
+- `preview/` 已删除：那 27 张截图拍的是 v3 时代的**手机网页座舱**，
+  而 v4 把网页座舱整个删了（只留 Windows 驻留服务 + iOS App），
+  留着会让人以为还能用手机浏览器当座舱。需要截图请从 v4 的 iOS App 重拍。
+  历史版本可用 `git show <旧的 commit>:preview/current.png` 取回。
 - 若不想传 iOS 源码，可只提交电脑侧文件（`bridge.py hotas.py palmdeck_config.py palmdeck_layouts.py updater.py web/ packaging/ .github/`），22 MB 里大部分是 `mobile/`。
