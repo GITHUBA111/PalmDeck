@@ -44,7 +44,19 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
 
 ### 入口与结构
 - `PalmDeckApp.swift` — `@main`，首启走 `PreflightView`（三步引导/手动 IP/轴反向），之后进 `CockpitView`（`palmdeck_entered` 持久化）；首次进座舱自动弹「速览教程」（`palmdeck_tutored` 持久化，设置 → 帮助可重开）。
-- `Model/`：`ControllerState`（共享状态 + 语义轴 + EMA 平滑）、`CockpitController`（60Hz 热路径 `CADisplayLink` + 连接/心跳 + 布局同步）、`NetClient`（WS 8765 控制面 + UDP 7773 热路径）、`Packet`（22 字节 `<2sBB8hH` 与 `bridge.py` 对齐）、`Discovery`（Bonjour `_palmdeck._udp`）、`Haptics`。
+- `Model/`：`ControllerState`（共享状态 + 语义轴 + EMA 平滑）、`CockpitController`（60Hz 热路径 `CADisplayLink` + 连接/心跳 + 布局同步）、`NetClient`（WS 8765 控制面 + UDP 7773 热路径）、`Discovery`（Bonjour `_palmdeck._udp`）、`Haptics`。
+
+  **纯逻辑层（无 SwiftUI/UIKit 依赖，可脱离 App 单测）**：
+  | 文件 | 职责 |
+  |---|---|
+  | `AxisCurve.swift` | 轴整形曲线（反转 / 灵敏度 / 死区 / `^1.35`）。**全仓库唯一实现** —— 平滑、发送、设置里的曲线预览三处共用 |
+  | `AxisMap.swift` | 模式 → 8 个 i16 轴的真值表（全函数：入参先夹到 [-1,1]） |
+  | `PacketFormat.swift` | 22 字节包 `<2sBB8hH` 的偏移 / 小端序 / `[-32767,32767]` 标度 |
+  | `CockpitMode.swift` | 模式枚举 + `infantry → gamepad` 旧值兼容 |
+  | `Packet.swift` | 只做「`ControllerState` → 纯数据」的适配，调上面两个 |
+
+  注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
+  `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现。
 - `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
 v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+LT/RT）。
@@ -61,6 +73,18 @@ v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚�
 ### 无遥测
 姿态球与飞行仪表板只显示本机发往电脑的**平滑杆位**（`smRoll/smPitch/smYaw`），
 不做游戏遥测回读（v4 已移除 `telemetry.py` 与 `--telemetry*` 参数，见 `docs/TODO.md`）。
+
+### 测试
+
+```bash
+python3 -m unittest discover -s tests -t .      # 76 项
+```
+
+其中 `tests/test_ios_axis.py` 用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**
+并跑 1300+ 条断言（曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、
+包长/偏移/小端序/量化边界）。不引入 Xcode unit-test target —— 本工程是
+CocoaPods 管理且没有共享 scheme，手写 target 要同时改 target/scheme/依赖，
+风险大于收益；而被测对象全是纯函数，`swiftc` 足够了。没有 `swiftc` 的环境自动 skip。
 
 ### 待办
 见 `docs/TODO.md`。

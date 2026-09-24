@@ -190,8 +190,23 @@ idle ──connect()──► connecting ──open──► live
 
 **响应曲线**（操纵与手感 → 响应曲线）：把真实整形函数画出来——横轴＝原始输入（含反转），
 纵轴＝实际输出；叠了 1:1 参考虚线、死区阴影带、当前输入点；拖灵敏度/死区滑条曲线实时变。
-`AxisResponseCurve.output()` **必须**与 `ControllerState.tickSmoothing()` 的
-`shape(clampUnit(inv·v·sens), dz)` 逐字一致，否则预览会说谎。
+`AxisResponseCurve.output()` **必须**与发送路径逐字一致，否则预览会说谎。
+**实现方式（不能退回到「复刻公式」）**：预览不再自己写一遍数学，而是直接调
+`Model/AxisCurve.swift` 的 `AxisCurve.output(v, sensitivity:deadzone:inverted:)` ——
+`ControllerState.tickSmoothing()`（平滑）与 `Packet.pack()`（发送）调的是同一个函数。
+`tests/test_ios_axis.py::TestCurveHasSingleImplementation` 会在任何别的 Swift 文件里
+再出现 `pow(` 或 `func shape(` 时直接失败。
+
+曲线定义（`AxisCurve.swift` 为唯一出处）：
+
+```
+y = sign(x) · ((|x| − dz) / (1 − dz)) ^ 1.35      |x| >= dz
+y = 0                                              |x| <  dz
+```
+
+顺序不能反：**先乘灵敏度 → 夹到 [-1,1] → 再进死区/曲线**（`AxisCurve.output`）。
+`dz` 被夹到 `[0, 0.95]`，杜绝 `dz >= 1` 的除零；方向舵用固定死区 `0.08`
+（自回中轴，死区跟着滑条放大会转不动尾桨）。
 
 > 实现：不用 `NavigationView`（横屏下会挤压两栏内容），改用自绘标题栏 + `HStack` 双栏，
 > 见 `Views/SettingsView.swift`（`SettingsCategory` / `SettingsIcon` / `SettingsHeader` /
