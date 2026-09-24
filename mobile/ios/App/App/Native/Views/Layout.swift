@@ -18,7 +18,7 @@ final class LayoutStore: ObservableObject {
     @Published var flight: [DeckWidget] = []
     @Published var drive: [DeckWidget] = []
 
-    private let key = "palmdeck_widgets_v7"
+    private let key = "palmdeck_widgets_v9"
 
     init() {
         load()
@@ -98,17 +98,12 @@ final class LayoutStore: ObservableObject {
             .make(.button, .vjoy4,    .r(0.88, 0.69, 0.10, 0.11), label: "起落架"),
             .make(.button, .vjoy5,    .r(0.77, 0.82, 0.10, 0.11), label: "切视角"),
             .make(.button, .vjoy6,    .r(0.88, 0.82, 0.10, 0.11), label: "语音"),
-            // 中下 10 键（两行）
-            .make(.button, .vjoy7,    .r(0.235, 0.76, 0.095, 0.105), label: "襟翼收"),
-            .make(.button, .vjoy8,    .r(0.337, 0.76, 0.095, 0.105), label: "襟翼放"),
-            .make(.button, .vjoy9,    .r(0.439, 0.76, 0.095, 0.105), label: "减速板"),
-            .make(.button, .vjoy10,   .r(0.541, 0.76, 0.095, 0.105), label: "配平"),
-            .make(.button, .vjoy11,   .r(0.643, 0.76, 0.095, 0.105), label: "自驾"),
-            .make(.button, .vjoy12,   .r(0.235, 0.875, 0.095, 0.105), label: "按钮12"),
-            .make(.button, .vjoy13,   .r(0.337, 0.875, 0.095, 0.105), label: "按钮13"),
-            .make(.button, .vjoy14,   .r(0.439, 0.875, 0.095, 0.105), label: "按钮14"),
-            .make(.button, .vjoy15,   .r(0.541, 0.875, 0.095, 0.105), label: "按钮15"),
-            .make(.button, .vjoy16,   .r(0.643, 0.875, 0.095, 0.105), label: "按钮16"),
+            // 中下 4 键（一行居中）。vJoy 11–16 默认不再占用：苦力帽只走 POV、
+            // 开火走 vJoy 16，其余留给用户在编辑模式自行添加（避免和 hat/开火撞号）。
+            .make(.button, .vjoy7,    .r(0.286, 0.76, 0.095, 0.105), label: "襟翼收"),
+            .make(.button, .vjoy8,    .r(0.388, 0.76, 0.095, 0.105), label: "襟翼放"),
+            .make(.button, .vjoy9,    .r(0.490, 0.76, 0.095, 0.105), label: "减速板"),
+            .make(.button, .vjoy10,   .r(0.592, 0.76, 0.095, 0.105), label: "自动驾驶"),
         ]
     }
 
@@ -121,22 +116,16 @@ final class LayoutStore: ObservableObject {
             .make(.button, .gearUp,   .r(0.60, 0.48, 0.17, 0.12)),
             .make(.button, .gearDown, .r(0.60, 0.62, 0.17, 0.12)),
             .make(.pad,    .look,     .r(0.79, 0.48, 0.19, 0.30)),
-            .make(.button, .vjoy1,    .r(0.015, 0.795, 0.118, 0.086), label: "左转向"),
-            .make(.button, .vjoy2,    .r(0.1385, 0.795, 0.118, 0.086), label: "右转向"),
-            .make(.button, .vjoy3,    .r(0.262, 0.795, 0.118, 0.086), label: "危险灯"),
-            .make(.button, .vjoy4,    .r(0.3855, 0.795, 0.118, 0.086), label: "喇叭"),
-            .make(.button, .vjoy5,    .r(0.509, 0.795, 0.118, 0.086), label: "手刹"),
-            .make(.button, .vjoy6,    .r(0.6325, 0.795, 0.118, 0.086), label: "雨刷"),
-            .make(.button, .vjoy7,    .r(0.756, 0.795, 0.118, 0.086), label: "大灯"),
-            .make(.button, .vjoy8,    .r(0.8795, 0.795, 0.118, 0.086), label: "远光"),
-            .make(.button, .vjoy9,    .r(0.015, 0.893, 0.118, 0.086), label: "升档"),
-            .make(.button, .vjoy10,   .r(0.1385, 0.893, 0.118, 0.086), label: "降档"),
-            .make(.button, .vjoy11,   .r(0.262, 0.893, 0.118, 0.086), label: "切视角"),
-            .make(.button, .vjoy12,   .r(0.3855, 0.893, 0.118, 0.086), label: "巡航"),
-            .make(.button, .vjoy13,   .r(0.509, 0.893, 0.118, 0.086), label: "发动机"),
-            .make(.button, .vjoy14,   .r(0.6325, 0.893, 0.118, 0.086), label: "差速锁"),
-            .make(.button, .vjoy15,   .r(0.756, 0.893, 0.118, 0.086), label: "警示"),
-            .make(.button, .vjoy16,   .r(0.8795, 0.893, 0.118, 0.086), label: "自由"),
+            // 底部 8 键 = Xbox A/B/X/Y + BACK/START/L3/R3。XInput 一共只有 10 个键，
+            // 升/降档占 LB/RB，所以这里不再铺 16 键（b11~b16 在 Xbox 上本来就是死的）。
+            .make(.button, .vjoy1,    .r(0.015, 0.85, 0.118, 0.086), label: "左转向"),
+            .make(.button, .vjoy2,    .r(0.1385, 0.85, 0.118, 0.086), label: "右转向"),
+            .make(.button, .vjoy3,    .r(0.262, 0.85, 0.118, 0.086), label: "危险灯"),
+            .make(.button, .vjoy4,    .r(0.3855, 0.85, 0.118, 0.086), label: "喇叭"),
+            .make(.button, .vjoy7,    .r(0.509, 0.85, 0.118, 0.086), label: "手刹"),
+            .make(.button, .vjoy8,    .r(0.6325, 0.85, 0.118, 0.086), label: "雨刷"),
+            .make(.button, .vjoy9,    .r(0.756, 0.85, 0.118, 0.086), label: "大灯"),
+            .make(.button, .vjoy10,   .r(0.8795, 0.85, 0.118, 0.086), label: "远光"),
         ]
     }
 }

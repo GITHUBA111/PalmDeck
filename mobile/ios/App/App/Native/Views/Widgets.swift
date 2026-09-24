@@ -44,7 +44,7 @@ enum WidgetBinding: String, Codable, CaseIterable {
         case .look: return "视角"
         case .gearUp: return "升档"
         case .gearDown: return "降档"
-        case .fire: return "开火"
+        case .fire: return "开火（vJoy 16）"
         default:
             if let n = Int(rawValue.dropFirst(4)) { return "按钮 \(n)" }
             return rawValue
@@ -155,9 +155,9 @@ struct WidgetView: View {
             if down { Haptics.tap() }
             s.onButton?(idx + 1, down)
         } else if b == .gearUp {
-            pulse(10)   // b11
+            pulse(5)   // b6 = RB（升档）
         } else if b == .gearDown {
-            pulse(11)   // b12
+            pulse(4)   // b5 = LB（降档）
         } else if b == .fire {
             let down = s.rt <= 0.5
             s.rt = down ? 1 : 0

@@ -100,3 +100,6 @@ npx cap open ios   # Xcode 里选 Team、连真机、Run
 | 苦力帽 | POV 1 | 十字键 / 右摇杆视角 |
 | 按钮 1–10 | 按钮 1–10 | A/B/X/Y 等 |
 | 飞机开火 | 按钮 16 | （双设备时不写 Xbox RT） |
+
+> - 苦力帽只写 **POV**，不占 vJoy 按钮（不再是 11–14）；开火独占按钮 16。vJoy 11–15 留空给自定义。
+> - **网页手柄测试器（gamepad-tester 类）只能看到 Xbox（ViGEmBus），看不到 vJoy（DirectInput）。** 验证开车方向盘：装 ViGEmBus 后看 Xbox 360 的「左摇杆 X」；验证飞机杆位：在游戏内绑 vJoy，不要用网页测试器。

@@ -314,11 +314,12 @@ class Hotas:
         "b8": 8, "flaps_down": 8, "start": 8, "pushback": 8,
         "b9": 9, "parking_brake": 9, "l3": 9, "sprint": 9,
         "b10": 10, "gear": 10, "r3": 10, "ping": 10, "landing_lights": 10,
-        "dup": 11, "hat_up": 11,
-        "ddown": 12, "voice": 12, "hat_down": 12,
-        "dleft": 13, "hat_left": 13,
-        "dright": 14, "hat_right": 14,
-        # 开车模式扩展按钮（vJoy 11–16）。飞行时 11–14 归 hat，开车时 hat 不发，可复用为普通键。
+        # 十字键 d-pad 在 vJoy 上用按钮 11–14 模拟；苦力帽 hat_up/down/left/right 只写 POV（见 tap_button）
+        "dup": 11,
+        "ddown": 12, "voice": 12,
+        "dleft": 13,
+        "dright": 14,
+        # 扩展按钮 vJoy 11–16：默认布局不再占用，保留给用户自定义（b11~b14 与 d-pad 同号，飞行时建议留给 hat）
         "b11": 11, "b12": 12, "b13": 13, "b14": 14, "b15": 15, "b16": 16,
     }
     VJOY_POV = {"hat_up": 0, "hat_right": 1, "hat_down": 2, "hat_left": 3}
@@ -339,6 +340,8 @@ class Hotas:
                             dev.set_disc_pov(1, -1)
                         except Exception:
                             pass
+                    # 苦力帽只写 POV，不再同时按按钮 11–14（否则和 b11~b14 重复）
+                    continue
                 idx = self.VJOY_BTN.get(alias)
                 if not idx:
                     continue

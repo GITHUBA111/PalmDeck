@@ -20,11 +20,14 @@ PalmDeck — 手机当开车 / 开飞机的杆，步兵用电脑键鼠。
    中央 PFD 姿态球显示正在发出的杆位
 7. HUD 的「锁定」保持当前杆位不回中（解锁后俯仰连续接上）；
    「校准」按当前握持姿态回中
-8. 帽垫四向 = 视角（hat）；10 个按钮可在设置里改名（对应 vJoy 按钮 1–10）
+8. 帽垫四向 = 视角（hat，只写 POV，不占 vJoy 按钮）；10 个按钮可在设置里改名（对应 vJoy 按钮 1–10）
 9. 触觉反馈：按键 / 滑条止动 / 限位都会振动。
    iOS App 走原生 Taptic；Safari 网页版 iPhone 不振动（系统限制）
 10. 电脑控制台「收包频率」应接近 60Hz（绿）；iPhone App 走 UDP 7773，Safari 走二进制 WebSocket
 11. 切「步兵」后用电脑键鼠；飞机开火 = vJoy 按钮 16
+
+注意：网页手柄测试器（gamepad-tester 类）只能看到 Xbox（ViGEmBus），看不到 vJoy（DirectInput）。
+开车方向盘 = Xbox 左摇杆 X；飞机杆位请进游戏绑 vJoy，别用网页测试器验证。
 
 若窗口写 backend=none，右键 start.bat → 以管理员身份运行一次。
 Steam 里对 WARDOGS 关掉 Steam Input。
