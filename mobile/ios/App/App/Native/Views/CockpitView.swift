@@ -6,8 +6,11 @@ struct CockpitView: View {
     @StateObject private var discovery = Discovery()
     @State private var showSettings = false
     @StateObject private var layout = LayoutStore()
+    @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
     @State private var showLibrary = false
     @State private var showTutorial = false
+    @State private var naming = false
+    @State private var tplName = ""
     var onExit: () -> Void = {}
     private var stripH: CGFloat { 28 }   // 底部仪表条高度
 
@@ -21,53 +24,23 @@ struct CockpitView: View {
 
             VStack(spacing: gap) {
                 topBar(height: topH)
-                if s.mode == .infantry {
-                    infantryBody(W: W, H: bodyH)
+                if s.mode == .gamepad {
+                    gamepadBody(W: W, H: bodyH)
                         .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
+                } else if s.mode == .heli {
+                    // 飞行模式：真机硬件皮肤（P4）
+                    FlightDeckView(s: s, ctrl: ctrl)
+                        .frame(width: W, height: bodyH)
+                        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
+                        .overlay(alignment: .top) { notConnectedBanner }
                 } else {
-                    ZStack {
-                        WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
-                        // 飞行模式的中心 3D 直升机（固定）
-                        if s.mode == .heli {
-                            HelicopterSceneView(state: s)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
-                                .frame(width: W * 0.22, height: bodyH * 0.42)
-                                .position(x: W * 0.62, y: bodyH * 0.26)
-                                .allowsHitTesting(false)
-                        }
-                        // 编辑时：组件库条（悬浮在顶部，半透明，不挤压布局）
-                        if layout.editing {
-                            VStack(spacing: 0) {
-                                HStack(spacing: 6) {
-                                    Text("添加：")
-                                        .font(.system(size: 12)).foregroundColor(Theme.orange)
-                                    libraryButton("方向盘", .wheel, .roll)
-                                    libraryButton("滑条", .slider, nil)
-                                    libraryButton("触摸板", .pad, .look)
-                                    libraryButton("摇杆", .stick, .roll)
-                                    libraryButton("苦力帽", .hat, .look)
-                                    libraryButton("姿态球", .attitude, .roll)
-                                    libraryButton("按键", .button, nil)
-                                    Spacer(minLength: 0)
-                                    Button("完成") { layout.editing = false; Haptics.press() }
-                                        .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 5)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel.opacity(0.97)))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.orange.opacity(0.7), lineWidth: 1))
-                                .padding(.horizontal, 6)
-                                .padding(.top, 2)
-                                Spacer(minLength: 0)
-                            }
-                        }
-                    }
-                    .frame(width: W, height: bodyH)
-                    .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-                    .overlay(alignment: .top) { if !layout.editing { notConnectedBanner } }
+                    // 开车模式：真机硬件皮肤（P5）
+                    DriveDeck(s: s, ctrl: ctrl)
+                        .frame(width: W, height: bodyH)
+                        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
+                        .overlay(alignment: .top) { notConnectedBanner }
                 }
-                telemetryStrip
+                statusStrip
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -81,6 +54,8 @@ struct CockpitView: View {
         }
         .onAppear {
             discovery.start()
+            // 电脑端下发布局 → 写入 LayoutStore
+            ctrl.onLayouts = { [weak layout] raw in layout?.applyServer(raw: raw) }
             // 首次进入座舱自动弹一次速览（可在设置里重新打开）；延迟一帧确保能正常弹出
             if !UserDefaults.standard.bool(forKey: "palmdeck_tutored") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showTutorial = true }
@@ -102,13 +77,13 @@ struct CockpitView: View {
     }
 
     // MARK: 底部仪表条
-    private var telemetryStrip: some View {
+    private var statusStrip: some View {
         HStack(spacing: 0) {
-            HudCell(label: "ROL", value: String(format: "%+.1f°", s.displayRoll), accent: axisAccent(s.displayRoll))
+            HudCell(label: "ROL", value: String(format: "%+.1f°", s.smRoll), accent: axisAccent(s.smRoll))
             divider
-            HudCell(label: "PIT", value: String(format: "%+.1f°", s.displayPitch), accent: axisAccent(s.displayPitch))
+            HudCell(label: "PIT", value: String(format: "%+.1f°", s.smPitch), accent: axisAccent(s.smPitch))
             divider
-            HudCell(label: "YAW", value: String(format: "%+.1f°", s.displayYaw), accent: axisAccent(s.displayYaw))
+            HudCell(label: "YAW", value: String(format: "%+.1f°", s.smYaw), accent: axisAccent(s.smYaw))
             divider
             HudCell(label: "THR", value: String(format: "%.0f%%", s.throttle * 100), accent: s.throttle > 0.01 ? Theme.green : Theme.textDim)
             divider
@@ -117,8 +92,8 @@ struct CockpitView: View {
             Spacer(minLength: 0)
             HudCell(label: "MODE", value: s.mode.label, accent: Theme.cyan)
             divider
-            HudCell(label: "SRC", value: s.displaySource == .telemetry ? (s.telemValid ? "遥测" : "等待") : "杆位",
-                    accent: s.displaySource == .telemetry ? (s.telemValid ? Theme.orange : Theme.textFaint) : Theme.textDim)
+            HudCell(label: "SRC", value: s.transport == "idle" ? "—" : s.transport.uppercased(),
+                    accent: s.transport == "udp" ? Theme.green : (s.transport == "ws" ? Theme.cyan : Theme.textDim))
         }
         .frame(height: stripH)
         .padding(.horizontal, 10)
@@ -162,20 +137,23 @@ struct CockpitView: View {
                 }
                 .buttonStyle(CardButton(fillWidth: false, height: height))
                 .frame(width: 40)
-                Button {
-                    layout.editing.toggle()
-                    Haptics.press()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: layout.editing ? "checkmark.circle.fill" : "square.grid.2x2")
-                            .font(.system(size: 13))
-                        Text(layout.editing ? "完成" : "布局")
-                            .font(.system(size: 11, weight: .medium))
+                if s.mode == .gamepad {
+                    Button {
+                        if !layout.editing { gamepadCustom = true }   // 编辑即切到自定义组件
+                        layout.editing.toggle()
+                        Haptics.press()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: layout.editing ? "checkmark.circle.fill" : "square.grid.2x2")
+                                .font(.system(size: 13))
+                            Text(layout.editing ? "完成" : "布局")
+                                .font(.system(size: 11, weight: .medium))
+                        }
                     }
+                    .buttonStyle(CardButton(active: layout.editing, accent: Theme.orange, fillWidth: false, height: height))
+                    .frame(width: 64)
+                    .padding(.leading, 4)
                 }
-                .buttonStyle(CardButton(active: layout.editing, accent: Theme.orange, fillWidth: false, height: height))
-                .frame(width: 64)
-                .padding(.leading, 4)
             }
         }
         .frame(height: height)
@@ -185,7 +163,7 @@ struct CockpitView: View {
                 .frame(height: 1.5)
                 .padding(.horizontal, 2)
         }
-        .sheet(isPresented: $showSettings) { SettingsSheet(ctrl: ctrl, s: s, layout: layout, discovery: discovery, onExit: onExit, onShowTutorial: {
+        .sheet(isPresented: $showSettings) { SettingsView(ctrl: ctrl, s: s, layout: layout, discovery: discovery, onExit: onExit, onShowTutorial: {
             showSettings = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTutorial = true }
         }) }
@@ -213,8 +191,9 @@ struct CockpitView: View {
             .frame(width: 140)
         } else {
             Button {
-                let target = discovery.found.first?.ip ?? ctrl.savedHostForUI
-                if target.isEmpty { showSettings = true } else { ctrl.connect(host: target) }
+                if let d = discovery.found.first { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
+                else if !ctrl.savedHostForUI.isEmpty { ctrl.connect(host: ctrl.savedHostForUI) }
+                else { showSettings = true }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 5) {
@@ -234,25 +213,23 @@ struct CockpitView: View {
         }
     }
 
-    // MARK: 步兵模式（休息屏）
-    private func infantryBody(W: CGFloat, H: CGFloat) -> some View {
+    // MARK: 游戏手柄（硬件皮肤 / 自定义组件）
+    private func gamepadBody(W: CGFloat, H: CGFloat) -> some View {
         ZStack {
-            // 步兵模式也支持自定义组件（给开火/投弹/地图等加触控键）
-            WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
-
-            VStack(spacing: 10) {
-                Spacer()
-                Image(systemName: "figure.walk")
-                    .font(.system(size: 34)).foregroundColor(Theme.cyan)
-                Text("步兵模式")
-                    .font(.system(size: 22, weight: .bold)).foregroundColor(Theme.cyan)
-                Text("键鼠操作中 · 轴已停（不会干扰鼠标）")
-                    .font(.system(size: 14)).foregroundColor(Theme.textDim)
-                Text("点右上角「布局」可加开火/投弹/地图等触控键")
-                    .font(.system(size: 12)).foregroundColor(Theme.textFaint)
-                Spacer()
+            if gamepadCustom {
+                // 自定义组件（给开火/投弹/地图等加触控键）
+                WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
+                    // 应用模板 / 撤销 / 恢复默认是整表替换，用 revision 强制重建画布，
+                    // 否则 EditableWidget 的 @State dragStart 会残留到新布局上。
+                    .id(layout.revision)
+            } else {
+                // 真机手柄皮肤（P6）
+                GamepadDeck(s: s, ctrl: ctrl)
+                Text("手柄模式 · 轴已停（不会干扰电脑键鼠）")
+                    .font(.system(size: 11)).foregroundColor(Theme.textFaint)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
 
             // 编辑时：组件库条
             if layout.editing {
@@ -267,6 +244,11 @@ struct CockpitView: View {
                         libraryButton("苦力帽", .hat, .look)
                         libraryButton("姿态球", .attitude, .roll)
                         Spacer(minLength: 0)
+                        Button("存为模板") {
+                            tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
+                            naming = true
+                        }
+                        .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
                         Button("完成") { layout.editing = false; Haptics.press() }
                             .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
                     }
@@ -282,6 +264,21 @@ struct CockpitView: View {
         }
         .frame(width: W, height: H)
         .overlay(alignment: .top) { if !layout.editing { notConnectedBanner } }
+        .alert("存为模板", isPresented: $naming) {
+            TextField("模板名称", text: $tplName)
+                .onChange(of: tplName) { v in
+                    if v.count > LayoutStore.maxNameLength {
+                        tplName = String(v.prefix(LayoutStore.maxNameLength))
+                    }
+                }
+            Button("取消", role: .cancel) { }
+            Button("确定") {
+                _ = layout.saveTemplate(name: tplName, mode: s.mode)
+                Haptics.success()
+            }
+        } message: {
+            Text("快照当前布局（\(layout.widgets(mode: s.mode).count) 个组件），名称最多 \(LayoutStore.maxNameLength) 个字符；可在设置 → 布局里切换。")
+        }
     }
 
     private var dotColor: Color {
@@ -298,8 +295,9 @@ struct CockpitView: View {
     private var notConnectedBanner: some View {
         if s.link != .live && s.link != .connecting {
             Button {
-                let target = discovery.found.first?.ip ?? ctrl.savedHostForUI
-                if target.isEmpty { showSettings = true } else { ctrl.connect(host: target) }
+                if let d = discovery.found.first { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
+                else if !ctrl.savedHostForUI.isEmpty { ctrl.connect(host: ctrl.savedHostForUI) }
+                else { showSettings = true }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 8) {
@@ -351,97 +349,6 @@ struct CardButton: ButtonStyle {
             return AnyView(base.frame(height: height))
         } else {
             return AnyView(base.frame(maxHeight: .infinity))
-        }
-    }
-}
-
-/// 设置面板（从座舱齿轮进入）
-struct SettingsSheet: View {
-    @ObservedObject var ctrl: CockpitController
-    @ObservedObject var s: ControllerState
-    @ObservedObject var layout: LayoutStore
-    var discovery: Discovery? = nil
-    var onExit: () -> Void = {}
-    var onShowTutorial: () -> Void = {}
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("连接") {
-                    HStack {
-                        Text("电脑")
-                        Spacer()
-                        Text(ctrl.savedHostForUI.isEmpty ? "未设置" : ctrl.savedHostForUI)
-                            .foregroundColor(.gray)
-                    }
-                    if s.link == .live {
-                        Button("断开连接") { ctrl.disconnect() }
-                    } else {
-                        ForEach(discovery?.found ?? [], id: \.ip) { d in
-                            Button("连接电脑 \(d.ip)") { ctrl.connect(host: d.ip) }
-                        }
-                        if !ctrl.savedHostForUI.isEmpty &&
-                            !(discovery?.found.contains { $0.ip == ctrl.savedHostForUI } ?? false) {
-                            Button("连接上次的 \(ctrl.savedHostForUI)") { ctrl.connect(host: ctrl.savedHostForUI) }
-                        }
-                    }
-                    Button("返回启动页（换 IP / 重新引导）") {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onExit() }
-                    }
-                }
-                Section("布局") {
-                    Toggle("编辑布局（拖动移动 · 拖右下角缩放）", isOn: $layout.editing)
-                    Text("开启后顶部出现组件库：方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/按键；拖动移动、拖右下角缩放、✕ 删除")
-                        .font(.footnote).foregroundColor(.gray)
-                    Button("恢复默认布局") { layout.reset(mode: s.mode) }
-                    Button("清空当前模式") { layout.clear(mode: s.mode) }
-                }
-                Section("轴反向（游戏里也能改，两边二选一即可）") {
-                    Toggle("反转横滚 Roll", isOn: $s.invX)
-                    Toggle("反转俯仰 Pitch", isOn: $s.invY)
-                    Toggle("反转方向舵 Yaw", isOn: $s.invYaw)
-                    Toggle("反转总距 Collective", isOn: $s.invColl)
-                }
-                Section("摇杆") {
-                    Toggle("松手回中", isOn: $s.stickReturn)
-                }
-                Section("方向盘（开车）") {
-                    HStack {
-                        Text("满舵角度")
-                        Slider(value: $s.wheelMaxDeg, in: 180...900, step: 90)
-                        Text(String(format: "%.1f圈", s.wheelMaxDeg/360)).frame(width: 48)
-                    }
-                    HStack {
-                        Text("回正速度")
-                        Slider(value: $s.wheelReturnSpeed, in: 0...1440, step: 60)
-                        Text(s.wheelReturnSpeed == 0 ? "不回" : String(format: "%.0f°/s", s.wheelReturnSpeed)).frame(width: 56)
-                    }
-                    Text("回正速度 0 = 松手保持（不回正）")
-                        .font(.footnote).foregroundColor(.gray)
-                }
-                Section("3D 显示源") {
-                    Picker("姿态来源", selection: $s.displaySource) {
-                        ForEach(DisplaySource.allCases, id: \.self) { src in
-                            Text(src.label).tag(src)
-                        }
-                    }
-                    if s.displaySource == .telemetry {
-                        Text(s.telemValid ? "已收到游戏遥测 ✓" : "等待遥测…（电脑端需开启 --telemetry）")
-                            .font(.footnote).foregroundColor(s.telemValid ? .green : .gray)
-                    }
-                }
-                Section("帮助") {
-                    Button("查看使用教程") { onShowTutorial() }
-                }
-            }
-            .navigationTitle("设置")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
         }
     }
 }
@@ -498,15 +405,15 @@ struct CockpitTutorialView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header
                         section(icon: "switch.2", title: "顶部",
-                                text: "中间切「飞机 / 开车 / 步兵」；右侧是连接状态 + 齿轮设置 + 布局")
+                                text: "中间切「飞机 / 开车 / 手柄」；右侧是连接状态 + 齿轮设置（手柄模式多一个「布局」按钮）")
                         section(icon: "airplane", title: "飞机模式",
-                                text: "姿态球（左）+ 3D 直升机（右）实时显示杆位/游戏姿态；左列油门/横滚/俯仰 + 苦力帽视角；右列摇杆（松手回中）/开火/方向舵 + 武器键")
+                                text: "硬件飞行甲板：总距杆（IDLE/FLY/MAX 止动）+ 脚舵 + 周期变距杆 + 仪表板（姿态球 / 扭矩 / 滚转俯仰）；按键簇：开火/投弹/起落架/灯光/悬停/视角")
                         section(icon: "car", title: "开车模式",
-                                text: "触摸方向盘（多圈、可调回正速度）+ 油门/刹车/离合滑条 + 升/降档 + 视角触摸板")
-                        section(icon: "figure.walk", title: "步兵模式",
-                                text: "键鼠休息屏，轴不发，不干扰鼠标；仍可布局加开火/投弹等触控键")
-                        section(icon: "square.grid.2x2", title: "自定义布局",
-                                text: "点右上角「布局」：拖动移动、拖右下角缩放、✕ 删除；顶部组件库可加方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/按键")
+                                text: "方向盘（多圈、可调回正速度）+ 离合/刹车/油门三踏板 + 序列式档杆 + 转速表与仪表盘 + 视角板 + 按键簇")
+                        section(icon: "gamepad", title: "手柄模式",
+                                text: "Xbox 硬件皮肤：双摇杆 / 十字键 / ABXY / LB·RB / LT·RT / 视图·菜单；轴停发、不抢电脑键鼠。设置里可切回「自定义组件布局」")
+                        section(icon: "square.grid.2x2", title: "自定义布局（仅手柄）",
+                                text: "手柄模式点右上角「布局」：拖动移动、拖右下角缩放、✕ 删除；顶部组件库可加方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/按键，可从电脑拉取 / 上传")
                         section(icon: "checklist", title: "第一次使用（三步）",
                                 text: "1) 电脑先启动 PalmDeck（start.bat 或 python3 bridge.py）\n2) 手机点「连接」，顶栏变绿即连上\n3) 进游戏把这只虚拟手柄绑一次即可")
                     }

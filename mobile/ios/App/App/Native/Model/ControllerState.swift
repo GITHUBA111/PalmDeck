@@ -1,32 +1,41 @@
 import Foundation
 import Combine
 
-/// 3D 直升机显示的姿态来源
-enum DisplaySource: String, CaseIterable {
-    case stick = "stick"        // 本地杆位（默认，永远可用）
-    case telemetry = "telemetry" // 游戏遥测（需电脑侧开启遥测）
-
-    var label: String {
-        switch self {
-        case .stick: return "本地杆位"
-        case .telemetry: return "游戏遥测"
-        }
-    }
-}
-
 /// 座舱模式
 enum CockpitMode: String, CaseIterable {
     case heli = "heli"
     case drive = "drive"
-    case infantry = "infantry"
+    case gamepad = "gamepad"
 
     var label: String {
         switch self {
         case .heli: return "飞机"
         case .drive: return "开车"
-        case .infantry: return "步兵"
+        case .gamepad: return "手柄"
         }
     }
+
+    /// 兼容旧值：UserDefaults / 旧服务端可能仍给 `infantry`（v3 遗留）。
+    static func parse(_ raw: String?) -> CockpitMode {
+        switch raw {
+        case "infantry": return .gamepad
+        default: return CockpitMode(rawValue: raw ?? "") ?? .heli
+        }
+    }
+}
+
+/// 持久化键（P7 手感参数）
+private enum PKey {
+    static let sensX = "palmdeck_sens_x"
+    static let sensY = "palmdeck_sens_y"
+    static let dz = "palmdeck_dz"
+    static let invX = "palmdeck_inv_x"
+    static let invY = "palmdeck_inv_y"
+    static let invYaw = "palmdeck_inv_yaw"
+    static let invColl = "palmdeck_inv_coll"
+    static let stickReturn = "palmdeck_stick_return"
+    static let wheelMaxDeg = "palmdeck_wheel_max_deg"
+    static let wheelReturn = "palmdeck_wheel_return"
 }
 
 /// 连接状态
@@ -52,35 +61,21 @@ final class ControllerState: ObservableObject {
     @Published var lookY: Double = 0
     @Published var lt: Double = 0          // 左扳机 / 刹车
     @Published var rt: Double = 0          // 右扳机 / 开火
-    @Published var clutch: Double = 0      // 开车：离合（0~1），走 vJoy Rz
-
-    // ---- 开车分页 ----
-    @Published var drivePage: Int = 0      // 0=驾驶 1=按键
+    @Published var clutch: Double = 0      // 开车：离合（0~1），走左摇杆 Y（0 → 中位，1 → -1）
 
     // ---- 帽 / 按键 ----
     @Published var hat: UInt8 = 255        // 0上 1右 2下 3左 255无
     @Published var btnMask: UInt16 = 0     // bit0..bit9 = b1..b10
 
     // ---- 模式 / 连接 ----
-    @Published var mode: CockpitMode = CockpitMode(
-        rawValue: UserDefaults.standard.string(forKey: "palmdeck_mode") ?? "heli") ?? .heli
+    @Published var mode: CockpitMode = CockpitMode.parse(
+        UserDefaults.standard.string(forKey: "palmdeck_mode"))
     @Published var link: LinkState = .idle
     @Published var backend: String = ""      // vjoy+vgamepad / none …
     @Published var deviceName: String = ""
     @Published var hz: Double = 0
     @Published var transport: String = "idle" // udp / ws / idle
     @Published var lastError: String = ""
-
-    // ---- 体感 / 姿态 ----
-    @Published var paused: Bool = false      // 锁定
-    @Published var haveCenter: Bool = false  // 已校准
-
-    // ---- 游戏遥测（可选）----
-    @Published var telemRoll: Double = 0
-    @Published var telemPitch: Double = 0
-    @Published var telemYaw: Double = 0
-    @Published var telemValid: Bool = false
-    @Published var displaySource: DisplaySource = .stick
 
     // ---- 平滑后的发送值（EMA）----
     private(set) var smRoll: Double = 0
@@ -91,17 +86,44 @@ final class ControllerState: ObservableObject {
     var onButton: ((Int, Bool) -> Void)?
     var onHat: ((UInt8) -> Void)?
 
-    // ---- 参数 ----
-    var sensX: Double = 1.0
-    var sensY: Double = 1.0
-    var dz: Double = 0.06
-    var invX: Bool = false      // 反转横滚
-    var invY: Bool = false      // 反转俯仰
-    var invYaw: Bool = false    // 反转方向舵
-    var invColl: Bool = false   // 反转总距
-    var stickReturn: Bool = true
-    var wheelReturnSpeed: Double = 720   // 方向盘回正速度（度/秒）；0 = 不回正
-    var wheelMaxDeg: Double = 540        // 方向盘满舵角度
+    // ---- 参数（全部持久化：改一次，重启仍在）----
+    @Published var sensX: Double = ControllerState.loadDouble(PKey.sensX, 1.0) {
+        didSet { UserDefaults.standard.set(sensX, forKey: PKey.sensX) }
+    }
+    @Published var sensY: Double = ControllerState.loadDouble(PKey.sensY, 1.0) {
+        didSet { UserDefaults.standard.set(sensY, forKey: PKey.sensY) }
+    }
+    @Published var dz: Double = ControllerState.loadDouble(PKey.dz, 0.06) {
+        didSet { UserDefaults.standard.set(dz, forKey: PKey.dz) }
+    }
+    @Published var invX: Bool = ControllerState.loadBool(PKey.invX, false) {   // 反转横滚
+        didSet { UserDefaults.standard.set(invX, forKey: PKey.invX) }
+    }
+    @Published var invY: Bool = ControllerState.loadBool(PKey.invY, false) {   // 反转俯仰
+        didSet { UserDefaults.standard.set(invY, forKey: PKey.invY) }
+    }
+    @Published var invYaw: Bool = ControllerState.loadBool(PKey.invYaw, false) {  // 反转方向舵
+        didSet { UserDefaults.standard.set(invYaw, forKey: PKey.invYaw) }
+    }
+    @Published var invColl: Bool = ControllerState.loadBool(PKey.invColl, false) { // 反转总距
+        didSet { UserDefaults.standard.set(invColl, forKey: PKey.invColl) }
+    }
+    @Published var stickReturn: Bool = ControllerState.loadBool(PKey.stickReturn, true) {
+        didSet { UserDefaults.standard.set(stickReturn, forKey: PKey.stickReturn) }
+    }
+    @Published var wheelReturnSpeed: Double = ControllerState.loadDouble(PKey.wheelReturn, 720) {  // 度/秒；0 = 不回正
+        didSet { UserDefaults.standard.set(wheelReturnSpeed, forKey: PKey.wheelReturn) }
+    }
+    @Published var wheelMaxDeg: Double = ControllerState.loadDouble(PKey.wheelMaxDeg, 540) {  // 满舵角度
+        didSet { UserDefaults.standard.set(wheelMaxDeg, forKey: PKey.wheelMaxDeg) }
+    }
+
+    private static func loadDouble(_ key: String, _ def: Double) -> Double {
+        UserDefaults.standard.object(forKey: key) as? Double ?? def
+    }
+    private static func loadBool(_ key: String, _ def: Bool) -> Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? def
+    }
 
     func resetAxes() {
         roll = 0; pitch = 0; yaw = 0
@@ -114,21 +136,19 @@ final class ControllerState: ObservableObject {
     /// 每帧 EMA 平滑（在发送前调用）。反转在此应用，sm* 即最终发送/显示值。
     func tickSmoothing() {
         let kXY = 0.45, kYaw = 0.5
-        let r = invX ? -roll : roll
-        let p = invY ? -pitch : pitch
+        // 灵敏度先乘、再夹到单位区间，最后进死区/曲线（避免 sm 溢出显示）
+        let r = clampUnit((invX ? -roll : roll) * sensX)
+        let p = clampUnit((invY ? -pitch : pitch) * sensY)
         let y = invYaw ? -yaw : yaw
         smRoll += (shape(r, dz: dz) - smRoll) * kXY
         smPitch += (shape(p, dz: dz) - smPitch) * kXY
         smYaw += (shape(y, dz: 0.08) - smYaw) * kYaw
     }
 
+    private func clampUnit(_ v: Double) -> Double { max(-1, min(1, v)) }
+
     /// 总距（应用反转后）
     var collective: Double { invColl ? (1 - throttle) : throttle }
-
-    /// 3D 显示用的姿态（按来源选择）
-    var displayRoll: Double { displaySource == .telemetry && telemValid ? telemRoll : smRoll }
-    var displayPitch: Double { displaySource == .telemetry && telemValid ? telemPitch : smPitch }
-    var displayYaw: Double { displaySource == .telemetry && telemValid ? telemYaw : smYaw }
 
     private func shape(_ v: Double, dz: Double) -> Double {
         let s = v < 0 ? -1.0 : 1.0

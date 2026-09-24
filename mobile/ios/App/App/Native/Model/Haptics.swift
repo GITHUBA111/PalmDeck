@@ -2,7 +2,11 @@ import UIKit
 
 /// 触觉反馈（Taptic Engine）。每次新建 generator 最可靠。
 enum Haptics {
-    static var enabled = true
+    /// 触觉总开关（持久化；设置里可关）。默认开。
+    static var enabled: Bool {
+        get { UserDefaults.standard.object(forKey: "palmdeck_haptics") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "palmdeck_haptics") }
+    }
 
     static func prepare() {
         UIImpactFeedbackGenerator(style: .light).prepare()

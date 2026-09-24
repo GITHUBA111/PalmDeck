@@ -7,14 +7,16 @@ final class CockpitController: ObservableObject {
 
     let state = ControllerState()
     private let net = NetClient()
-    private var touchActive = false   // 手指正在拖摇杆/轴（体感暂停）
+    private var touchActive = false   // 手指正在拖动手柄/踏板
     private var displayLink: CADisplayLink?
     private var lastFrameTime: CFTimeInterval = 0
     private var lastSend = Date.distantPast
     private var retry = 0
     private var savedHost: String = ""
-    private var lastTelem = Date.distantPast
     private var autoReconnect = false   // 仅「意外断线」才自动重连；手动断开不重连
+    private var wsPort: UInt16 = 8765   // 服务端实际端口（hello 时分商）
+    private var udpPort: UInt16 = 7773
+    private var lastPing = Date.distantPast
 
     @Published var pfConnState: String = ""
     @Published var pfMotionState: String = ""
@@ -38,7 +40,9 @@ final class CockpitController: ObservableObject {
     func setTouchActive(_ v: Bool) { touchActive = v }
 
     // MARK: - 连接
-    func connect(host: String) {
+    func connect(host: String) { connect(host: host, ws: wsPort, udp: udpPort) }
+
+    func connect(host: String, ws: UInt16, udp: UInt16) {
         let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !h.isEmpty else { return }
         // 拒绝回环/假地址（如 127.0.0.1），否则会连到手机自己
@@ -52,13 +56,15 @@ final class CockpitController: ObservableObject {
             Haptics.warning()
             return
         }
+        wsPort = ws
+        udpPort = udp
         savedHost = h
         savedHostForUI = h
         UserDefaults.standard.set(h, forKey: "palmdeck_host")
         autoReconnect = true
         state.link = .connecting
         pfConnState = "正在连接 \(h)…"
-        net.connect(host: h)
+        net.connect(host: h, wsPort: ws, udpPort: udp)
     }
 
     func reconnect() {
@@ -81,12 +87,25 @@ final class CockpitController: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.retry = 0
+            self.lastPing = Date()
             self.state.link = .live
             Haptics.success()
             self.pfConnState = "已连接"
             // 上报当前模式
             self.net.sendJSON(["type": "mode", "name": self.state.mode.rawValue])
+            // 拉取电脑端保存的布局（没有则由 App 用内置默认）
+            self.net.sendJSON(["type": "layouts_get"])
         }
+    }
+
+    // MARK: - 布局同步（P3）
+    /// 服务端下发布局时回调（在 UI 层接到 LayoutStore）
+    var onLayouts: (([String: Any]) -> Void)?
+
+    func requestLayouts() { net.sendJSON(["type": "layouts_get"]) }
+
+    func sendLayoutPut(mode: String, layout: [[String: Any]]) {
+        net.sendJSON(["type": "layouts_put", "mode": mode, "layout": layout])
     }
 
     private func handleClose() {
@@ -127,7 +146,11 @@ final class CockpitController: ObservableObject {
         guard let type = obj["type"] as? String else { return }
         switch type {
         case "hello":
-            if let u = obj["udp"] as? Int { /* 端口固定 7773，可按需更新 */ _ = u }
+            // 协商服务端实际端口（配置可改）；下次连接/重连使用
+            DispatchQueue.main.async {
+                if let w = obj["ws"] as? Int, w > 0, w <= 65535 { self.wsPort = UInt16(w) }
+                if let u = obj["udp"] as? Int, u > 0, u <= 65535 { self.udpPort = UInt16(u) }
+            }
         case "status":
             DispatchQueue.main.async {
                 self.state.backend = obj["backend"] as? String ?? ""
@@ -143,16 +166,9 @@ final class CockpitController: ObservableObject {
                     self.pfConnState = self.state.lastError.isEmpty ? "未检测到手柄驱动" : self.state.lastError
                 }
             }
-        case "attitude":
-            let r = (obj["roll"] as? Double) ?? 0
-            let p = (obj["pitch"] as? Double) ?? 0
-            let y = (obj["yaw"] as? Double) ?? 0
-            DispatchQueue.main.async {
-                self.state.telemRoll = max(-1, min(1, r))
-                self.state.telemPitch = max(-1, min(1, p))
-                self.state.telemYaw = max(-1, min(1, y))
-                self.state.telemValid = true
-                self.lastTelem = Date()
+        case "layouts":
+            if let raw = obj["layouts"] as? [String: Any] {
+                DispatchQueue.main.async { [weak self] in self?.onLayouts?(raw) }
             }
         case "pong":
             break
@@ -191,11 +207,7 @@ final class CockpitController: ObservableObject {
     private var frameCount = 0
     private var atLimit = false
     private func tick() {
-        // 遥测超时：>1.5s 无姿态包 → 回退本地杆位（TODO：收不到则回退）
-        if state.telemValid && Date().timeIntervalSince(lastTelem) > 1.5 {
-            state.telemValid = false
-        }
-        // 平滑值始终本地更新（驱动 3D 模型），不依赖是否连上电脑
+        // 平滑值始终本地更新（驱动姿态球），不依赖是否连上电脑
         state.tickSmoothing()
         // 轴到限位：进入满轴时轻震（只在已连接时，避免本地空振）
         let mag = max(abs(state.smRoll), abs(state.smPitch))
@@ -205,13 +217,16 @@ final class CockpitController: ObservableObject {
         // 读数降到 ~10Hz 更新（避免每帧触发 SwiftUI 重绘）
         frameCount += 1
         if frameCount % 6 == 0 {
-            // 读数与 3D 直升机/姿态球同源：遥测激活时显示真实姿态
+            // 读数与姿态球同源（平滑后的杆位）
             readout = String(format: "R %+.2f  P %+.2f  Y %+.2f  T %d%%",
-                             state.displayRoll, state.displayPitch, state.displayYaw,
+                             state.smRoll, state.smPitch, state.smYaw,
                              Int((state.throttle * 100).rounded()))
         }
         // 仅在连接时把杆位发往电脑
         guard state.link == .live else { return }
+        // 5s 心跳：保活 WS / NAT
+        let nowD = Date()
+        if nowD.timeIntervalSince(lastPing) >= 5 { lastPing = nowD; ping() }
         net.send(Packet.pack(state))
     }
 

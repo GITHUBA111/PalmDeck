@@ -149,7 +149,7 @@ struct PreflightView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
         .onTapGesture {
             if s.link != .live, let d = discovery.best {
-                ctrl.connect(host: d.ip); Haptics.tap()
+                ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp); Haptics.tap()
             }
         }
     }
@@ -157,7 +157,10 @@ struct PreflightView: View {
     private var statusButton: some View {
         Button(s.link == .live ? "断开" : (s.link == .connecting ? "…" : "连接")) {
             if s.link == .live { ctrl.disconnect() }
-            else if s.link != .connecting { ctrl.connect(host: discovery.best?.ip ?? host) }
+            else if s.link != .connecting {
+                if let d = discovery.best { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
+                else { ctrl.connect(host: host) }
+            }
             Haptics.tap()
         }
         .buttonStyle(CardButton(active: false,
@@ -257,7 +260,7 @@ struct PreflightView: View {
             ForEach(discovery.found, id: \.ip) { d in
                 let isCurrent = s.link == .live && ctrl.savedHostForUI == d.ip
                 Button {
-                    ctrl.connect(host: d.ip); Haptics.tap()
+                    ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp); Haptics.tap()
                 } label: {
                     HStack(spacing: 8) {
                         Circle().fill(isCurrent ? Color.green : Color.cyan).frame(width: 7, height: 7)

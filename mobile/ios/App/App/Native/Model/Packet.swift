@@ -15,15 +15,15 @@ enum Packet {
         // 真值表（与 JS packState 一致）；直升机油门 = 总距（可反转），开车油门不反转
         let coll: Double = s.mode == .heli ? s.collective : s.throttle
         let rtOut: Double = s.mode == .drive ? s.throttle
-                          : s.mode == .infantry ? 0
+                          : s.mode == .gamepad ? 0
                           : s.rt
-        let thrOut: Double = s.mode == .infantry ? 0 : coll
-        let ltOut: Double = s.mode == .infantry ? 0 : max(s.lt, 0)
+        let thrOut: Double = s.mode == .gamepad ? 0 : coll
+        let ltOut: Double = s.mode == .gamepad ? 0 : max(s.lt, 0)
 
-        // 开车时 Rz 复用为离合（0~1 → -1~1），飞行时 Rz = 方向舵
-        let rzOut: Double = s.mode == .drive ? (s.clutch * 2 - 1) : s.smYaw
-        // 开车时 Y 轴空闲，留给用户可能加的“方向舵/第二转向”；飞行时 Y = 俯仰
-        let yOut: Double = s.mode == .drive ? s.smYaw : s.smPitch
+        // 开车时 Rz 不输出（离合改走左摇杆 Y），飞行时 Rz = 方向舵
+        let rzOut: Double = s.mode == .drive ? 0 : s.smYaw
+        // 开车时左摇杆 Y = 离合（滑条 0 → 中位，1 → -1 到底）；飞行时 Y = 俯仰
+        let yOut: Double = s.mode == .drive ? s.clutch : s.smPitch
         appendI16(&data, s.smRoll)
         appendI16(&data, yOut)
         appendI16(&data, rzOut)

@@ -109,10 +109,13 @@ struct SteeringWheel: View {
                             var delta = fingerAng - lastFingerAngle
                             if delta > 180 { delta -= 360 }
                             if delta < -180 { delta += 360 }
+                            let old = angleDeg
                             angleDeg += delta
                             lastFingerAngle = fingerAng
                             // 限制到满舵
                             angleDeg = max(-maxDeg, min(maxDeg, angleDeg))
+                            // 过中位（0°）→ selection 轻震
+                            if (old < 0 && angleDeg >= 0) || (old > 0 && angleDeg <= 0) { Haptics.select() }
                             value = max(-1, min(1, angleDeg / maxDeg))
                         }
                     }

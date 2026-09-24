@@ -24,7 +24,10 @@
 		D02F22B00AB4DBE45A58E98B /* PalmDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */; };
 		8C64A513AC615D5363FD07F8 /* CockpitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADE12BFD530D6FFF3701839 /* CockpitView.swift */; };
 		0A2D9D2BFC4984B79BC5AFD7 /* Controls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B2E1BA4D6A8927AE448464 /* Controls.swift */; };
-		1ABD8B12794F5AEF9310F941 /* HelicopterScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4036E3B19CA7859C0AFA67A8 /* HelicopterScene.swift */; };
+		F1D2E3A4B5C67890D1E2F3A5 /* FlightDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3A4 /* FlightDeck.swift */; };
+		F1D2E3A4B5C67890D1E2F3A7 /* DriveDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3A6 /* DriveDeck.swift */; };
+		F1D2E3A4B5C67890D1E2F3A9 /* GamepadDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3A8 /* GamepadDeck.swift */; };
+		F1D2E3A4B5C67890D1E2F3AA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3AB /* SettingsView.swift */; };
 		A0582E022106727531889FD6 /* PreflightView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E5B86802679AC075FC6975 /* PreflightView.swift */; };
 		ABBB06836B4A7638FCB1CA2F /* SteeringWheel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A7E91000A2997A8B4B0D33 /* SteeringWheel.swift */; };
 		0F281265CD94BDE925BEF299 /* Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A63FEED2F98804AD52E180 /* Layout.swift */; };
@@ -57,7 +60,10 @@
 		D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PalmDeckApp.swift; path = Native/PalmDeckApp.swift; sourceTree = "<group>"; };
 		2ADE12BFD530D6FFF3701839 /* CockpitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CockpitView.swift; path = Native/Views/CockpitView.swift; sourceTree = "<group>"; };
 		C2B2E1BA4D6A8927AE448464 /* Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Controls.swift; path = Native/Views/Controls.swift; sourceTree = "<group>"; };
-		4036E3B19CA7859C0AFA67A8 /* HelicopterScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HelicopterScene.swift; path = Native/Views/HelicopterScene.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3A4 /* FlightDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FlightDeck.swift; path = Native/Views/FlightDeck.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3A6 /* DriveDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DriveDeck.swift; path = Native/Views/DriveDeck.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3A8 /* GamepadDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GamepadDeck.swift; path = Native/Views/GamepadDeck.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsView.swift; path = Native/Views/SettingsView.swift; sourceTree = "<group>"; };
 		77E5B86802679AC075FC6975 /* PreflightView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PreflightView.swift; path = Native/Views/PreflightView.swift; sourceTree = "<group>"; };
 		E7A7E91000A2997A8B4B0D33 /* SteeringWheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SteeringWheel.swift; path = Native/Views/SteeringWheel.swift; sourceTree = "<group>"; };
 		84A63FEED2F98804AD52E180 /* Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Layout.swift; path = Native/Views/Layout.swift; sourceTree = "<group>"; };
@@ -126,7 +132,10 @@
 				D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */,
 				2ADE12BFD530D6FFF3701839 /* CockpitView.swift */,
 				C2B2E1BA4D6A8927AE448464 /* Controls.swift */,
-				4036E3B19CA7859C0AFA67A8 /* HelicopterScene.swift */,
+				F1D2E3A4B5C67890D1E2F3A4 /* FlightDeck.swift */,
+				F1D2E3A4B5C67890D1E2F3A6 /* DriveDeck.swift */,
+				F1D2E3A4B5C67890D1E2F3A8 /* GamepadDeck.swift */,
+				F1D2E3A4B5C67890D1E2F3AB /* SettingsView.swift */,
 				77E5B86802679AC075FC6975 /* PreflightView.swift */,
 				F0E1D2C3B4A5968778695A4B3C2D1E0F /* Theme.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -279,7 +288,10 @@
 				D02F22B00AB4DBE45A58E98B /* PalmDeckApp.swift in Sources */,
 				8C64A513AC615D5363FD07F8 /* CockpitView.swift in Sources */,
 				0A2D9D2BFC4984B79BC5AFD7 /* Controls.swift in Sources */,
-				1ABD8B12794F5AEF9310F941 /* HelicopterScene.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3A5 /* FlightDeck.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3A7 /* DriveDeck.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3A9 /* GamepadDeck.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3AA /* SettingsView.swift in Sources */,
 				A0582E022106727531889FD6 /* PreflightView.swift in Sources */,
 				0F1E2D3C4B5A69788796A5B4C3D2E1F0 /* Theme.swift in Sources */,
 			);

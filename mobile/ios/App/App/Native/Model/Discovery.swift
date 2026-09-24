@@ -87,6 +87,8 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
             if usableLanIP(ip) {
                 publish(ip: ip, name: "电脑")
             }
+            // 继续 resolve：服务名只编码 IP，端口在 TXT 里
+            service.resolve(withTimeout: 4)
             return
         }
         // 兜底：resolve 拿地址
@@ -107,7 +109,8 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
                 return nil
             }
             if let ip, usableLanIP(ip) {
-                publish(ip: ip, name: sender.name)
+                let (ws, udp) = ports(from: sender)
+                publish(ip: ip, name: sender.name, ws: ws, udp: udp)
                 return
             }
         }
@@ -119,12 +122,30 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
         }
     }
 
-    private func publish(ip: String, name: String) {
+    /// 从 TXT 记录读服务端实际端口（bridge.py 注册 `ws`/`udp`）。
+    private func ports(from service: NetService) -> (UInt16, UInt16) {
+        guard let data = service.txtRecordData() else { return (8765, 7773) }
+        let dict = NetService.dictionary(fromTXTRecord: data)
+        func num(_ key: String) -> UInt16? {
+            guard let d = dict[key], let s = String(data: d, encoding: .utf8),
+                  let v = Int(s), v > 0, v <= 65535 else { return nil }
+            return UInt16(v)
+        }
+        return (num("ws") ?? 8765, num("udp") ?? 7773)
+    }
+
+    private func publish(ip: String, name: String, ws: UInt16 = 8765, udp: UInt16 = 7773) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard usableLanIP(ip) else { return }      // 忽略回环/假地址
-            guard !self.found.contains(where: { $0.ip == ip }) else { return }
-            self.found.append(DiscoveredHost(ip: ip, ws: 8765, udp: 7773, name: name))
+            if let i = self.found.firstIndex(where: { $0.ip == ip }) {
+                // 已发现：用解析到的端口刷新（TXT 可能比名字慢到）
+                if self.found[i].ws != ws || self.found[i].udp != udp {
+                    self.found[i] = DiscoveredHost(ip: ip, ws: ws, udp: udp, name: name)
+                }
+                return
+            }
+            self.found.append(DiscoveredHost(ip: ip, ws: ws, udp: udp, name: name))
             self.statusText = "已发现 \(ip)"
             Haptics.tap()
         }

@@ -1,17 +1,16 @@
 import SwiftUI
 
 /// 飞行姿态球（PFD）：天地 + 俯仰刻度 + 滚转弧 + 飞机符。
-/// 显示 displayRoll/displayPitch：默认本地杆位，切换到「游戏遥测」后用真实姿态。
+/// 显示平滑后的杆位 smRoll/smPitch/smYaw（与发往电脑的值同源）。
 struct AttitudeBall: View {
     @ObservedObject var s: ControllerState
 
     var body: some View {
         GeometryReader { geo in
             let d = min(geo.size.width, geo.size.height)
-            let r = d / 2
-            let roll = s.displayRoll
-            let pitch = s.displayPitch
-            let yaw = s.displayYaw
+            let roll = s.smRoll
+            let pitch = s.smPitch
+            let yaw = s.smYaw
             let heading = yaw * 180   // -180..+180
 
             ZStack {
@@ -125,12 +124,6 @@ struct AttitudeBall: View {
 
                 // 外圈
                 Circle().stroke(Theme.border, lineWidth: 2.5)
-                // 锁定标记
-                if s.paused {
-                    Text("HOLD").font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Theme.orange)
-                        .position(x: 30, y: 20)
-                }
             }
             .frame(width: d, height: d)
             .position(x: geo.size.width/2, y: geo.size.height/2)
