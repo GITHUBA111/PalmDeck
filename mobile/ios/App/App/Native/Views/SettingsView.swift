@@ -280,7 +280,11 @@ struct SettingsView: View {
     private var matchedGroups: [SettingsResultGroup] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return [] }
+        // heli/drive 用固定硬件皮肤，整个「布局」分类下的条目都不存在
+        // （面板里只剩一句锁定说明），搜出跳过去却看不到行的死结果不如不给。
+        let hiddenCat: SettingsCategory? = s.mode == .gamepad ? nil : .layout
         return SettingsCategory.allCases.compactMap { c in
+            guard c != hiddenCat else { return nil }
             let items = c.entries.filter {
                 $0.title.lowercased().contains(q) || $0.keywords.lowercased().contains(q)
             }
@@ -459,7 +463,26 @@ struct SettingsView: View {
                     Label("清空当前模式", systemImage: "trash")
                 }
             }
+
+            Section {
+                Button { ctrl.requestLayouts() } label: {
+                    Label("从电脑拉取布局", systemImage: "arrow.down.circle")
+                }
+                Button { layout.upload(mode: s.mode, via: ctrl) } label: {
+                    Label("上传当前模式到电脑", systemImage: "arrow.up.circle")
+                }
+                .disabled(s.link != .live)
+                if !layout.syncMessage.isEmpty {
+                    Text(layout.syncMessage).font(.footnote).foregroundColor(.secondary)
+                }
+            } header: {
+                SettingsHeader("与电脑同步")
+            } footer: {
+                Text("上传需要在座舱内已连接电脑；布局保存在电脑的 layouts.json。")
+            }
         } else {
+            // heli/drive 用固定硬件皮肤，没有渲染路径：
+            // 不提供自定义/同步，否则会让人以为改了却看不到效果。
             Section {
                 Label("\(s.mode.label)模式使用固定硬件皮肤，不支持自定义布局。",
                       systemImage: "lock.fill")
@@ -468,23 +491,6 @@ struct SettingsView: View {
             } header: {
                 SettingsHeader("模式")
             }
-        }
-
-        Section {
-            Button { ctrl.requestLayouts() } label: {
-                Label("从电脑拉取布局", systemImage: "arrow.down.circle")
-            }
-            Button { layout.upload(mode: s.mode, via: ctrl) } label: {
-                Label("上传当前模式到电脑", systemImage: "arrow.up.circle")
-            }
-            .disabled(s.link != .live)
-            if !layout.syncMessage.isEmpty {
-                Text(layout.syncMessage).font(.footnote).foregroundColor(.secondary)
-            }
-        } header: {
-            SettingsHeader("与电脑同步")
-        } footer: {
-            Text("上传需要在座舱内已连接电脑；布局保存在电脑的 layouts.json。")
         }
     }
 
@@ -673,14 +679,32 @@ struct SettingsView: View {
 
         Section {
             InfoRow(label: "App 版本", value: appVersion)
+            InfoRow(label: "电脑端版本", value: pcVersion, warn: pcVersionMismatch)
             InfoRow(label: "当前皮肤", value: s.mode.label)
         } header: {
             SettingsHeader("关于")
+        } footer: {
+            if pcVersionMismatch {
+                Text("App 与电脑端主版本号不一致，轴映射或设置项可能对不上，建议一起更新。")
+            }
         }
     }
 
     private var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
+    }
+
+    /// 电脑端版本（来自 hello 帧）；未连接时为空。
+    private var pcVersion: String {
+        s.pcVersion.isEmpty ? (s.link == .live ? "旧版（未上报）" : "未连接") : "v\(s.pcVersion)"
+    }
+
+    /// 主版本号不一致（只比首段）：只在拿到电脑端版本后判定。
+    private var pcVersionMismatch: Bool {
+        guard !s.pcVersion.isEmpty else { return false }
+        let mine = appVersion.split(separator: ".").first.map(String.init) ?? ""
+        let theirs = s.pcVersion.split(separator: ".").first.map(String.init) ?? ""
+        return !mine.isEmpty && mine != theirs
     }
 }
 
@@ -720,13 +744,20 @@ struct InfoRow: View {
     let label: String
     let value: String
     var mono: Bool = false
+    /// 非空时在值前面画一个感叹号，用于提示「不一致 / 需注意」。
+    var warn: Bool = false
 
     var body: some View {
         HStack {
             Text(label)
             Spacer(minLength: 12)
+            if warn {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.orange)
+            }
             Text(value)
-                .foregroundColor(.secondary)
+                .foregroundColor(warn ? Theme.orange : .secondary)
                 .font(mono ? .system(.body, design: .monospaced) : .body)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -826,7 +857,9 @@ struct SliderRow: View {
 }
 
 /// 响应曲线：把「死区 + 灵敏度 + 反转」的真实整形函数画出来。
-/// 数学必须与 `ControllerState.tickSmoothing()` 的 `shape()` 完全一致，否则预览会骗人。
+///
+/// 这里**不复刻公式**，直接调 `AxisCurve.output` —— 和 `ControllerState.tickSmoothing()`、
+/// `Packet.pack()` 是同一个函数。复刻过的版本会漂，而骗人的预览比没有预览更糟。
 struct AxisResponseCurve: View {
     var sensitivity: Double
     var deadzone: Double
@@ -834,14 +867,9 @@ struct AxisResponseCurve: View {
     var accent: Color
     var live: Double = 0
 
-    /// ＝ ControllerState.shape(clampUnit(inv*v*sens), dz)
+    /// 与发送路径同一个函数。
     func output(_ v: Double) -> Double {
-        let raw = (inverted ? -v : v) * sensitivity
-        let x = max(-1, min(1, raw))
-        let s: Double = x < 0 ? -1 : 1
-        let a = abs(x)
-        if a < deadzone { return 0 }
-        return s * pow((a - deadzone) / (1 - deadzone), 1.35)
+        AxisCurve.output(v, sensitivity: sensitivity, deadzone: deadzone, inverted: inverted)
     }
 
     var body: some View {

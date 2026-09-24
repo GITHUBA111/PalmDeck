@@ -150,6 +150,8 @@ final class CockpitController: ObservableObject {
             DispatchQueue.main.async {
                 if let w = obj["ws"] as? Int, w > 0, w <= 65535 { self.wsPort = UInt16(w) }
                 if let u = obj["udp"] as? Int, u > 0, u <= 65535 { self.udpPort = UInt16(u) }
+                // 记下电脑端版本，设置 → 关于里显示；主版本不一致时告警
+                self.state.pcVersion = obj["version"] as? String ?? ""
             }
         case "status":
             DispatchQueue.main.async {
@@ -158,8 +160,8 @@ final class CockpitController: ObservableObject {
                 self.state.hz = obj["hz"] as? Double ?? 0
                 self.state.transport = obj["transport"] as? String ?? "idle"
                 self.state.lastError = obj["error"] as? String ?? ""
-                if let cm = obj["cockpit_mode"] as? String,
-                   let m = CockpitMode(rawValue: cm) { /* 服务端确认 */ }
+                // 注：服务端 hello 里的 `cockpit_mode` 只是回显，不采纳 ——
+                // 模式是 App 本地选择（见 docs/PalmDeck-v4-app-interaction.md §3）。
                 if self.state.backend != "none" {
                     self.pfConnState = "✓ " + self.state.deviceName
                 } else {

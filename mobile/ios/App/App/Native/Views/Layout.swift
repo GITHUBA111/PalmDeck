@@ -53,8 +53,12 @@ final class LayoutStore: ObservableObject {
         loadUndo()
         // 只在「从未存过该模式」时播种内置默认。
         // 用 == nil（而不是 isEmpty），否则用户主动「清空」的空白布局会在重启后被默认布局覆盖。
-        for m in CockpitMode.allCases where layouts[m.rawValue] == nil {
-            layouts[m.rawValue] = LayoutStore.defaults(mode: m)
+        //
+        // 只播种 .gamepad：heli/drive 在 P4/P5 之后走固定硬件皮肤，
+        // 全仓库唯一的 WidgetCanvas 在 CockpitView 的 gamepad 分支里，
+        // 给它们播种等于往 UserDefaults 写一份永远没人读的数据。
+        if layouts[CockpitMode.gamepad.rawValue] == nil {
+            layouts[CockpitMode.gamepad.rawValue] = LayoutStore.defaultGamepad()
         }
     }
 
@@ -266,61 +270,19 @@ final class LayoutStore: ObservableObject {
         syncMessage = "已上传到电脑"
     }
 
-    // MARK: 默认布局（沿用改造前的控件集）
+    // MARK: 默认布局
+
+    /// 只有手柄模式会渲染组件画布（`CockpitView` 的 `gamepadBody`），
+    /// 其余模式返回空数组。
+    ///
+    /// v3 时期 heli/drive 各有一套精细的滑块/按键布局，P4/P5 换成固定硬件皮肤后
+    /// 就没有任何渲染路径了；数据留在 git 历史里（`git show <v0.3.2>:.../Layout.swift`），
+    /// 不再放进二进制，免得和皮肤里的控件重复两套真相。
     static func defaults(mode: CockpitMode) -> [DeckWidget] {
         switch mode {
-        case .heli: return defaultFlight()
-        case .drive: return defaultDrive()
         case .gamepad: return defaultGamepad()
+        case .heli, .drive: return []
         }
-    }
-    static func defaultFlight() -> [DeckWidget] {
-        [
-            .make(.attitude, .roll, .r(0.28, 0.02, 0.22, 0.42)),
-            // 左列
-            .make(.slider, .throttle, .r(0.01, 0.02, 0.20, 0.14)),
-            .make(.slider, .roll,     .r(0.01, 0.19, 0.20, 0.12)),
-            .make(.slider, .pitch,    .r(0.01, 0.33, 0.20, 0.12)),
-            .make(.hat,    .look,     .r(0.02, 0.50, 0.14, 0.26)),
-            // 右列
-            .make(.stick,  .roll,     .r(0.80, 0.02, 0.15, 0.26)),
-            .make(.button, .fire,     .r(0.78, 0.30, 0.18, 0.10), label: "开火"),
-            .make(.slider, .yaw,      .r(0.77, 0.42, 0.21, 0.12)),
-            .make(.button, .vjoy1,    .r(0.77, 0.56, 0.10, 0.11), label: "武器投放"),
-            .make(.button, .vjoy2,    .r(0.88, 0.56, 0.10, 0.11), label: "锁定目标"),
-            .make(.button, .vjoy3,    .r(0.77, 0.69, 0.10, 0.11), label: "干扰弹"),
-            .make(.button, .vjoy4,    .r(0.88, 0.69, 0.10, 0.11), label: "起落架"),
-            .make(.button, .vjoy5,    .r(0.77, 0.82, 0.10, 0.11), label: "切视角"),
-            .make(.button, .vjoy6,    .r(0.88, 0.82, 0.10, 0.11), label: "语音"),
-            // 中下 4 键（一行居中）。vJoy 11–16 默认不再占用：苦力帽只走 POV、
-            // 开火走 vJoy 16，其余留给用户在编辑模式自行添加（避免和 hat/开火撞号）。
-            .make(.button, .vjoy7,    .r(0.286, 0.76, 0.095, 0.105), label: "襟翼收"),
-            .make(.button, .vjoy8,    .r(0.388, 0.76, 0.095, 0.105), label: "襟翼放"),
-            .make(.button, .vjoy9,    .r(0.490, 0.76, 0.095, 0.105), label: "减速板"),
-            .make(.button, .vjoy10,   .r(0.592, 0.76, 0.095, 0.105), label: "自动驾驶"),
-        ]
-    }
-
-    static func defaultDrive() -> [DeckWidget] {
-        [
-            .make(.wheel,  .roll,     .r(0.02, 0.06, 0.40, 0.84)),
-            .make(.slider, .throttle, .r(0.60, 0.02, 0.38, 0.13)),
-            .make(.slider, .brake,    .r(0.60, 0.17, 0.38, 0.13)),
-            .make(.slider, .clutch,   .r(0.60, 0.32, 0.38, 0.13)),
-            .make(.button, .gearUp,   .r(0.60, 0.48, 0.17, 0.12)),
-            .make(.button, .gearDown, .r(0.60, 0.62, 0.17, 0.12)),
-            .make(.pad,    .look,     .r(0.79, 0.48, 0.19, 0.30)),
-            // 底部 8 键 = Xbox A/B/X/Y + BACK/START/L3/R3。XInput 一共只有 10 个键，
-            // 升/降档占 LB/RB，所以这里不再铺 16 键（b11~b16 在 Xbox 上本来就是死的）。
-            .make(.button, .vjoy1,    .r(0.015, 0.85, 0.118, 0.086), label: "左转向"),
-            .make(.button, .vjoy2,    .r(0.1385, 0.85, 0.118, 0.086), label: "右转向"),
-            .make(.button, .vjoy3,    .r(0.262, 0.85, 0.118, 0.086), label: "危险灯"),
-            .make(.button, .vjoy4,    .r(0.3855, 0.85, 0.118, 0.086), label: "喇叭"),
-            .make(.button, .vjoy7,    .r(0.509, 0.85, 0.118, 0.086), label: "手刹"),
-            .make(.button, .vjoy8,    .r(0.6325, 0.85, 0.118, 0.086), label: "雨刷"),
-            .make(.button, .vjoy9,    .r(0.756, 0.85, 0.118, 0.086), label: "大灯"),
-            .make(.button, .vjoy10,   .r(0.8795, 0.85, 0.118, 0.086), label: "远光"),
-        ]
     }
 
     /// 游戏手柄皮肤默认布局（P4 会再细化外观，这里先给出可用控件集）。

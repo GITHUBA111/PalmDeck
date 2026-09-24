@@ -2,28 +2,6 @@ import Foundation
 import Combine
 
 /// 座舱模式
-enum CockpitMode: String, CaseIterable {
-    case heli = "heli"
-    case drive = "drive"
-    case gamepad = "gamepad"
-
-    var label: String {
-        switch self {
-        case .heli: return "飞机"
-        case .drive: return "开车"
-        case .gamepad: return "手柄"
-        }
-    }
-
-    /// 兼容旧值：UserDefaults / 旧服务端可能仍给 `infantry`（v3 遗留）。
-    static func parse(_ raw: String?) -> CockpitMode {
-        switch raw {
-        case "infantry": return .gamepad
-        default: return CockpitMode(rawValue: raw ?? "") ?? .heli
-        }
-    }
-}
-
 /// 持久化键（P7 手感参数）
 private enum PKey {
     static let sensX = "palmdeck_sens_x"
@@ -73,6 +51,8 @@ final class ControllerState: ObservableObject {
     @Published var link: LinkState = .idle
     @Published var backend: String = ""      // vjoy+vgamepad / none …
     @Published var deviceName: String = ""
+    /// 电脑端上报的协议版本（hello 帧的 `version`，如 "4.0"）。空 = 尚未拿到。
+    @Published var pcVersion: String = ""
     @Published var hz: Double = 0
     @Published var transport: String = "idle" // udp / ws / idle
     @Published var lastError: String = ""
@@ -137,23 +117,19 @@ final class ControllerState: ObservableObject {
     func tickSmoothing() {
         let kXY = 0.45, kYaw = 0.5
         // 灵敏度先乘、再夹到单位区间，最后进死区/曲线（避免 sm 溢出显示）
-        let r = clampUnit((invX ? -roll : roll) * sensX)
-        let p = clampUnit((invY ? -pitch : pitch) * sensY)
+        // 夹紧顺序不能反：先乘灵敏度再夹到 [-1,1]，然后才进死区/曲线。
+        // 曲线数学在 AxisCurve（唯一实现），设置里的预览调的是同一个函数。
+        let r = AxisCurve.clampUnit((invX ? -roll : roll) * sensX)
+        let p = AxisCurve.clampUnit((invY ? -pitch : pitch) * sensY)
         let y = invYaw ? -yaw : yaw
-        smRoll += (shape(r, dz: dz) - smRoll) * kXY
-        smPitch += (shape(p, dz: dz) - smPitch) * kXY
-        smYaw += (shape(y, dz: 0.08) - smYaw) * kYaw
+        smRoll += (AxisCurve.shape(r, dz: dz) - smRoll) * kXY
+        smPitch += (AxisCurve.shape(p, dz: dz) - smPitch) * kXY
+        smYaw += (AxisCurve.shape(y, dz: ControllerState.yawDeadzone) - smYaw) * kYaw
     }
 
-    private func clampUnit(_ v: Double) -> Double { max(-1, min(1, v)) }
+    /// 方向舵固定死区（不跟随「摇杆死区」滑条：偏航是自回中轴，太大死区会转不动尾桨）。
+    static let yawDeadzone = 0.08
 
     /// 总距（应用反转后）
     var collective: Double { invColl ? (1 - throttle) : throttle }
-
-    private func shape(_ v: Double, dz: Double) -> Double {
-        let s = v < 0 ? -1.0 : 1.0
-        let a = abs(v)
-        if a < dz { return 0 }
-        return s * pow((a - dz) / (1 - dz), 1.35)
-    }
 }

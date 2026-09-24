@@ -19,6 +19,10 @@
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
 		0A0B21D5ABA1ED3191C9ECF1 /* CockpitController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */; };
 		F00BD81A580487FD8AB3ECB8 /* ControllerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */; };
+		F1D2E3A4B5C67890D1E2F3B4 /* PacketFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */; };
+		F1D2E3A4B5C67890D1E2F3B2 /* AxisMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */; };
+		F1D2E3A4B5C67890D1E2F3B0 /* CockpitMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */; };
+		F1D2E3A4B5C67890D1E2F3AE /* AxisCurve.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */; };
 		8C5FE72E22128E4D7F99919F /* NetClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB070AC1289461E3EB9EB14 /* NetClient.swift */; };
 		92AEFC899861917590E91DE1 /* Packet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752F835687AB475EBE47FB17 /* Packet.swift */; };
 		D02F22B00AB4DBE45A58E98B /* PalmDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */; };
@@ -55,6 +59,10 @@
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 		9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CockpitController.swift; path = Native/Model/CockpitController.swift; sourceTree = "<group>"; };
 		EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ControllerState.swift; path = Native/Model/ControllerState.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketFormat.swift; path = Native/Model/PacketFormat.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AxisMap.swift; path = Native/Model/AxisMap.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CockpitMode.swift; path = Native/Model/CockpitMode.swift; sourceTree = "<group>"; };
+		F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AxisCurve.swift; path = Native/Model/AxisCurve.swift; sourceTree = "<group>"; };
 		BFB070AC1289461E3EB9EB14 /* NetClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NetClient.swift; path = Native/Model/NetClient.swift; sourceTree = "<group>"; };
 		752F835687AB475EBE47FB17 /* Packet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Packet.swift; path = Native/Model/Packet.swift; sourceTree = "<group>"; };
 		D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PalmDeckApp.swift; path = Native/PalmDeckApp.swift; sourceTree = "<group>"; };
@@ -127,6 +135,10 @@
 				E7A7E91000A2997A8B4B0D33 /* SteeringWheel.swift */,
 				9A49254C69CD3A70A2E7D0F9 /* CockpitController.swift */,
 				EC9419B2C60F31796D5FC1A8 /* ControllerState.swift */,
+				F1D2E3A4B5C67890D1E2F3B5 /* PacketFormat.swift */,
+				F1D2E3A4B5C67890D1E2F3B3 /* AxisMap.swift */,
+				F1D2E3A4B5C67890D1E2F3B1 /* CockpitMode.swift */,
+				F1D2E3A4B5C67890D1E2F3AF /* AxisCurve.swift */,
 				BFB070AC1289461E3EB9EB14 /* NetClient.swift */,
 				752F835687AB475EBE47FB17 /* Packet.swift */,
 				D037F9DC1440439B3CEC687C /* PalmDeckApp.swift */,
@@ -283,6 +295,10 @@
 				ABBB06836B4A7638FCB1CA2F /* SteeringWheel.swift in Sources */,
 				0A0B21D5ABA1ED3191C9ECF1 /* CockpitController.swift in Sources */,
 				F00BD81A580487FD8AB3ECB8 /* ControllerState.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3B4 /* PacketFormat.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3B2 /* AxisMap.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3B0 /* CockpitMode.swift in Sources */,
+				F1D2E3A4B5C67890D1E2F3AE /* AxisCurve.swift in Sources */,
 				8C5FE72E22128E4D7F99919F /* NetClient.swift in Sources */,
 				92AEFC899861917590E91DE1 /* Packet.swift in Sources */,
 				D02F22B00AB4DBE45A58E98B /* PalmDeckApp.swift in Sources */,
@@ -437,12 +453,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = N82J75VYYV;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.palmdeck.yoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -459,12 +475,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = N82J75VYYV;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.palmdeck.yoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
