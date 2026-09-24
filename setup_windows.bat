@@ -24,9 +24,9 @@ python --version
 echo.
 
 REM ---------- 2. 安装依赖 ----------
-echo [2/4] 安装依赖（vgamepad / pyvjoy / zeroconf / qrcode）...
+echo [2/4] 安装依赖（vgamepad / pyvjoy / zeroconf / qrcode / pystray / Pillow）...
 python -m pip install --quiet --upgrade pip >nul 2>nul
-python -m pip install --quiet pyvjoy zeroconf qrcode
+python -m pip install --quiet pyvjoy zeroconf qrcode pystray Pillow
 echo       完成
 echo.
 

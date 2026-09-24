@@ -8,6 +8,13 @@ PalmDeck — 手机当开车 / 开飞机的杆，步兵用电脑键鼠。
 
 想打成单个 exe（不用装 Python 也能跑）：双击 build_exe.bat → 得到 dist\PalmDeck.exe
 
+PalmDeck.exe 是「罗技驱动式」托盘常驻软件：
+- 双击启动：右下角托盘出现方向盘图标，后台跑桥接，自动开浏览器控制台；没有黑框窗口
+- 重复双击 exe = 只打开已有实例的控制台（不会重复启动）
+- 托盘菜单：打开控制台 / 检查更新 / 打开日志 / 开机自启 / 退出
+- 自动更新：每次启动查 GitHub Release，有新版本自动下载 → 自替换 → 重启
+- 日志文件：%APPDATA%\PalmDeck\palmdeck.log
+
 ======== 手动方式 ========
 1. 电脑已装 vJoy（开始菜单能看到 Configure vJoy）；开车另装 ViGEmBus
 2. 双击 start.bat，不要关窗口

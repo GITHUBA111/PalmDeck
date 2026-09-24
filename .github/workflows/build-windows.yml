@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: 安装依赖
-        run: pip install pyinstaller pyvjoy zeroconf qrcode
+        run: pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
 
       - name: 打包
         run: pyinstaller --clean --noconfirm packaging/PalmDeck.spec

@@ -875,7 +875,7 @@ def serve_http(host: str, port: int, ws_port: int) -> None:
     httpd.serve_forever()
 
 
-def main() -> None:
+def main(argv: Optional[list] = None) -> None:
     cfg = load_config()
     parser = argparse.ArgumentParser(description="PalmDeck PC yoke")
     parser.add_argument("--host", default=cfg["host"])
@@ -899,7 +899,7 @@ def main() -> None:
                         help="udp 来源：监听该本地端口收 JSON 姿态包")
     parser.add_argument("--telemetry-map", default="",
                         help="字段映射，如 roll=state.roll,pitch=state.pitch,yaw=state.heading")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     # 装配遥测源
     fmap = {}
     if args.telemetry_map:

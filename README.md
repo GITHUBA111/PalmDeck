@@ -28,7 +28,7 @@
 ## 用户流程
 
 1. 电脑安装 vJoy（飞行模拟）和 / 或 ViGEmBus（开车）
-2. 打开 PalmDeck 电脑端，浏览器弹出控制台和二维码
+2. 打开 PalmDeck 电脑端：右下角托盘出现方向盘图标，浏览器自动弹出控制台和二维码（重复双击 exe = 只打开控制台，不会重复启动）
 3. 手机扫码打开座舱（横屏）。首次走「起飞检查单」：填 IP → 连接 → 开启体感 → 校准 → 进入座舱
 4. 到游戏的控制器设置里绑定 `vJoy Device` 或 `Xbox 360 Controller`
 5. 座舱顶栏切换：飞机 / 开车 / 步兵（按住 0.4 秒）
@@ -56,14 +56,21 @@ Windows 可双击 `start.bat`。
 
 ## 打包分发
 
-Windows 电脑端：
+Windows 电脑端（罗技驱动式桌面守护程序）：
 
 ```bash
-pip install pyinstaller pyvjoy
+pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
 pyinstaller packaging/PalmDeck.spec
 ```
 
 得到 `dist/PalmDeck.exe`。用户机器仍需先装 vJoy 或 ViGEmBus。
+
+**`PalmDeck.exe` 是托盘常驻的守护程序**（类似罗技 G HUB）：
+- 双击启动：托盘出现方向盘图标，后台跑桥接，自动开浏览器控制台；**没有黑框窗口**
+- 重复双击 exe：只打开已有实例的控制台（不会重复启动）
+- 托盘菜单：打开控制台 / 检查更新 / 打开日志 / 开机自启 / 退出
+- **自动更新**：每次启动查 GitHub Release，有新版本自动下载 → 自替换 → 重启
+- 日志文件：`%APPDATA%\PalmDeck\palmdeck.log`
 
 手机 App：
 

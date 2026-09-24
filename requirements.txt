@@ -5,3 +5,7 @@
 #   vgamepad
 # Linux:
 #   evdev
+
+# Windows 桌面守护程序（托盘图标）：
+pystray
+Pillow

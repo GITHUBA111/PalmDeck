@@ -1,7 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 # 在 Windows 上打包：
-#   pip install pyinstaller pyvjoy zeroconf qrcode
+#   pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
 #   pyinstaller packaging/PalmDeck.spec
+#
+# 入口是 start.py（罗技驱动式守护程序：托盘 + 自动更新 + 后台桥接），
+# bridge 作为模块被它 import。
 #
 # 注意：vgamepad 不通过 pip 安装（那个包的 setup.py 会在安装时跑 msiexec 卡死），
 # 而是内置在 vendor/vgamepad，下面用 hiddenimports + datas 手工收进来。
@@ -12,7 +15,10 @@ import os
 root = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 hiddenimports = [
+    "bridge",
     "hotas",
+    # 系统托盘（Windows 后端动态 import，需显式收进来）
+    "pystray._win32",
     # vendored vgamepad（vendor/ 在 pathex 里）
     "vgamepad",
     "vgamepad.win",
@@ -35,7 +41,7 @@ datas = [
 binaries = []
 
 # 这些后端是函数内 try/except 动态 import，PyInstaller 静态扫描会漏，需显式 collect_all
-for pkg in ("pyvjoy", "zeroconf", "qrcode"):
+for pkg in ("pyvjoy", "zeroconf", "qrcode", "pystray"):
     try:
         d, b, h = collect_all(pkg)
         datas += d
@@ -45,7 +51,7 @@ for pkg in ("pyvjoy", "zeroconf", "qrcode"):
         pass
 
 a = Analysis(
-    [os.path.join(root, "bridge.py")],
+    [os.path.join(root, "start.py")],
     pathex=[root, os.path.join(root, "vendor")],
     binaries=binaries,
     datas=datas,
@@ -67,6 +73,6 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     icon=None,
 )
