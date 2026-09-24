@@ -149,5 +149,42 @@ class TestNoCapacitorResidue(unittest.TestCase):
             self.assertNotIn(token, text, f"project.pbxproj 还在引用 Capacitor 残骸：{token}")
 
 
+class TestNoCocoaPods(unittest.TestCase):
+    """工程不再用 CocoaPods（它当初只为装 Capacitor）。
+
+    Podfile 用的是本地路径 pod：`pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'`，
+    而 `mobile/node_modules/` 是 gitignored 的 —— 意味着**新克隆的仓库里
+    `pod install` 必定失败**。本地能构建只因为 `mobile/node_modules/` 和 `Pods/`
+    这两份未入库的东西还在。所以这不是「能不能跑」，是「能不能克隆」。
+
+    拆掉后工程就是普通 `App.xcodeproj`（xcodebuild 会从 target 自动合成 scheme），
+    构建命令也必须从 `-workspace` 改回 `-project`。
+    """
+
+    IOS = os.path.join(ROOT, "mobile", "ios")
+
+    def test_podfile_and_workspace_are_gone(self):
+        for rel in ("App/Podfile", "App/Podfile.lock", "App/App.xcworkspace", "App/Pods"):
+            self.assertFalse(
+                os.path.exists(os.path.join(self.IOS, rel)),
+                f"CocoaPods 脚手架又回来了：{rel}（它依赖未入库的 mobile/node_modules）",
+            )
+
+    def test_pbxproj_has_no_pods_integration(self):
+        path = os.path.join(self.IOS, "App", "App.xcodeproj", "project.pbxproj")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        for token in ("Pods_App", "Pods-App", "PODS_ROOT", "[CP]",
+                      "baseConfigurationReference", "Pods/Target Support Files"):
+            self.assertNotIn(token, text, f"project.pbxproj 还接着 CocoaPods：{token}")
+
+    def test_build_scripts_use_project_not_workspace(self):
+        for rel in ("mac.sh", os.path.join("mobile", "ios", "deploy_wifi.sh")):
+            with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertIn("-project App.xcodeproj", text, f"{rel} 没改成 -project")
+            self.assertNotIn("-workspace App.xcworkspace", text, f"{rel} 还在用已删除的 workspace")
+
+
 if __name__ == "__main__":
     unittest.main()

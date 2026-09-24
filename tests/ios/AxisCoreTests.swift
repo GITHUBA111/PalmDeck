@@ -1,4 +1,4 @@
-// PalmDeck iOS 纯逻辑测试（不依赖 XCTest / 宿主 App / CocoaPods）
+// PalmDeck iOS 纯逻辑测试（不依赖 XCTest / 宿主 App）
 //
 // 由 tests/test_ios_axis.py 用 swiftc 编译并运行：
 //   swiftc -O -o <bin> AxisCurve.swift AxisMap.swift CockpitMode.swift AxisCoreTests.swift

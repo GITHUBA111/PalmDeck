@@ -11,17 +11,17 @@ APP=$(ls -d /Users/hui/Library/Developer/Xcode/DerivedData/App-*/Build/Products/
 
 case "${1:-run}" in
   clean)
-    xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+    xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
       -destination "platform=macOS,variant=Mac Catalyst" \
       -allowProvisioningUpdates clean build 2>&1 | grep -E "error:|BUILD" | head -20
     ;;
   build)
-    xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+    xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
       -destination "platform=macOS,variant=Mac Catalyst" \
       -allowProvisioningUpdates build 2>&1 | grep -E "error:|BUILD" | head -20
     ;;
   run)
-    xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+    xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
       -destination "platform=macOS,variant=Mac Catalyst" \
       -allowProvisioningUpdates build 2>&1 | grep -E "error:|BUILD" | head -20
     ;;

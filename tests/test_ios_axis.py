@@ -1,9 +1,8 @@
-"""iOS 纯逻辑测试（swiftc 直跑，不依赖 Xcode 工程 / XCTest / CocoaPods）。
+"""iOS 纯逻辑测试（swiftc 直跑，不依赖 Xcode 工程 / XCTest）。
 
-为什么不用 XCTest target：本工程是 CocoaPods 管理、没有共享 scheme，
-手写 unit-test target 要动 `project.pbxproj` 的 target/scheme/依赖，
-风险大于收益。而被测对象（曲线数学、轴真值表、包字节布局）都是**纯函数**，
-`swiftc` 直接编译运行即可，还能跟着 `python3 -m unittest` 一起跑。
+为什么不用 XCTest target：被测对象（曲线数学、轴真值表、包字节布局）都是**纯函数**，
+在 `project.pbxproj` 里手加一个 unit-test target 只能换来「要跑就得开 Xcode」。
+`swiftc` 直接编译运行更简单，还能跟着 `python3 -m unittest` 一起跑。
 
 被测文件（App 里的真实源码，不是副本）：
   - Native/Model/AxisCurve.swift   ← 曲线（预览与发送共用同一个实现）

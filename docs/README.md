@@ -84,9 +84,10 @@ python3 -m unittest discover -s tests -t .      # 76 项
 
 其中 `tests/test_ios_axis.py` 用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**
 并跑 1300+ 条断言（曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、
-包长/偏移/小端序/量化边界）。不引入 Xcode unit-test target —— 本工程是
-CocoaPods 管理且没有共享 scheme，手写 target 要同时改 target/scheme/依赖，
-风险大于收益；而被测对象全是纯函数，`swiftc` 足够了。没有 `swiftc` 的环境自动 skip。
+包长/偏移/小端序/量化边界）。不引入 Xcode unit-test target ——
+被测对象全是**纯函数**，手写 target 要同时改 `project.pbxproj` 的
+target/scheme/构建设置，风险大于收益；`swiftc` 足够了，而且能跟着
+`python3 -m unittest` 一起跑。没有 `swiftc` 的环境自动 skip。
 
 ### 待办
 见 `docs/TODO.md`。

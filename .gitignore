@@ -9,9 +9,6 @@ PalmDeck-Windows.zip
 node_modules/
 mobile/node_modules/
 
-# CocoaPods（pod install 可恢复）
-Pods/
-mobile/ios/App/Pods/
 
 # Xcode 用户状态
 xcuserdata/

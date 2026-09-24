@@ -121,7 +121,7 @@ echo "    设备 UDID = $UDID"
 # ---------- 2. 编译 ----------
 echo "==> 编译（真机 Debug，自动签名）"
 cd "$APP_DIR"
-if ! xcodebuild -workspace App.xcworkspace -scheme "$SCHEME" -configuration Debug \
+if ! xcodebuild -project App.xcodeproj -scheme "$SCHEME" -configuration Debug \
       -destination "id=$UDID" -derivedDataPath "$DD" \
       -allowProvisioningUpdates build; then
   echo "!! 编译失败（这是代码/签名问题，不是 Wi-Fi 问题）。请查看上方 error: 行。"
