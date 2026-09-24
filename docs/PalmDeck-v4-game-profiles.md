@@ -418,12 +418,48 @@ PC 侧两者都映射到 `X360["b5"] = LEFT_SHOULDER = LB`（`hotas.py:293`）�
 > 这三条**建议单独成 commit（E1）**，不混进预设功能——
 > 它们是修复，与「游戏预设」这个新功能无因果关系。
 
-### 3.8 顺手删掉的两个 Capacitor 残骸（G0）
+### 3.8 Capacitor 残骸（G0）—— 比预想的大，而且是个阻塞项
 
-| 东西 | 体积 | 证据 | 结论 |
-|---|---|---|---|
-| `mobile/ios/App/App/public/` | **84 KB**（打进 App 包） | `project.pbxproj:18,56,158,236` 作为 folder 资源；内容是 Capacitor 期 `host.html` + `qrcode.js` + 空 `cordova.js` | v4 是纯 SwiftUI（`@main`），**全 App 无 WebView**，从不读它 |
-| `mobile/ios/App/App/PalmDeckUdpPlugin.swift` | 118 行 | 仅被 `capacitor.config.json:16` 的 `packageClassList` 提及；`Haptics.swift` 直接用 UIKit | Capacitor 插件残骸。注释还写着「iOS WKWebView 不支持 navigate.vibrate」——WebView 早没了 |
+本来以为只是「删 84 KB 死文件」，实际查下来是**整个 Capacitor 壳子只删了一半**。
+
+| 东西 | 体积 | 证据 |
+|---|---|---|
+| `App/App/public/` | **84 KB**（打进 App 包） | pbxproj 作为 folder 资源；内容是 `cap sync` 从 `webDir: "../web"` 拷来的网页座舱 |
+| `App/App/PalmDeckUdpPlugin.swift` | 118 行 | 全仓库**唯一** `import Capacitor` 的地方 |
+| `App/App/Base.lproj/Main.storyboard` | 1 KB | 里面是 **`customClass="CAPBridgeViewController" customModule="Capacitor"`** |
+| `App/App/SceneDelegate.swift` | 6 行 | 空占位（“保留占位以免工程引用报错”） |
+| `App/App/capacitor.config.json` / `config.xml` | 小 | `cap sync` 生成物，pbxproj 当资源拷进包 |
+
+**为什么这些能活到现在**：它们都没有 `UIMainStoryboardFile` 引用，
+所以只是「打进包的死资源」，跑起来看不出问题。
+
+#### 真正的阻塞项：干净克隆根本构建不了
+
+```
+Podfile:12   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+Podfile:13   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+.gitignore:10   mobile/node_modules/
+```
+
+CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor/ios`；
+而 `mobile/node_modules/` 是 gitignored 的。
+⇒ **新克隆的仓库里 `pod install` 必定失败**（本地能构建只因为
+`mobile/node_modules/` 和 `Pods/` 这两份未入库的东西还在）。
+
+而且 `project.pbxproj` 是**完整接入** CocoaPods 的：
+`Pods_App.framework`、`baseConfigurationReference = Pods-App.debug.xcconfig`、
+`[CP] Check Pods Manifest.lock` / `[CP] Embed Pods Frameworks` 两个构建阶段。
+所以不能只删 Podfile —— 会把工程拆坏。
+
+#### 拆成两个 commit
+
+| | 内容 | 验证 |
+|---|---|---|
+| **G0a** | 删上表 5 个残骸 + pbxproj 里对应的 24 行引用 + 1 个 VariantGroup 块；清掉 iOS `.gitignore` 的 Capacitor 规则。**Pods 先不动** | 模拟器构建 + 启动截图 + 新增 3 条防腐测试 |
+| **G0b** | 摘掉 CocoaPods：删 `Podfile`/`Podfile.lock`/`App.xcworkspace/`/`Pods/`，摘 pbxproj 的 framework/xcconfig/两个 CP 阶段，构建命令由 `-workspace` 改 `-project`（`deploy_wifi.sh:124`、`mac.sh:14,19,24`） | 构建 + 真机安装 |
+
+分成两步是因为 G0b 会改构建方式（`-workspace` → `-project`），
+万一 pbxproj 手术出错，G0a 已经是一个能独立回滚的干净状态。
 
 建议单独一个 commit 删掉（**不混进本方案**）。
 
@@ -499,15 +535,16 @@ PC 侧两者都映射到 `X360["b5"] = LEFT_SHOULDER = LB`（`hotas.py:293`）�
 
 | 阶段 | 内容 | 规模 | 依赖 | 可独立验收 |
 |---|---|---|---|---|
-| **G0** | 删 Capacitor 残骸（84 KB + 118 行） | **XS** | 无 | ✅ App 包不再含 `public/` |
+| **G0a** | 删 Capacitor 残骸（`public/` 84 KB、插件、`Main.storyboard`、`SceneDelegate`、`config.xml`） | **S** | 无 | ✅ 新增 3 条防腐测试 |
+| **G0b** | 摘掉 CocoaPods（含构建命令 `-workspace` → `-project`） | **S** | G0a | ✅ 干净克隆能直接构建 |
 | **E1** | 修 §3.7 的三个 App 侧缺陷（b5 撞车 / b11–16 死键 / LB-RB 标签反） | **S** | 无 | ✅ 新增「绑定不重复」测试 |
 | **G1** | 手感参数按模式分离 + 迁移 | **S** | 无 | ✅ ETS2 与 WARDOGS 参数互不污染 |
 | **G2** | `GameProfile` + 预设 UI | **M** | G1 | ✅ 两个预设一键来回切 |
 | **G4** | 两个预设的**具体值**（§3.6） | **XS** | G2 | ✅ 打开即有「WARDOGS」「欧洲卡车模拟」 |
 | ~~G3~~ | ~~电脑侧声明式轴表 + WS `profile`~~ | ~~M~~ | — | **暂不做**（§2.7 证明用不上） |
 
-建议顺序 **G0 → E1 → G1 → G2 → G4**，每个阶段一个 commit。
-- G0 纯删除，不带任何功能。
+建议顺序 **G0a → G0b → E1 → G1 → G2 → G4**，每个阶段一个 commit。
+- G0a/G0b 纯删除，不带任何功能；拆两步是为了让 pbxproj 手术失败时可回滚。
 - E1 是 bug 修复，和预设功能**没有因果关系**，必须能单独回滚。
 - G1 也是「当前就是错的」（飞机/赛车共用一个死区），不是新功能。
 - G2 是唯一一个真正的功能 commit。

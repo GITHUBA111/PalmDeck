@@ -87,6 +87,67 @@ class TestRepoCleanliness(unittest.TestCase):
         ]
         self.assertEqual(bad, [], f"仓库里跟踪了构建产物：{bad}")
 
+    def test_gitignore_has_no_dead_ios_rules(self):
+        """iOS 的 .gitignore 不该再留着 Capacitor 时代的规则。"""
+        path = os.path.join(ROOT, "mobile", "ios", ".gitignore")
+        with open(path, encoding="utf-8") as fh:
+            rules = {ln.strip() for ln in fh}
+        dead = {
+            "App/App/public",
+            "App/App/capacitor.config.json",
+            "App/App/config.xml",
+            "capacitor-cordova-ios-plugins",
+        }
+        self.assertEqual(
+            rules & dead,
+            set(),
+            ".gitignore 里还留着 Capacitor 时代产物的规则，说明它们还会被重新生成",
+        )
+
+
+class TestNoCapacitorResidue(unittest.TestCase):
+    """v4 是纯 SwiftUI，全 App 没有 WebView。
+
+    Capacitor 的壳子是 v3（网页座舱）时代的，删掉后必须不能回来 ——
+    它不只是 84 KB 的死资源，更会把人重新引向「WebView 里跑控制台」这条
+    v4 明确否掉的路。另外 `Main.storyboard` 里是 `CAPBridgeViewController`，
+    一旦有人给它补上 `UIMainStoryboardFile`，App 会以网页壳启动。
+    """
+
+    IOS_APP = os.path.join(ROOT, "mobile", "ios", "App", "App")
+
+    def _swift_sources(self):
+        for base, _dirs, files in os.walk(self.IOS_APP):
+            for fn in files:
+                if fn.endswith(".swift"):
+                    yield os.path.join(base, fn)
+
+    def test_no_swift_file_imports_capacitor(self):
+        offenders = []
+        for path in self._swift_sources():
+            with open(path, encoding="utf-8") as fh:
+                for i, line in enumerate(fh, 1):
+                    if "import Capacitor" in line or "CAPPlugin" in line:
+                        offenders.append(f"{os.path.relpath(path, ROOT)}:{i}")
+        self.assertEqual(offenders, [], f"还有 Swift 文件依赖 Capacitor：{offenders}")
+
+    def test_no_capacitor_bridge_storyboard(self):
+        for name in ("Main.storyboard", "capacitor.config.json", "config.xml"):
+            path = os.path.join(self.IOS_APP, name)
+            self.assertFalse(os.path.exists(path), f"Capacitor 残骸又回来了：{name}")
+        self.assertFalse(
+            os.path.exists(os.path.join(self.IOS_APP, "public")),
+            "App/App/public/ 是 `cap sync` 生成的网页座舱，v4 不该再有",
+        )
+
+    def test_pbxproj_does_not_reference_capacitor(self):
+        path = os.path.join(ROOT, "mobile", "ios", "App", "App.xcodeproj", "project.pbxproj")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        for token in ("PalmDeckUdpPlugin", "Main.storyboard", "capacitor.config.json",
+                      "config.xml", "public in Resources"):
+            self.assertNotIn(token, text, f"project.pbxproj 还在引用 Capacitor 残骸：{token}")
+
 
 if __name__ == "__main__":
     unittest.main()
