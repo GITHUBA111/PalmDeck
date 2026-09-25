@@ -378,6 +378,96 @@ class TestWidgetLibrary(unittest.TestCase):
         self.assertIn("case .rt: return $s.rt", widgets)
 
 
+class TestBindingOptions(unittest.TestCase):
+    """组件库「绑定」下拉必须按类型收敛。
+
+    历史坑：下拉列的是 `WidgetBinding.allCases`（8 轴 + 20 键），类型选「按键」
+    照样能选「油门」这类**轴**绑定；而 `tapButton` 对轴绑定是空实现 ⇒ 加出来的是
+    **按了没反应的按键**；更糟的是默认绑定写死 `.throttle`，选「按键」→「添加到画布」
+    一步就能踩到。方向盘的绑定下拉同样是假的（渲染时写死通道，`binding` 被忽略）。
+
+    修法：`WidgetBinding.axes` / `.buttons` 只列**真会被用到**的那些；
+    `WidgetKind.bindingOptions` 只说滑条/按键有绑定；弹窗按它给选项、换类型归第一个。
+    方案：`docs/PalmDeck-v4-binding-filter.md`。
+    """
+
+    def setUp(self):
+        self.widgets = _ios("Views", "Widgets.swift")
+        self.cockpit = _ios("Views", "CockpitView.swift")
+
+    def _swift_list(self, name):
+        body = self.widgets.split("static let %s: [WidgetBinding] = [" % name, 1)[1]
+        body = body.split("]", 1)[0]
+        return set(re.findall(r"\.(\w+)", body))
+
+    # ---- 模型层：清单必须与真正的实现一一对应 ----
+
+    def test_axes_match_what_bind_axis_handles(self):
+        """`axes` 与 `bindAxis` 的 case 必须完全一致 —— 不然又是一个「选了等于没选」。"""
+        body = self.widgets.split("private func bindAxis", 1)[1]
+        body = body.split("private func isButtonActive", 1)[0]
+        handled = set(re.findall(r"case \.(\w+):", body))
+        self.assertEqual(self._swift_list("axes"), handled,
+                         "滑条下拉给的轴，必须每一项都被 bindAxis 处理")
+
+    def test_axes_do_not_include_look(self):
+        """`look` 只被写死通道的组件（触摸板/摇杆/苦力帽）内部用，滑条 bindAxis 不处理它。"""
+        self.assertNotIn("look", self._swift_list("axes"),
+                         "滑条选「视角」会落进 bindAxis 的 default → 静默变成横滚")
+
+    def test_buttons_match_what_tap_button_handles(self):
+        """`buttons` = 16 个 vJoy 键 + 升/降档 + 开火，且不含任何轴。"""
+        body = self.widgets.split("private func tapButton", 1)[1]
+        named = set(re.findall(r"b == \.(\w+)", body))       # gearUp / gearDown / fire
+        expected = {"vjoy%d" % i for i in range(1, 17)} | named
+        self.assertEqual(self._swift_list("buttons"), expected,
+                         "按键下拉给的键，必须每一项都被 tapButton 处理")
+        self.assertNotIn("roll", self._swift_list("buttons"))
+
+    def test_only_slider_and_button_have_binding_options(self):
+        body = self.widgets.split("var bindingOptions: [WidgetBinding] {", 1)[1]
+        body = body.split("\n    }", 1)[0]
+        self.assertRegex(body, r"case \.slider:\s*return WidgetBinding\.axes")
+        self.assertRegex(body, r"case \.button:\s*return WidgetBinding\.buttons")
+        self.assertRegex(body, r"default:\s*return \[\]",
+                         "方向盘/触摸板/摇杆/苦力帽/姿态球不读 binding，不该给下拉")
+
+    def test_button_default_binding_is_a_key(self):
+        body = self.widgets.split("var defaultBinding: WidgetBinding {", 1)[1]
+        body = body.split("\n    }", 1)[0]
+        self.assertRegex(body, r"case \.button:\s*return \.vjoy1",
+                         "换到按键时绑定要落到「按钮 1」，不能留着 .throttle")
+
+    # ---- UI 层：弹窗用的是类型清单，而不是全量枚举 ----
+
+    def test_library_picker_uses_kind_options(self):
+        self.assertIn("ForEach(kind.bindingOptions, id: \\.self)", self.cockpit)
+        self.assertNotIn("ForEach(WidgetBinding.allCases", self.cockpit,
+                         "全量枚举正是「按键能选油门」的根因")
+
+    def test_sheet_preselects_the_tapped_kind(self):
+        self.assertIn("init(store: LayoutStore, mode: CockpitMode, initialKind: WidgetKind)",
+                      self.cockpit, "弹窗要能从被点的类型开始，而不是总从滑条起")
+        # 用 .sheet(item:) 把类型当成弹窗输入：先改 state 再 isPresented 会拿到旧值
+        self.assertIn(".sheet(item: $libraryKind)", self.cockpit)
+        self.assertIn("LibrarySheet(store: layout, mode: s.mode, initialKind: kind)", self.cockpit)
+        self.assertNotIn("showLibrary", self.cockpit, "presented 开关会被 state 更新时序坑到")
+        self.assertIn("libraryKind = kind", self.cockpit)
+        self.assertIn("var id: String { rawValue }", self.widgets, "WidgetKind 要能当 sheet 的 item")
+        self.assertIn("initialKind.bindingOptions.first ?? initialKind.defaultBinding", self.cockpit)
+
+    def test_changing_kind_resets_binding_to_first_of_class(self):
+        self.assertIn(".onChange(of: kind)", self.cockpit)
+        self.assertIn("newKind.bindingOptions.first ?? newKind.defaultBinding", self.cockpit,
+                      "换类型后必须把绑定归到该类第一个，不能让轴的绑定留在按键上")
+
+    def test_fixed_kinds_explain_what_they_send(self):
+        for note in ('固定发「横滚/转向」', '固定发「视角」', '固定发「横滚 + 俯仰」',
+                     '固定发「苦力帽 + 视角」', '只显示本机杆位'):
+            self.assertIn(note, self.widgets, "固定通道组件要说明它到底发什么")
+        self.assertIn("kind.fixedBindingNote", self.cockpit)
+
+
 class TestEditSession(unittest.TestCase):
     """编辑布局必须能「放弃」：进编辑记回滚点，放弃 = 整表回滚，完成 = 丢掉回滚点。
 

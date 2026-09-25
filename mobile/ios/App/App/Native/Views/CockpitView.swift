@@ -7,7 +7,9 @@ struct CockpitView: View {
     @State private var showSettings = false
     @StateObject private var layout = LayoutStore()
     @StateObject private var profiles = GameProfileStore()
-    @State private var showLibrary = false
+    /// 点开组件库弹窗的那个组件类型；nil = 弹窗关闭。
+    /// 用 `.sheet(item:)`：把类型当成弹窗的输入，避免「先改 state 再 isPresented」拿到旧值。
+    @State private var libraryKind: WidgetKind?
     @State private var showTutorial = false
     @State private var savingPreset = false
     @State private var presetName = ""
@@ -37,7 +39,9 @@ struct CockpitView: View {
         }
         .background(CockpitBackdrop())
         .palmAppearance()
-        .sheet(isPresented: $showLibrary) { LibrarySheet(store: layout, mode: s.mode) }
+        .sheet(item: $libraryKind) { kind in
+            LibrarySheet(store: layout, mode: s.mode, initialKind: kind)
+        }
         .fullScreenCover(isPresented: $showTutorial) {
             CockpitTutorialView()
         }
@@ -56,13 +60,13 @@ struct CockpitView: View {
         .onDisappear { discovery.stop() }
     }
 
-    /// 库按钮：带绑定的直接加；滑条/按键弹选择
+    /// 库按钮：带绑定的直接加；滑条/按键弹选择（弹窗从被点的类型开始）
     private func libraryButton(_ title: String, _ kind: WidgetKind, _ defaultBinding: WidgetBinding?) -> some View {
         Button(title) {
             if let b = defaultBinding {
                 layout.add(kind: kind, binding: b, mode: s.mode)
             } else {
-                showLibrary = true
+                libraryKind = kind
             }
         }
         .buttonStyle(CardButton(fillWidth: false, height: 28))
@@ -440,10 +444,20 @@ struct CardButton: ButtonStyle {
 struct LibrarySheet: View {
     @ObservedObject var store: LayoutStore
     let mode: CockpitMode
+    let initialKind: WidgetKind
     @Environment(\.dismiss) private var dismiss
 
-    @State private var kind: WidgetKind = .slider
-    @State private var binding: WidgetBinding = .throttle
+    @State private var kind: WidgetKind
+    @State private var binding: WidgetBinding
+
+    init(store: LayoutStore, mode: CockpitMode, initialKind: WidgetKind) {
+        self.store = store
+        self.mode = mode
+        self.initialKind = initialKind
+        _kind = State(initialValue: initialKind)
+        // 只接受这个类型真正会用到的绑定；固定通道组件退回它的占位值。
+        _binding = State(initialValue: initialKind.bindingOptions.first ?? initialKind.defaultBinding)
+    }
 
     var body: some View {
         NavigationView {
@@ -460,10 +474,19 @@ struct LibrarySheet: View {
                             .font(.system(size: 12))
                             .foregroundColor(Theme.textDim)
                     }
+                } else if kind.bindingOptions.isEmpty {
+                    // 方向盘 / 触摸板 / 摇杆 / 苦力帽 / 姿态球：渲染时各走写死通道，
+                    // `widget.binding` 被忽略 —— 不给下拉，免得让人选一个不生效的值。
+                    Section {
+                        Label("「\(kind.label)」\(kind.fixedBindingNote)，这里不用选绑定。",
+                              systemImage: "pin")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.textDim)
+                    }
                 } else {
                     Section("绑定功能") {
                         Picker("绑定", selection: $binding) {
-                            ForEach(WidgetBinding.allCases, id: \.self) { b in
+                            ForEach(kind.bindingOptions, id: \.self) { b in
                                 Text(b.onlyOnVJoy ? "\(b.label) · 开车/手柄不生效" : b.label).tag(b)
                             }
                         }
@@ -486,6 +509,11 @@ struct LibrarySheet: View {
             }
             .navigationTitle("添加组件")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+            .onChange(of: kind) { newKind in
+                // 换类型就把绑定归到该类的第一个：滑条→横滚/转向，按键→按钮 1；
+                // 固定通道组件退回它的占位值（渲染时不读，只为持久化/改名预填好看）。
+                binding = newKind.bindingOptions.first ?? newKind.defaultBinding
+            }
         }
     }
 }

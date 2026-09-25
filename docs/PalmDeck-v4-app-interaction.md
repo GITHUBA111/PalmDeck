@@ -248,6 +248,8 @@ y = 0                                              |x| <  dz
 - 入口：顶栏 `[布局]`（三个模式都有）。
 - 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球 / 仪表盘；
   有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定（只读的「仪表盘」跳过绑定选择）。
+  弹窗里的绑定下拉**只列该类型真正会用的项**（滑条→轴、按键→vJoy 键），且从被点的类型起，
+  见 §12.17。
 - 画布操作：拖动移动、右下角手柄缩放、左上 `✕` 删除、右上 `Aa` **重命名**
   （名称留空回落绑定的默认名，如「按钮 3」；名称只存本机，不改变发出去的键位）。
   两个手势都写在 `DragGesture(coordinateSpace: .global)` 上 —— 组件自己会跟着手指跑，
@@ -914,6 +916,31 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 
 **机器验证**：`tests/test_deck_bindings.py::TestDiscoverability`（11 条源码守卫）。
 **实测**（Catalyst 逐张截图）与顺手发现的问题：见 `docs/PalmDeck-v4-discoverability.md` §9 / §8.4。
+
+## 12.17 组件库绑定按类型收敛（只列真正生效的）
+
+**问题**：`LibrarySheet` 的绑定下拉不管类型，一律列全部 `WidgetBinding`；
+类型选「按键」照样能选「油门」这类**轴**绑定，而 `Widgets.swift` 的 `tapButton`
+对轴绑定是空实现 ⇒ 加出来是**按了没反应的按键**。更糟的是新建组件默认
+`@State binding = .throttle`，**选「按键」→ 直接「添加到画布」一步就踩**。
+
+**做法**（只改两个 View，不动协议 / 存储键 / 画布结构）：
+
+| 位置 | 之前 | 之后 |
+|---|---|---|
+| 绑定下拉 | 列全部 `WidgetBinding.allCases`（含轴 + 键 + 视角） | 只列该类型真正会读的：`WidgetKind.bindingOptions`（`.slider`→`WidgetBinding.axes`，`.button`→`.buttons`，其余为空） |
+| 固定通道组件 | 也给下拉，选了不生效 | 方向盘 / 触摸板 / 摇杆 / 苦力帽 / 姿态球 → 一行「固定发…」说明（`fixedBindingNote`），因为渲染时读的是写死通道、`binding` 被忽略 |
+| 只读组件 | 也给下拉 | 仪表盘 → 「只读显示，不绑定轴或按键」 |
+| 弹窗初值 | 写死 `.throttle` | `bindingOptions.first ?? defaultBinding`（滑条→横滚/转向，按键→按钮 1） |
+| 换类型时 | 绑定不变（可能留下不生效的旧值） | `.onChange(of: kind)` 归到新类型的第一个 |
+| 组件库入口 | 只 `isPresented`，不知道点的是哪个 | `.sheet(item: $libraryKind)` 把类型当弹窗输入（**别用「先改 state 再 `isPresented`」**：同一 action 里改两个 state，sheet 内容闭包可能拿到旧值 —— 点「按键」却从「滑条」起。实测踩到，见方案文档 §8.3） |
+
+**边界**：`WidgetBinding.look` 仍留在枚举里（方向盘等写死通道内部仍以它作默认 `binding` 占位），
+只是不再作为任何下拉选项出现；老布局里的历史死组件不迁移。
+
+**方案 / 实测**：`docs/PalmDeck-v4-binding-filter.md`。
+**机器验证**：`tests/test_deck_bindings.py::TestBindingOptions`（9 条，交叉核对
+`axes`↔`bindAxis`、`buttons`↔`tapButton`，以及上述接线）。
 
 ---
 

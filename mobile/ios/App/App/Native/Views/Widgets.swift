@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 组件类型
-enum WidgetKind: String, Codable, CaseIterable {
+enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     case wheel      // 方向盘
     case slider     // 滑条
     case pad        // 触摸板（视角）
@@ -10,6 +10,11 @@ enum WidgetKind: String, Codable, CaseIterable {
     case hat        // 苦力帽
     case attitude   // 姿态球
     case panel      // 飞行仪表盘（只读）
+
+    /// 给 `.sheet(item:)` 用：把「点的是哪个组件」当成弹窗的输入，
+    /// 而不是先改一个 `@State` 再 `isPresented = true` —— 后者在同一个
+    /// action 里设两个 state 时，sheet 内容闭包可能拿到旧值（点「按键」却从「滑条」起）。
+    var id: String { rawValue }
 
     var label: String {
         switch self {
@@ -26,6 +31,41 @@ enum WidgetKind: String, Codable, CaseIterable {
 
     /// 只读组件：不绑定任何轴/键，摆上去只做显示。
     var isReadOnly: Bool { self == .panel }
+
+    /// 组件库里「绑定」下拉该给哪些选项。空 = 这个组件不读 `widget.binding`：
+    /// 方向盘 / 触摸板 / 摇杆 / 苦力帽 / 姿态球渲染时各走固定通道，仪表盘只读。
+    /// 给了下拉就是让人选一个存下去却不生效的值（历史 bug：选「按键」能选「油门」，
+    /// 而 `tapButton` 对轴绑定是空实现 ⇒ 按了没反应）。
+    var bindingOptions: [WidgetBinding] {
+        switch self {
+        case .slider: return WidgetBinding.axes
+        case .button: return WidgetBinding.buttons
+        default:      return []
+        }
+    }
+
+    /// 绑定被忽略时，说清它到底发什么（给下拉的替身文案用）。
+    var fixedBindingNote: String {
+        switch self {
+        case .wheel:    return "固定发「横滚/转向」"
+        case .pad:      return "固定发「视角」"
+        case .stick:    return "固定发「横滚 + 俯仰」"
+        case .hat:      return "固定发「苦力帽 + 视角」"
+        case .attitude: return "只显示本机杆位"
+        case .panel:    return "只读显示，不绑定"
+        default:        return ""
+        }
+    }
+
+    /// 组件被「直接加上画布」或换到该类型时的绑定占位。
+    /// 固定通道组件的值在渲染时被忽略，这里只保证存下去的是一个看似合理的名字。
+    var defaultBinding: WidgetBinding {
+        switch self {
+        case .pad, .stick, .hat: return .look
+        case .button:            return .vjoy1
+        default:                 return .roll
+        }
+    }
 }
 
 /// 组件绑定的功能（轴或按钮）
@@ -63,6 +103,18 @@ enum WidgetBinding: String, Codable, CaseIterable {
         default: return false
         }
     }
+
+    /// 滑条真正会用的轴：必须与 `WidgetView.bindAxis` 的 case 一一对应。
+    /// 显式列出而不用 `filter(isAxis)` —— 后者会把 `look` 带进来，
+    /// 而 `look` 只被那些「写死通道」的组件内部使用，滑条 `bindAxis` 并不处理它。
+    static let axes: [WidgetBinding] = [.roll, .pitch, .yaw, .throttle, .brake, .clutch, .rt]
+
+    /// 按键真正会发的键：必须与 `WidgetView.tapButton` 的分支一一对应。
+    static let buttons: [WidgetBinding] = [
+        .vjoy1, .vjoy2, .vjoy3, .vjoy4, .vjoy5, .vjoy6, .vjoy7, .vjoy8,
+        .vjoy9, .vjoy10, .vjoy11, .vjoy12, .vjoy13, .vjoy14, .vjoy15, .vjoy16,
+        .gearUp, .gearDown, .fire,
+    ]
     var vjoyIndex: Int? {
         if rawValue.hasPrefix("vjoy"), let n = Int(rawValue.dropFirst(4)) { return n - 1 }
         return nil
