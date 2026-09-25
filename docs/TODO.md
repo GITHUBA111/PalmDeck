@@ -144,6 +144,12 @@
   `.accessibility2`；方向盘 / 摇杆 / 苦力帽 / 滑条 / 视角板 / 姿态球 / 弧表杆位条 / 编辑态 ✕·`Aa`
   全补 `accessibilityLabel` + `accessibilityValue`。方案与实测：`docs/PalmDeck-v4-accessibility.md`；
   守卫：`tests/test_deck_bindings.py::TestAccessibility`（8 条）。
+- **连接提示不再“顶”画布**（走查反馈）—— 点「点此连接电脑」时 `link` 变 `.connecting`，
+  旧横幅把 `connecting` 也排除 → 整行消失 → `WidgetCanvas` 变高 → 组件按归一化坐标重排，
+  看上去就是「点一下其它组件全闪」。改：横幅条件只排除 `live`（连接中显示「正在连接…」），
+  行高锛死 `deckTopRowH = 32`，`live` 才收成 0 并带 0.22s 动画；连接中 `allowsHitTesting` 挡重复点。
+  Catalyst 实测：`idle` 与 `connecting` 下组件区域裁剪 md5 完全一致。方案：
+  `docs/PalmDeck-v4-connect-banner-stable.md`；守卫：`tests/test_deck_bindings.py::TestConnectBanner`（5 条）。
 
 ## 已存档（方案已保存，未实施）
 - 无。

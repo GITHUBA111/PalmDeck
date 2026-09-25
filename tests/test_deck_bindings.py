@@ -1129,3 +1129,51 @@ class TestAccessibility(unittest.TestCase):
         收缩后仍以 `minimumScaleFactor` 兜底，保证不挤裂。"""
         cockpit = _ios("Views", "CockpitView.swift")
         self.assertIn("minimumScaleFactor", cockpit)
+
+
+class TestConnectBanner(unittest.TestCase):
+    """未连接横幅不能因为连接状态变化而“顶”动画布（走查反馈：点连接提示，其它组件闪）。
+
+    历史坑：`deckBody` 是 `VStack { 横幅 / 编辑条; 画布 }`，横幅出现条件是
+    `s.link != .live && s.link != .connecting` —— 点按瞬间 `link` 变 `.connecting`，
+    横幅**整行消失**，下面 `WidgetCanvas`（GeometryReader + 归一化坐标）变高，
+    所有组件按比例重排 ⇒ 视觉上“点一下全闪了”。
+
+    修法：横幅在 `link != .live` 期间一直占位（`.connecting` 只换文案、变亮、禁点），
+    行高锚死 `deckTopRowH`；只有 `live` 才收成 0，并带 0.22s 动画。
+    方案：`docs/PalmDeck-v4-connect-banner-stable.md`。
+    """
+
+    def setUp(self):
+        self.c = _ios("Views", "CockpitView.swift")
+        self.deck = self.c.split("private func deckBody", 1)[1] \
+                         .split("private var presetNoteRow", 1)[0]
+
+    def test_banner_stays_while_connecting(self):
+        """`.connecting` 不再让横幅消失 —— 点按瞬间行高不变。"""
+        self.assertNotIn("s.link != .live && s.link != .connecting", self.c,
+                         "把 connecting 也排除了，点按就会抽掉整行、画布被顶")
+        self.assertIn("if s.link == .live {", self.c,
+                      "只有 live 才收成 0")
+
+    def test_row_height_is_pinned(self):
+        """行高必须是个固定常量，文字 / 图标 / 发现的 IP 变化都不能改它。"""
+        self.assertIn("private let deckTopRowH: CGFloat = 32", self.c)
+        self.assertIn(".frame(height: deckTopRowH)", self.c,
+                      "胶囊没锚死行高，文案一变高度就跟着变")
+        self.assertIn(".lineLimit(1)", self.c, "横幅文案换行会让整行变高")
+
+    def test_deck_body_uses_the_stable_row(self):
+        self.assertIn("connectionBannerRow", self.deck)
+        self.assertNotIn("notConnectedBanner", self.c,
+                         "旧横幅（connecting 会消失）不该再留着")
+
+    def test_live_transition_is_animated(self):
+        self.assertIn(".animation(.easeInOut(duration: 0.22), value: s.link)", self.c,
+                      "live 收起 / 断线重现要平滑，不要瞬跳")
+
+    def test_no_double_tap_while_connecting(self):
+        self.assertIn("guard !connecting else { return }", self.c,
+                      "连接中再点会发第二次 connect")
+        self.assertIn(".allowsHitTesting(!connecting)", self.c,
+                      "连接中要挡住点按（但别用 .disabled，会把胶囊压暗）")

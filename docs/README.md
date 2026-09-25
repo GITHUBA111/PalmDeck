@@ -11,6 +11,7 @@
 | `PalmDeck-v4-game-profiles.md` | **方案（待评审）**：游戏预设 —— 电脑侧轴映射表 + App 侧手感 + 布局，一键切游戏 | G0–G2 已落地；G3 降级；G4 待真机验收 |
 | `PalmDeck-v4-binding-filter.md` | **组件库绑定按类型收敛**：按键只列按键、滑条只列轴，固定通道组件不再给假下拉 | 已落地 |
 | `PalmDeck-v4-accessibility.md` | **动态字号 + 无障碍标签**（走查第 5 条）：`.pdFont` 随系统字号、自绘控件补 VoiceOver | 已落地 |
+| `PalmDeck-v4-connect-banner-stable.md` | **连接提示横幅不掉高**：点按「连接电脑」不再把画布组件“顶”得重排（走查反馈） | 已落地 |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
@@ -92,7 +93,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 216 项
+python3 -m unittest discover -s tests -t .      # 221 项
 ```
 
 其中四个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑；
@@ -102,7 +103,7 @@ python3 -m unittest discover -s tests -t .      # 216 项
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
-| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签） |
+| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签）；**`TestConnectBanner`**（连接横幅行高锛死、`connecting` 不收起、`live` 才收、动画） |
 | `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）、**P1.5 迁移**（两个老键合并 / 重名加后缀 / 幂等 / 垃圾 JSON）、`hasShaping = false` 不碰手感；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
 

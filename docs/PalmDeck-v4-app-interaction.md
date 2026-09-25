@@ -69,7 +69,7 @@ idle ──connect()──► connecting ──open──► live
 ### 2.3 连接胶囊 / 未连接横幅（座舱内）
 - `live`：绿点 + `IP` + `Hz`，点击 = 断开（`CockpitView.swift:169`）。
 - 非 `live`：`连接中…` / `一键连接` / `连接`；有发现则 wifi 图标变绿。
-- 橙色胶囊 `notConnectedBanner`：点一下即连最佳主机。
+- 橙色胶囊 `connectionBannerRow`：点一下即连最佳主机。
   它现在是**画布上方的一行**（VStack 占位），不是浮层 —— 浮层会盖住下面的组件，
   那些组件既点不动也拖不动（画布还在浮层下面接着手势）。详见 §12.10。
 
@@ -78,9 +78,14 @@ idle ──connect()──► connecting ──open──► live
 |---|---|---|---|
 | idle 未发现 | 「连接」灰 | 「未连接电脑（先在电脑启动 PalmDeck）」 | — |
 | idle 已发现 | 「一键连接」绿 | 「点此连接电脑 <ip>」 | tap |
-| connecting | 「连接中…」+ 菊花 | 无（画布变高） | — |
-| live | 绿点 ip + Hz | 无（画布变高） | success |
+| connecting | 「连接中…」+ 菊花 | 青色「正在连接…」（同行高，不可点） | — |
+| live | 绿点 ip + Hz | 无（画布**平滑**变高） | success |
 | lost | 「连接中…」重试 | 橙胶囊（可点重连） | warning |
+
+> **行高恒定**：横幅整行高度钉死在 `deckTopRowH`（32pt），`idle` 与 `connecting`
+> 完全一致；只有 `live` 才收成 0（带 0.22s 动画）。否则「点按 → connecting → 横幅消失 →
+> 画布变高 → 组件按归一化坐标重排」会看成「点一下其它组件全闪了」。
+> 详见 §12.19 与 `PalmDeck-v4-connect-banner-stable.md`。
 
 ### 2.4 端口协商（P7 新增）
 `hello` 里带 `http/ws/udp`。App 记录服务端实际端口，后续连接用实际端口，
@@ -963,6 +968,35 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 
 ---
 
+## 12.19 未连接提示不该“顶”一下画布（走查反馈）
+
+**问题**（用户）：**点「点此连接电脑」的提示，其它组件会闪一下。**
+
+**根因**：`deckBody` 是 `VStack { 横幅 / 编辑条; 提示回执; 画布 }`，而横幅的出现条件是
+`s.link != .live && s.link != .connecting`。点按 → `link = .connecting` → **横幅整行消失** →
+下面 `WidgetCanvas`（`GeometryReader` + 全部组件 **归一化** 坐标）变高 → 所有组件按比例重排。
+
+**做法**（只动 `CockpitView.swift` 一个 View，不动状态机 / 协议 / 存储）：
+
+1. 条件改成 `s.link != .live`：**`connecting` 不再收起**，只换文案「正在连接…」+ 换青色；
+   点按瞬间行高不变。
+2. `deckTopRowH: CGFloat = 32` + `.frame(height: deckTopRowH)`：文案 / 图标 / 发现的 IP 变化
+   都不再影响高度，文字 `.lineLimit(1)` + `minimumScaleFactor(0.8)`。
+3. `live` 才收成 0，并给 `deckBody` 的 `VStack` 挂 `.animation(.easeInOut(duration: 0.22), value: s.link)`：
+   连上 / 断线是平滑展开 / 收起。
+4. 连接中用 `.allowsHitTesting(!connecting)` + `guard !connecting` 挡住重复点（不用 `.disabled`，
+   那会把胶囊压暗）。
+
+**实测**（Mac Catalyst，临时把初始 `link` 置为 `.connecting` 后重建）：`idle` 与 `connecting`
+两张截图里，组件区域（视角板）的裁剪 **md5 完全一致** —— 点按前后组件像素未动。
+
+**不做的**：编辑条 ↔ 横幅行高仍不同（进 / 出编辑模式仍会变一次，属用户主动操作）；
+「存为预设」回执（`presetNoteRow`，仅编辑态）同理。
+**方案**：`docs/PalmDeck-v4-connect-banner-stable.md`。
+**机器验证**：`tests/test_deck_bindings.py::TestConnectBanner`（5 条）。
+
+---
+
 ## 13. 不做 / 明确边界
 
 - 不恢复 v3 的“整机倾斜体感”“锁定/校准 HUD”（v4 为触控硬件皮肤）。
@@ -973,3 +1007,6 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
   到 `.xxLarge`，设置 / 首启 / 速览放开到 `.accessibility2`；自绘控件补
   `accessibilityLabel` / `accessibilityValue`。见 `docs/PalmDeck-v4-accessibility.md`。
 - 不引入第三方依赖 / 不改电脑侧协议。
+- **连接状态变化不改画布几何（§12.19）**：画布上方那行（连接横幅）高度锛死；
+  `idle ↔ connecting` 不改变 `WidgetCanvas` 尺寸。进 / 出编辑模式、存预设回执仍会变
+  （用户主动操作，且那行本就是编辑 UI）。

@@ -19,6 +19,9 @@ struct CockpitView: View {
     @State private var pendingMode: CockpitMode?
     var onExit: () -> Void = {}
     private var stripH: CGFloat { 28 }   // 底部仪表条高度
+    /// 画布上方那一行（连接横幅）的固定高度：
+    /// 连接状态怎么变都不改它，`WidgetCanvas` 的高度就不变，组件不会被「顶」得重排。
+    private let deckTopRowH: CGFloat = 32
 
     var body: some View {
         GeometryReader { geo in
@@ -246,7 +249,7 @@ struct CockpitView: View {
     private func deckBody(W: CGFloat, H: CGFloat) -> some View {
         VStack(spacing: 0) {
             if layout.editing { editBar }
-            else { notConnectedBanner }
+            else { connectionBannerRow }
             presetNoteRow
             // 应用模板 / 撤销 / 恢复默认是整表替换，用 revision 强制重建画布，
             // 否则 EditableWidget 的 @State dragStart 会残留到新布局上。
@@ -256,6 +259,8 @@ struct CockpitView: View {
         }
         .frame(width: W, height: H)
         .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
+        // 只有 `live` 会把上面那一行收成 0；让它平滑展开 / 收起，而不是“呿”一下。
+        .animation(.easeInOut(duration: 0.22), value: s.link)
         .alert("存为布局预设", isPresented: $savingPreset) {
             TextField("预设名称", text: $presetName)
                 .onChange(of: presetName) { v in
@@ -378,28 +383,44 @@ struct CockpitView: View {
         }
     }
 
-    /// 未连接提示横幅（占画布上方一行，不遮挡任何组件；点击即连）
+    /// 未连接提示横幅（占画布上方一行，不遮挡任何组件；点击即连）。
+    ///
+    /// **`.connecting` 不收起**（只换文案 + 变亮），否则点按那一瞬间整行消失、
+    /// 下面画布变高 → 所有组件按归一化坐标重排，看上去就是「点一下全闪了」。
+    /// 行高固定为 `deckTopRowH`，只有真正 `live` 才收成 0（带 0.22s 动画）。
+    /// 方案：`docs/PalmDeck-v4-connect-banner-stable.md`。
     @ViewBuilder
-    private var notConnectedBanner: some View {
-        if s.link != .live && s.link != .connecting {
+    private var connectionBannerRow: some View {
+        if s.link == .live {
+            Color.clear.frame(height: 0)
+        } else {
+            let connecting = (s.link == .connecting)
             Button {
+                guard !connecting else { return }   // 连接中不重复发
                 if let d = discovery.found.first { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
                 else if !ctrl.savedHostForUI.isEmpty { ctrl.connect(host: ctrl.savedHostForUI) }
                 else { showSettings = true }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: !discovery.found.isEmpty ? "wifi" : "exclamationmark.triangle.fill")
-                    Text(!discovery.found.isEmpty ? "点此连接电脑 \(discovery.found.first!.ip)" : "未连接电脑（先在电脑启动 PalmDeck）")
+                    Image(systemName: connecting ? "wifi"
+                          : (!discovery.found.isEmpty ? "wifi" : "exclamationmark.triangle.fill"))
+                    Text(connecting ? "正在连接…"
+                         : (!discovery.found.isEmpty ? "点此连接电脑 \(discovery.found.first!.ip)"
+                            : "未连接电脑（先在电脑启动 PalmDeck）"))
                         .pdFont(12, weight: .medium)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
-                .background(Capsule().fill(Theme.orange.opacity(0.9)))
+                .background(Capsule().fill((connecting ? Theme.cyan : Theme.orange).opacity(0.9)))
                 .foregroundColor(Theme.onAccent)
+                .frame(height: deckTopRowH)   // 行高锛死：状态怎么变都不影响画布
             }
             .buttonStyle(.plain)
-            .padding(.vertical, 4)
+            // 不去 `.disabled`：那会把胶囊变灰、跟旁边“正在连接”的亮度对不上。
+            .allowsHitTesting(!connecting)
         }
     }
 
