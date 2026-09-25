@@ -291,6 +291,41 @@ class TestThemeAppearance(unittest.TestCase):
         self.assertNotIn("Theme.orange", ball, "姿态球该用固定 hudOrange")
 
 
+class TestProfileDoesNotBlankTheCanvas(unittest.TestCase):
+    """切预设不得把画布擦成白板。
+
+    症状（用户报的）：设置 → 游戏预设 → 点任意一个 → 座舱面板全空。
+    根因：内置预设的 `widgetsJSON` 是 nil（它们只是“手感快照”），
+    而 `LayoutStore.applyProfile` 把 nil 当成「空布局」整表替换了。
+    """
+
+    def test_builtin_profiles_carry_no_layout(self):
+        src = _read("mobile", "ios", "App", "App", "Native", "Model", "GameProfile.swift")
+        for fn in ("wardogsProfile", "ets2Profile"):
+            body = func_body(src, fn)
+            self.assertNotIn("widgetsJSON", body,
+                             "%s 是内置“手感快照”，不该夹带布局" % fn)
+
+    def test_apply_profile_skips_when_no_layout(self):
+        src = _ios("Views", "Layout.swift")
+        body = src.split("func applyProfile(", 1)[1].split("func snapshotWidgetsJSON", 1)[0]
+        # 必须先判空再动撤销槽/整表替换
+        self.assertIn("guard let list = target else { return }", body,
+                      "不带布局时必须直接返回，不能整表替换")
+        self.assertLess(body.index("guard let list = target"),
+                        body.index("pushUndo"),
+                        "先判空再压撤销槽")
+        self.assertIn("!list.isEmpty", body, "空数组也得当成“不带布局”")
+        self.assertIn("LayoutStore.defaults(mode: mode)", body,
+                      "当前是空表时应该铺回默认模块，而不是留白板")
+
+    def test_settings_row_tells_whether_layout_comes_along(self):
+        s = _ios("Views", "SettingsView.swift")
+        self.assertIn('"仅手感，不动布局"', s)
+        self.assertIn('"含布局"', s)
+        self.assertIn("布局保持不动", s, "应用后要给反馈，否则用户以为又坏了")
+
+
 class TestLayoutModuleWiring(unittest.TestCase):
     """三个模式都走通用模块，且都插了默认布局。"""
 

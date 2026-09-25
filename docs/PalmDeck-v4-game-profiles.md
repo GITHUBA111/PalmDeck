@@ -307,7 +307,7 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
     var invX, invY, invYaw, invColl: Bool
     var wheelMaxDeg: Double?            // nil = 不改（ETS2 才需要 900）
     var wheelReturnSpeed: Double?       // nil = 不改
-    var widgetsJSON: Data?              // 布局（编码后的 [DeckWidget]）
+    var widgetsJSON: Data?              // 布局（编码后的 [DeckWidget]）；nil = 预设不带布局
 }
 ```
 
@@ -325,12 +325,19 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
   → 最后布局整表替换。写反的症状是“切了预设但手感没变”。
 - 切换后 **`layout.revision += 1`**（`applyProfile` 沿用 `applyTemplate` 的语义，
   因为这是整表替换，`WidgetCanvas` 靠 `.id(revision)` 强制重绘）；同时压撤销槽。
+- **`widgetsJSON == nil` 时不动用户布局**（实测坑，见 `tests/test_deck_bindings.py` 的
+  `TestProfileDoesNotBlankTheCanvas`）。`nil` 的含义是「这个预设不带布局」，
+  不是「把画布清空」——内置预设（WARDOGS / ETS2）都是 nil，它们只是**手感快照**。
+  空数组 / 坏 JSON 也一律当成“不带”。唯一例外：该模式**当前就是空表**
+  （用户清空过，或踩过这个坑）→ 铺回该模式默认模块，绝不留一块白板。
 - 上限 12（同模板）；内置不可删不可改名（同模板的规则）。
 
 **UI 位置**：设置页新增分类「游戏预设」（放在「布局」上方），
-一行一个预设，显示 `名字 · 模式 · 轴表名 · 死区`，选中行标「当前」。
-顶部只读显示**电脑实际**的 `axis_profile`（来自 `hello`，`bridge.py:744`）；
+一行一个预设，显示 `名字 · 模式 · 轴表名 · 死区` + 第二行说明 `仅手感，不动布局` / `含布局`，
+选中行标「当前」。顶部只读显示**电脑实际**的 `axis_profile`（来自 `hello`，`bridge.py:744`）；
 选中预设的 `axesPreset` 与它不一致时给黄标提示。
+切换后的反馈文案会把“布局到底动没动”写出来（`已切换到「X」· 布局保持不动`），
+因为旧版“切了预设面板变白板”很难让人分清是 bug 还是设计。
 
 **测试**：`tests/ios/GameProfileTests.swift` + `tests/test_ios_profiles.py`
 （内置定义 / 编解码往返 / 缺字段回落 / 存储增删改与上限 / **应用顺序** / pbxproj 登记守卫）。
@@ -637,6 +644,11 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
   布局 `nil` 时不碰 `wheel*`；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj`。
 - 预设应用后 `layouts[mode]` 等于预设里的 `widgets`、`revision` 自增（`applyProfile` 里保证；
   布局解码在 `LayoutStore`，单测覆盖编解码层）。
+- **预设不得擦掉画布（已实现）**：`tests/test_deck_bindings.py::TestProfileDoesNotBlankTheCanvas`——
+  内置预设不得夹带 `widgetsJSON`；`LayoutStore.applyProfile` 必须先判空再 `pushUndo`；
+  空数组也算“不带布局”；当前是空表时要铺回 `LayoutStore.defaults(mode:)`；
+  设置行要标出“仅手感，不动布局” / “含布局”。
+  （这一条是**源码级**守卫：`LayoutStore` 在 `Views/` 里，`swiftc` 编不了。）
 - **G1 回归（已实现，两层）**：
   - **算法层** `tests/ios/AxisCoreTests.swift`：键名拼接用 `rawValue` 不用 `label`；
     七个旧键**逐个**都被搬家（每个键给不同值，防「只搬了一个也能过」）；

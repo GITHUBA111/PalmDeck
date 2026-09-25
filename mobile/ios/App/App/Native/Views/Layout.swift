@@ -199,16 +199,32 @@ final class LayoutStore: ObservableObject {
 
     // MARK: - 游戏预设（G2）
 
-    /// 预设自带布局整表替换：落盘 + `revision++`（同 `applyTemplate` 的语义）。
+    /// 预设携带的布局：**整表替换**，落盘 + `revision++`（同 `applyTemplate` 的语义）。
     ///
     /// 接收**编码后的 JSON** 而不是 `[DeckWidget]`，因为 `GameProfile` 是纯类型
-    /// （见 `Model/GameProfile.swift`）；解码在这一层做，坏数据退化成空布局。
-    /// 也压撤销槽 —— 切预设是一次整表替换，用户可能想退回上一套布局。
+    /// （见 `Model/GameProfile.swift`）；解码在这一层做。
+    ///
+    /// **预设不带布局时绝不碰用户布局**（`widgetsJSON == nil` / 空表 / 坏数据都算“不带”）。
+    /// 内置的 WARDOGS / 欧洲卡车模拟就是这种情况（见 `docs/PalmDeck-v4-game-profiles.md` §3.6），
+    /// 它们的价值是“手感快照”，不该顺手把用户摆好的画布擦掉 ——
+    /// 早期版本把 `nil` 当空数组整表替换，症状就是「选任意预设 → 面板变白板」。
+    ///
+    /// 唯一例外：该模式**当前就是空表**（用户清空过，或踩过上面那个坑），
+    /// 那就铺回该模式的默认模块 —— 预设的承诺是“给我一套能用的”，不是“给我一块白板”。
     func applyProfile(widgetsJSON: Data?, mode: CockpitMode) {
-        pushUndo(mode: mode)
-        let list: [DeckWidget] = widgetsJSON.flatMap {
+        let provided = widgetsJSON.flatMap {
             try? JSONDecoder().decode([DeckWidget].self, from: $0)
-        } ?? []
+        }
+        let target: [DeckWidget]?
+        if let list = provided, !list.isEmpty {
+            target = list                                          // 预设自带布局
+        } else if widgets(mode: mode).isEmpty {
+            target = LayoutStore.defaults(mode: mode)               // 不带布局 + 当前空表
+        } else {
+            target = nil                                            // 不带布局 + 用户已有布局 → 不碰
+        }
+        guard let list = target else { return }
+        pushUndo(mode: mode)
         replaceWidgets(list, mode: mode)
     }
 

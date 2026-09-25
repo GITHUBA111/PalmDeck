@@ -486,7 +486,7 @@ struct SettingsView: View {
             SettingsHeader("预设")
         } footer: {
             if profNote.isEmpty {
-                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机；内置预设不可删改。")
+                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机；内置预设不可删改。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件（行尾标「仅手感」）。想要“连布局一起记”，用「将当前状态存为预设」。")
             } else {
                 Text(profNote).foregroundColor(Theme.orange)
             }
@@ -508,6 +508,8 @@ struct SettingsView: View {
                 }
                 Text("\(p.mode.label) · 轴表 \(p.axesPreset) · 死区 \(String(format: "%.2f", p.dz))")
                     .font(.system(size: 12)).foregroundColor(.secondary)
+                Text(p.widgetsJSON == nil ? "仅手感，不动布局" : "含布局")
+                    .font(.system(size: 11)).foregroundColor(Theme.textFaint)
             }
             Spacer(minLength: 8)
             if profiles.activeName == p.name {
@@ -538,7 +540,9 @@ struct SettingsView: View {
                                  })
         profiles.markActive(p.name)
         Haptics.press()
-        profNote = "已切换到「\(p.name)」"
+        profNote = p.widgetsJSON == nil
+            ? "已切换到「\(p.name)」· 布局保持不动"
+            : "已切换到「\(p.name)」· 布局已换成预设的"
     }
 
     // ---- 连接 ----

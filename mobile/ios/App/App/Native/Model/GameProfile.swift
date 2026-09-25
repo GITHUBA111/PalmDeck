@@ -49,15 +49,21 @@ struct GameProfile: Codable, Equatable, Identifiable {
     var wheelMaxDeg: Double?
     /// 卡车方向盘不应快速回正；nil = 不改。
     var wheelReturnSpeed: Double?
-    /// 编码后的 `[DeckWidget]`（nil = 空布局，让该模式用自己的默认布局）。
+    /// 编码后的 `[DeckWidget]`；**nil = 这个预设不带布局**。
+    ///
+    /// nil 的含义是「别碰用户的画布」，不是「把画布清空」——见
+    /// `LayoutStore.applyProfile`。内置预设都是 nil（只快照手感）。
     var widgetsJSON: Data?
 
     var id: String { name }
 
-    /// 该预设是否携带组件布局（三个模式都用通用画布；false = 不改用户当前布局）。
+    /// 该模式是否走通用画布（E2 收尾后恒为 true，保留给“将来可能出现的非画布模式”一个开关）。
+    /// 与「预设带不带布局」是两件事：后者看 `widgetsJSON`。
     var usesWidgetCanvas: Bool { mode.usesWidgetCanvas }
 
-    /// 解码布局。坏数据返回空数组而不是抛错 —— 一个预设的布局坏了
+    /// 解码布局。**返回空数组 ≠ 空布局**，只表示“这个预设没带布局”：
+    /// 调用方据此决定“不碰用户布局”（`LayoutStore.applyProfile`）。
+    /// 坏数据也退化成空数组而不是抛错 —— 一个预设的布局坏了
     /// 不该连累「切手感/切模式」这件主功能。
     func widgets<T: Decodable>(_ type: T.Type = T.self) -> [T] {
         guard let d = widgetsJSON else { return [] }
@@ -264,13 +270,15 @@ final class GameProfileStore: ObservableObject {
 /// **顺序很关键**（也是这个函数值得单独存在、单独测的原因）：
 /// 1. **先切模式** —— `applyMode` 会把该模式那一份手感读进来；
 /// 2. 再写手感参数 —— `didSet` 的保存键跟着**新的** `mode` 走，落对键；
-/// 3. 布局整表替换 —— `revision++` 强制画布重建。
+/// 3. 布局：**仅当预设自带布局（`widgetsJSON != nil`）时**才整表替换；
+///    内置预设不带布局，于是这一步是空操作，用户摆好的画布不被擦掉。
 ///
 /// 若先写手感再切模式，`applyMode` 会把刚写的手感覆盖回该模式原来的值，预设等于白切。
 enum GameProfileApplier {
     /// - Parameters:
     ///   - setMode: 切模式（UI 传 `ctrl.setMode`，它内部会 `state.applyMode`）。
-    ///   - replaceLayout: 整表替换布局（UI 传 `layout.applyProfile`）。
+    ///   - replaceLayout: 应用预设布局（UI 传 `layout.applyProfile`；
+    ///     `widgetsJSON` 为 nil 时它自己会判空跳过，所以这里无条件转发）。
     static func apply(_ p: GameProfile,
                       to state: ShapingTarget,
                       setMode: (CockpitMode) -> Void,
@@ -287,7 +295,7 @@ enum GameProfileApplier {
         state.invColl = p.invColl
         if let w = p.wheelMaxDeg { state.wheelMaxDeg = w }
         if let r = p.wheelReturnSpeed { state.wheelReturnSpeed = r }
-        // 3. 布局整表替换
+        // 3. 布局（预设不带布局时 LayoutStore 会自己跳过）
         replaceLayout(p.widgetsJSON, p.mode)
     }
 }

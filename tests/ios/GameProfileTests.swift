@@ -69,6 +69,14 @@ func testBuiltins() {
     expect(e.sensX == 1.0 && e.sensY == 1.0, "ETS2 线性灵敏度（避免非线性叠加）")
     expect(e.wheelMaxDeg == 900, "ETS2 满舵 900°")
     expect(e.wheelReturnSpeed == 720, "ETS2 回正速度沿用默认")
+
+    // 内置预设是“手感快照”，不带布局：
+    // 带了（或解码成空布局）就会把用户摆好的画布擦掉。
+    expect(w.widgetsJSON == nil, "WARDOGS 不带布局")
+    expect(e.widgetsJSON == nil, "ETS2 不带布局")
+    let wl: [Int] = w.widgets()
+    let el: [Int] = e.widgets()
+    expect(wl.isEmpty && el.isEmpty, "不带布局解码出来是空数组（= 别碰用户布局）")
 }
 
 // MARK: - 2. 编解码往返 + 缺字段回落

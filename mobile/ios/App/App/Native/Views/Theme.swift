@@ -45,7 +45,9 @@ enum Theme {
     static let text      = Color.pd(Color(red: 0.055, green: 0.090, blue: 0.140), .white)
     static let textDim   = Color.pd(Color(red: 0.278, green: 0.333, blue: 0.404),
                                     Color(red: 0.62,  green: 0.70,  blue: 0.80))
-    static let textFaint = Color.pd(Color(red: 0.451, green: 0.506, blue: 0.573),
+    /// 最弱一档：只给 10pt 的组件标题、轴名用。浅色侧刻意压暗到 #5F6D80——
+    /// 白底 + 小字号下 #738192 只能算“勉强看得见”，扫一眼读不出来。
+    static let textFaint = Color.pd(Color(red: 0.373, green: 0.427, blue: 0.502),
                                     Color(red: 0.42,  green: 0.49,  blue: 0.58))
     /// 彩色底上的字：两种模式都用白（强调色两套都够深，白字都立得住）。
     static let onAccent = Color.white
