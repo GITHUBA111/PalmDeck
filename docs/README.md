@@ -81,6 +81,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 组件系统（模块化/乐高式）
 - 8 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球/仪表盘；除只读的「仪表盘」外，各绑定一个语义轴或 vJoy 键。
 - 编辑模式：顶栏组件库添加、拖拽移动（**7pt 内吸画布/其它组件的边与中心线并画出对齐线**，且任何方向至少留 40pt 在画布内、拖不丢）、右下角缩放手柄、✕ 删除、`Aa` 重命名；`⋯` 里清空 / 恢复默认 / 撤销；空画布显示「画布是空的」而不再是一块白板；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
+- **命名快照只有一种：预设**（P1.5 起，原「布局模板」已并进来）。两种形态：**整机**（模式 + 手感 + 有布局就换）与**布局**（只装组件、不碰手感，且只在自己那个模式下出现）。编辑条上的「存为预设」存的是后者，并在编辑条下面给一行回执。见 `docs/PalmDeck-v4-unified-presets.md`。
 
 ### 无遥测
 姿态球与飞行仪表板只显示本机发往电脑的**平滑杆位**（`smRoll/smPitch/smYaw`），
@@ -89,7 +90,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 168 项
+python3 -m unittest discover -s tests -t .      # 176 项
 ```
 
 其中四个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：
@@ -98,7 +99,7 @@ python3 -m unittest discover -s tests -t .      # 168 项
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
-| `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
+| `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）、**P1.5 迁移**（两个老键合并 / 重名加后缀 / 幂等 / 垃圾 JSON）、`hasShaping = false` 不碰手感；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
 
 不引入 Xcode unit-test target —— 被测对象全是**纯函数 / 纯状态**，

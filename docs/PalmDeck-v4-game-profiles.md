@@ -114,9 +114,10 @@ vJoyConfig.exe 1 -f -a X Y Z Rx Ry Rz Sl0 -b 16 -p 1
 
 ### 2.4 已经能按游戏变的部分：布局 + 按钮标签
 
-「布局模板」已落地（`docs/PalmDeck-proposal-template.md` §2）：
-每模式 12 个命名快照，可切换/重命名/删除/还原。
-而按钮的**显示名是每个组件自己的字段**（`DeckWidget.label`，`Views/Widgets.swift:67`），
+布局命名快照已落地，**P1.5 后统一叫「预设」**（原「布局模板」这个词已从 UI 与代码里删干净，
+见 `docs/PalmDeck-v4-unified-presets.md`）：
+每个模式的画布可整表存/取，而按钮的**显示名是每个组件自己的字段**
+（`DeckWidget.label`，`Views/Widgets.swift:67`），
 且 `Widgets.swift:38–47` 已有「开火/升档/降档」这类语义名。
 
 ⇒ **「按钮叫什么」这件事已经能做到按游戏不同了**，只是没有被组织进「预设」。
@@ -296,7 +297,7 @@ palmdeck_inv_x/_y/_yaw/_coll →  palmdeck_inv_*.<mode>
 
 ### 3.4 App 侧：预设 = 布局 + 手感 + 轴表名（G2，已落地）
 
-复用已落地的布局模板机制，把它扩成预设：
+复用已落地的布局快照机制（P1.5 后二者合并，统一叫「预设」），把它扩成整机预设：
 
 ```swift
 struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型）
@@ -307,6 +308,7 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
     var invX, invY, invYaw, invColl: Bool
     var wheelMaxDeg: Double?            // nil = 不改（ETS2 才需要 900）
     var wheelReturnSpeed: Double?       // nil = 不改
+    var hasShaping: Bool                // 见下「两种形态」；decode 默认 true（老 v1 JSON 全是整机）
     var widgetsJSON: Data?              // 布局（编码后的 [DeckWidget]）；nil = 预设不带布局
 }
 ```
@@ -318,8 +320,10 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 > 又：`GameProfileApplier` 不直接吃 `ControllerState`，而是吃一个 `ShapingTarget` 协议
 > （`ControllerState` 在 `ControllerState.swift` 里 conformity）—— 同样是为了测试可注入替身。
 
-- 存储：`palmdeck_game_profiles_v1`（本地，**不进 `layouts.json`、不进配置导出包**）；
+- 存储：`palmdeck_game_profiles_v2`（本地，**不进 `layouts.json`、不进配置导出包**）；
   生效名另存 `palmdeck_active_game_profile`（仅 UI 标记）。
+  旧键 `palmdeck_game_profiles_v1` / `palmdeck_layout_templates_v1` 只在 v2 不存在时被合并一次，
+  之后**只读不写**（`GameProfileMigration`，见下）。
 - 切换动作 = 一次性写入，**顺序固定**（`GameProfileApplier.apply`）：
   先切模式（`setMode` → `applyMode` 读本模式手感）→ 再写手感参数（键跟着新模式走）
   → 最后布局整表替换。写反的症状是“切了预设但手感没变”。
@@ -330,7 +334,7 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
   不是「把画布清空」——内置预设（WARDOGS / ETS2）都是 nil，它们只是**手感快照**。
   空数组 / 坏 JSON 也一律当成“不带”。唯一例外：该模式**当前就是空表**
   （用户清空过，或踩过这个坑）→ 铺回该模式默认模块，绝不留一块白板。
-- 上限 12（同模板）；内置不可删不可改名（同模板的规则）。
+- 上限 **24**（原预设 12 + 模板 12，合并后不再按类型各分一半）；内置不可删不可改名。
 
 **UI 位置**：设置页新增分类「游戏预设」（放在「布局」上方），
 一行一个预设，显示 `名字 · 模式 · 轴表名 · 死区` + 第二行说明 `仅手感，不动布局` / `含布局`，
@@ -341,6 +345,29 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 
 **测试**：`tests/ios/GameProfileTests.swift` + `tests/test_ios_profiles.py`
 （内置定义 / 编解码往返 / 缺字段回落 / 存储增删改与上限 / **应用顺序** / pbxproj 登记守卫）。
+
+#### 3.4.1 P1.5 落地：一个概念，两种形态（整机 / 布局）
+
+原来「游戏预设」（整机）与「布局模板」（只装组件）是两套类型、两个键、两个 UI 分类，
+用户要在两处找「我上次存的那套」。现在合并成一种类型 + 一个开关：
+
+- **`hasShaping: Bool`** 决定形态。`true` = **整机**（模式 + 手感 + 有布局就换）；
+  `false` = **布局**（只装组件、不碰手感，模式只是归属）。
+  同一个 `GameProfile`、同一个 store（不引入子类，也不搞两个 store）。
+- **decode 默认 `true`**：老 v1 JSON 里没有这个字段，解出来全是「整机」——正是它们本来的语义。
+- **`GameProfileApplier.apply` 里所有手感写入都包在 `if p.hasShaping` 内**：
+  一个「布局」预设点下去只换面板，死区/灵敏度/反转一个都不碰
+  （`GameProfileTests.testApplyLayoutOnlyDoesNotTouchShaping` 钉死）。
+- **「布局」预设只在自己那个模式下出现**（`$0.hasShaping || $0.mode == s.mode`）：
+  它存的就是那套面板，拿到别的模式里既没有对等的轴也没有对等的组件。
+- **内置「默认」不是类型，是列表里一行只读的「布局」预设**：点了走
+  `LayoutStore.applyDefault(mode:)`（直接取 `defaults(mode:)`，不入库、不占 24 个名额）。
+- **空预设两级拦截**：`save` 兵底（`既没手感也没布局` 直接返回错误文案）
+  + UI 把两个存按钮置灰。
+- **迁移幂等且旧键只读**：只有 v2 不存在时才 `GameProfileMigration.merge(profilesV1:templatesV1:)`；
+  否则用户删掉的预设下次启动会复活。重名加「·布局」后缀（内置名也算重名）。
+
+细节、验证方式与实测记录：`docs/PalmDeck-v4-unified-presets.md`。
 
 ### 3.5 协议：一条 WS 文本消息（G3）
 
@@ -621,7 +648,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 协议 PKT（22B `<2sBB8hH`） | **不改**。字段名 roll/pitch/yaw/thr 保持冻结 |
 | 协议 WS 文本 | **暂不改**。原计划 G3 新增 `{"type":"profile"}` + `caps: profile_select`，但§2.7 证明两个目标游戏都不需要，已降级（§7） |
 | 电脑侧 | **G0+G1+G2 不改电脑侧任何文件**。（若将来做 G3：`hotas.py` `remap_vjoy` 改查表、`palmdeck_config.py` 新 `axes_presets`、`bridge.py` WS 分支 + `caps`） |
-| App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告）——**注：E1 涉及的两个皮肤文件已在 E2 续中整份删除** |
+| App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（复用布局快照机制）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）——**注：G2 里那套「模板」已在 P1.5 并进预设，`LayoutTemplate` 类型已删除**；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告）——**注：E1 涉及的两个皮肤文件已在 E2 续中整份删除** |
 | 文档 | 本文件、`docs/PalmDeck-v4-app-interaction.md`（持久化键表 + 预设交互）、`docs/PalmDeck-v4-redesign.md`（P8）、`docs/README.md` |
 | App 侧（E2） | `Layout.swift`（`defaultHeli()` / `defaultDrive()` 只留轴 + `EditableWidget` 重命名）、`CockpitView.swift`（`deckBody` 直接渲染 `WidgetCanvas`）、`SettingsView.swift`（布局分类三模式统一）、删除 `FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`、`project.pbxproj` 去登记；`tests/test_deck_bindings.py`（`TestDefaultHeliLayout` / `TestDefaultDriveLayout` / `TestNoFixedSkins`） |
 
@@ -640,8 +667,12 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 - **G2 回归（已实现）**：`tests/ios/GameProfileTests.swift` + `tests/test_ios_profiles.py` ——
   `GameProfile` 编解码往返、旧格式缺字段时的回落（缺 `axesPreset` 回落 `hotas`、
   `infantry` 兼容成 `gamepad`）、内置两个预设的值与 §3.6 一致、
-  存储增删改/内置保护/上限 12、**应用顺序**（先切模式→写手感→换布局）、
+  存储增删改/内置保护/上限（P1.5 起 24）、**应用顺序**（先切模式→写手感→换布局）、
   布局 `nil` 时不碰 `wheel*`；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj`。
+- **P1.5 迁移（已实现）**：`hasShaping` 缺省 true（老 v1 JSON 原样解出）、
+  两个老键合并（条数/形态/重名后缀）、**幂等**（v2 存在时不重跑，删掉的预设不会复活）、
+  垃圾 JSON 不抛错；源码级守卫在 `TestUnifiedPresets`（「模板」词已删干净、旧键只读、
+  迁移只在 v2 缺位时跑、内置「默认」是一行不是按钮、布局预设按模式展示）。
 - 预设应用后 `layouts[mode]` 等于预设里的 `widgets`、`revision` 自增（`applyProfile` 里保证；
   布局解码在 `LayoutStore`，单测覆盖编解码层）。
 - **预设不得擦掉画布（已实现）**：`tests/test_deck_bindings.py::TestProfileDoesNotBlankTheCanvas`——
@@ -691,7 +722,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 - **不做 App → 电脑的轴表下发**（即 App 自己定义新轴表并推给电脑）。
   那等于把 HID 语义交给手机，一旦断线/版本错配就是「杆乱动」。
   轴表**只能在电脑侧定义**，App 只能**选**。
-- **不做跨设备预设同步**（与「布局模板」相同的边界，见 `docs/PalmDeck-proposal-template.md` §2 边界）。
+- **不做跨设备预设同步**（与命名快照一直以来的边界一致，见 `docs/PalmDeck-v4-unified-presets.md` §6）。
 - **不把预设塞进 `layouts.json` / 配置导出包**，除非你明确要求（那就升级 `BUNDLE_VERSION`）。
 - **G3（协议 + 电脑侧轴表）暂不做**。立论已写在 §2.7：两个目标游戏里，
   WARDOGS 用 `hotas`（已是默认）且 ETS2 根本不吃轴表。

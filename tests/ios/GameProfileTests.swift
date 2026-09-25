@@ -201,6 +201,121 @@ func testStoreRejectsEmptyAndLong() {
     expect(ps.save(p) != nil, "超长名拒绝")
     p.name = String(repeating: "长", count: GameProfileStore.maxNameLength)
     expect(ps.save(p) == nil, "刚好到上限允许")
+
+    // 内置还原点名也要拦（否则列表里会出现两行「默认」）
+    var reserved = GameProfile.layoutOnly(name: GameProfileBuiltin.reservedLayoutName,
+                                          mode: .drive, widgetsJSON: Data([1]))
+    expect(ps.save(reserved) != nil, "不得叫「默认」")
+
+    // 既没手感也没布局的预设：点下去什么也不会发生，不该能存
+    reserved.name = "空壳"
+    reserved.widgetsJSON = nil
+    expect(ps.save(reserved) != nil, "空预设拒绝")
+    reserved.widgetsJSON = Data([1])
+    expect(ps.save(reserved) == nil, "有布局就能存")
+}
+
+// MARK: - 3b. 两种形态：hasShaping / 只装布局
+
+func testHasShapingDefaultsTrue() {
+    // 老 JSON（`palmdeck_game_profiles_v1`）里没有 hasShaping —— 它们全是整机预设，
+    // 所以缺字段必须回落 true，否则老用户一升级预设就全变成“只装布局”的了。
+    let legacy = #"{"name":"老预设","mode":"heli","dz":0.03}"#
+    let p = try! JSONDecoder().decode(GameProfile.self, from: Data(legacy.utf8))
+    expect(p.hasShaping, "缺 hasShaping 回落 true")
+    expect(p.kindLabel == "整机", "缺字段算整机")
+
+    let la = GameProfile.layoutOnly(name: "只装布局", mode: .drive, widgetsJSON: Data([1, 2]))
+    expect(!la.hasShaping, "layoutOnly 出来的不是整机")
+    expect(la.kindLabel == "布局", "行尾章是「布局」")
+    expect(la.hasLayout, "带布局")
+    expect(la.mode == .drive, "布局预设记得自己属于哪个模式")
+    let back = try! JSONDecoder().decode(GameProfile.self, from: try! JSONEncoder().encode(la))
+    expect(back == la, "false 也能往返")
+    expect(!back.hasShaping, "往返后仍是布局预设")
+}
+
+// MARK: - 3c. 迁移：老预设 + 老模板 → 一个列表
+
+func legacyTemplatesJSON() -> Data {
+    let obj: [String: Any] = [
+        "drive": [
+            ["name": "卡车台", "widgets": [["kind": "slider", "id": "a"]]],
+            ["name": "同样的名字", "widgets": [["kind": "pad", "id": "b"]]],
+        ],
+        "heli": [
+            // 内置名 + 内置还原点名：都不得占坑
+            ["name": "WARDOGS", "widgets": [["kind": "stick", "id": "c"]]],
+            ["name": GameProfileBuiltin.reservedLayoutName, "widgets": [["kind": "pad", "id": "d"]]],
+            // 空布局 / 坏数据：跳过
+            ["name": "空的", "widgets": [Any]()],
+            ["name": "缺字段"],
+        ],
+    ]
+    return try! JSONSerialization.data(withJSONObject: obj)
+}
+
+func testMigrationMergesBothStores() {
+    let v1 = #"[{"name":"我的飞机","mode":"heli","dz":0.02}]"#.data(using: .utf8)!
+    let merged = GameProfileMigration.merge(profilesV1: v1, templatesV1: legacyTemplatesJSON())
+
+    // 1 个整机预设 + 3 个模板（卡车台 / 同名 / WARDOGS·布局），跳过「默认」「空的」「缺字段」
+    expect(merged.count == 4, "合并后应该 4 个，实际 \(merged.count)：\(merged.map { $0.name })")
+    expect(merged.first?.name == "我的飞机", "老预设排在前")
+    expect(merged.first?.hasShaping == true, "老预设是整机")
+    expect(merged.first?.widgetsJSON == nil, "老预设不带布局（v1 里没这一项）")
+
+    let byName = Dictionary(uniqueKeysWithValues: merged.map { ($0.name, $0) })
+    expect(byName["卡车台"] != nil, "模板搬过来了")
+    expect(byName["卡车台"]?.hasShaping == false, "模板 → 布局预设")
+    expect(byName["卡车台"]?.mode == .drive, "模式跟着模板所属模式")
+    expect(byName["WARDOGS·布局"] != nil, "与内置重名要加后缀（不能占内置名）")
+    expect(byName["WARDOGS"] == nil, "不得生成一个叫 WARDOGS 的用户预设")
+    expect(byName[GameProfileBuiltin.reservedLayoutName] == nil, "内置还原点名不入库")
+    expect(byName["空的"] == nil, "空模板跳过")
+
+    // payload 只是搬字节：必须还能被解回原样（用泛型 Dictionary 解，不依赖 DeckWidget）
+    let payload = byName["卡车台"]!.widgetsJSON!
+    let objs = try! JSONSerialization.jsonObject(with: payload) as! [[String: String]]
+    expect(objs.count == 1 && objs[0]["id"] == "a", "模板布局原样搬过来")
+}
+
+func testMigrationNameCollisionGetsSuffix() {
+    let v1 = #"[{"name":"同样的名字","mode":"drive"}]"#.data(using: .utf8)!
+    let merged = GameProfileMigration.merge(profilesV1: v1, templatesV1: legacyTemplatesJSON())
+    let names = Set(merged.map { $0.name })
+    expect(names.contains("同样的名字"), "整机预设保留原名")
+    expect(names.contains("同样的名字·布局"), "模板撞名加后缀，实际 \(names)")
+}
+
+func testMigrationIsIdempotent() {
+    let store = DictStore([
+        GameProfileStore.legacyProfilesKey: #"[{"name":"老预设","mode":"heli"}]"#.data(using: .utf8)!,
+        GameProfileStore.legacyTemplatesKey: legacyTemplatesJSON(),
+    ])
+    do {
+        let ps = GameProfileStore(store: store)
+        expect(ps.all.count == 6, "内置 2 + 迁移 4，实际 \(ps.all.count)")
+        expect(store.object(forKey: GameProfileStore.key) != nil, "迁移结果写进了 v2")
+        ps.delete("卡车台")
+        expect(ps.find("卡车台") == nil, "删掉了")
+    }
+    // 重启：v2 已存在 → 迁移不得重跑（否则删掉的会复活）
+    let ps2 = GameProfileStore(store: store)
+    expect(ps2.find("卡车台") == nil, "重启后不会被迁移复活")
+    expect(ps2.all.count == 5, "重启后条数不变，实际 \(ps2.all.count)")
+    // 老键只读：一直在那儿（回滚 App 版本时不丢数据）
+    expect(store.object(forKey: GameProfileStore.legacyTemplatesKey) != nil, "旧键不删")
+}
+
+func testMigrationToleratesGarbage() {
+    let merged = GameProfileMigration.merge(profilesV1: Data([0xFF, 0x00]),
+                                            templatesV1: Data("not json".utf8))
+    expect(merged.isEmpty, "坏数据退化成空，不抛错")
+    // 只有一半是好的：好的那半照迁
+    let half = GameProfileMigration.merge(
+        profilesV1: Data([0xFF, 0x00]), templatesV1: legacyTemplatesJSON())
+    expect(half.count == 3, "预设坏了不影响模板，实际 \(half.count)")
 }
 
 // MARK: - 4. 应用顺序（最关键）
@@ -248,6 +363,31 @@ func testApplyDoesNotTouchWheelWhenNil() {
     expectClose(t.dz, 0.06, 1e-12, "但死区必须写成 0.06")
 }
 
+func testApplyLayoutOnlyDoesNotTouchShaping() {
+    let rec = Recorder()
+    let t = FakeTarget()
+    t.sensX = 0.77; t.sensY = 0.66; t.dz = 0.31
+    t.invX = true; t.invYaw = true
+    let la = GameProfile.layoutOnly(name: "只装布局", mode: .drive, widgetsJSON: Data([1, 2, 3]))
+
+    GameProfileApplier.apply(la, to: t,
+                             setMode: { m in rec.events.append("mode:\(m.rawValue)") },
+                             replaceLayout: { data, m in
+                                 rec.events.append("layout:\(m.rawValue)")
+                                 rec.layoutJSON = data
+                             })
+
+    expect(rec.events == ["mode:drive", "layout:drive"], "仍然先切模式再换布局")
+    expect(rec.layoutJSON == Data([1, 2, 3]), "布局原样传下去")
+    // 手感一个字段都不许碰 —— 这是「只装布局」的全部意义
+    expectClose(t.sensX, 0.77, 1e-12, "sensX 不动")
+    expectClose(t.sensY, 0.66, 1e-12, "sensY 不动")
+    expectClose(t.dz, 0.31, 1e-12, "死区不动")
+    expect(t.invX, "反转不动")
+    expect(t.invYaw, "yaw 反转不动")
+    expect(t.wheelMaxDeg == 540, "满舵不动")
+}
+
 // MARK: - 跑
 
 testBuiltins()
@@ -258,8 +398,14 @@ testWidgetsHelpers()
 testStoreCRUD()
 testStorePersistence()
 testStoreRejectsEmptyAndLong()
+testHasShapingDefaultsTrue()
+testMigrationMergesBothStores()
+testMigrationNameCollisionGetsSuffix()
+testMigrationIsIdempotent()
+testMigrationToleratesGarbage()
 testApplyOrderModeBeforeShaping()
 testApplyDoesNotTouchWheelWhenNil()
+testApplyLayoutOnlyDoesNotTouchShaping()
 
 if failures.isEmpty {
     print("OK  \(checks) checks passed")

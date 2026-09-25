@@ -321,7 +321,10 @@ class TestProfileDoesNotBlankTheCanvas(unittest.TestCase):
 
     def test_settings_row_tells_whether_layout_comes_along(self):
         s = _ios("Views", "SettingsView.swift")
-        self.assertIn('"仅手感，不动布局"', s)
+        # 两种形态在这一行要能一眼分清：整机带布局 / 整机不带布局 / 只装布局。
+        self.assertIn('p.hasLayout ? "含布局" : "仅手感"', s)
+        self.assertIn('只装组件', s, "布局预设要说清楚它不带手感")
+        self.assertIn("个组件", s, "布局预设要显示会铺多少个组件")
         self.assertIn('"含布局"', s)
         self.assertIn("布局保持不动", s, "应用后要给反馈，否则用户以为又坏了")
 
@@ -580,8 +583,8 @@ class TestEditBarReachesWholeTableActions(unittest.TestCase):
     def test_edit_bar_has_a_menu(self):
         self.assertIn("Menu {", self.bar, "编辑条要有整表操作的入口")
 
-    def test_menu_wires_reset_clear_undo(self):
-        for call in ("layout.reset(mode: s.mode)",
+    def test_menu_wires_restore_clear_undo(self):
+        for call in ("layout.applyDefault(mode: s.mode)",
                      "layout.clear(mode: s.mode)",
                      "layout.undoLast(mode: s.mode)"):
             self.assertIn(call, self.bar)
@@ -680,3 +683,82 @@ class TestDragSnappingIsWired(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUnifiedPresets(unittest.TestCase):
+    """「模板」和「游戏预设」合并成一个概念：都是命名快照，只是一个记整机、一个只记布局。
+
+    合并前两套系统各存各的键、各有一套 UI，用户要在两个分类里找「我上次存的那套」。
+    现在只有「设置 → 预设」一处，且「布局」预设只在自己那个模式下出现。
+    """
+
+    def test_template_vocabulary_is_gone(self):
+        for rel in (("Views", "Layout.swift"),
+                    ("Views", "SettingsView.swift"),
+                    ("Views", "CockpitView.swift")):
+            src = _ios(*rel)
+            for dead in ("LayoutTemplate", "saveTemplate", "renameTemplate",
+                         "deleteTemplate", "applyTemplate", "templatesByMode",
+                         "customTemplates", "maxTemplates", "TplPrompt"):
+                self.assertNotIn(dead, src, "%s 里不该再有「模板」这套东西" % (rel,))
+
+    def test_store_key_is_v2_and_old_keys_are_read_only(self):
+        src = _ios("Model", "GameProfile.swift")
+        self.assertIn('static let key = "palmdeck_game_profiles_v2"', src)
+        self.assertIn('static let legacyProfilesKey = "palmdeck_game_profiles_v1"', src)
+        self.assertIn('static let legacyTemplatesKey = "palmdeck_layout_templates_v1"', src)
+        # 旧键只读：只能从它们 object(...)，绝不能往它们写（否则回滚 App 版本会读到半新半旧的数据）
+        body = src.split("private func load()", 1)[1].split("func saveToDisk", 1)[0]
+        self.assertIn("object(forKey: GameProfileStore.legacyProfilesKey)", body)
+        self.assertIn("object(forKey: GameProfileStore.legacyTemplatesKey)", body)
+        self.assertNotIn("set(", body, "load() 里写盘只能走 saveToDisk()")
+
+    def test_migration_only_runs_when_v2_is_absent(self):
+        src = _ios("Model", "GameProfile.swift")
+        body = src.split("private func load()", 1)[1].split("func saveToDisk", 1)[0]
+        # 有 v2 就直接 return —— 否则用户删掉的预设会在下次启动复活
+        self.assertLess(body.index("object(forKey: GameProfileStore.key)"),
+                        body.index("GameProfileMigration.merge"),
+                        "先读 v2；有就直接用")
+        self.assertIn("return", body.split("GameProfileMigration.merge", 1)[0].split("custom = obj", 1)[1])
+
+    def test_builtin_default_layout_is_a_row_not_a_button(self):
+        src = _ios("Views", "SettingsView.swift")
+        self.assertIn("case profile(GameProfile), restoreDefault", src,
+                      "内置「默认」应该在预设列表里占一行")
+        self.assertIn("layout.applyDefault(mode: s.mode)", src)
+        self.assertNotIn("恢复默认布局", src, "它是列表里的一行，不再是另一个分类里的按钮")
+
+    def test_layout_presets_are_mode_scoped(self):
+        src = _ios("Views", "SettingsView.swift")
+        self.assertIn("$0.hasShaping || $0.mode == s.mode", src,
+                      "「布局」预设只在自己那个模式下出现")
+
+    def test_cockpit_edit_bar_saves_a_layout_preset(self):
+        src = _ios("Views", "CockpitView.swift")
+        self.assertIn("存为预设", src, "编辑条上的入口改名了（模板 → 预设）")
+        self.assertIn("GameProfile.layoutOnly(name: presetName", src)
+        self.assertIn("widgetsJSON: layout.snapshotWidgetsJSON(mode: s.mode)", src)
+        self.assertIn("profiles.save(p)", src)
+
+    def test_save_layout_preset_speaks_back(self):
+        """存预设必须回一句话（成功 / 重名 / 名字非法）。
+
+        以前是 `_ = profiles.save(p)`：重名或名字非法时**什么都不发生**，
+        用户点完「确定」界面纹丝不动，只能自己怀疑人生。
+        """
+        src = _ios("Views", "CockpitView.swift")
+        body = src.split("private func saveLayoutPreset()", 1)[1].split("private var editBar", 1)[0]
+        self.assertIn("presetNote = profiles.save(p) ??", body,
+                      "save 的返回值（错误文案）必须显示出来")
+        self.assertNotIn("_ = profiles.save(p)", body)
+        # 回执是画布**上面的一行**（和横幅同规矩），不许用 overlay 盖画布
+        self.assertIn("presetNoteRow", src)
+        row = src.split("private var presetNoteRow", 1)[1].split("private var editBar", 1)[0]
+        self.assertNotIn("overlay", row)
+        self.assertIn("if layout.editing && !presetNote.isEmpty", row)
+
+    def test_layout_preset_default_name_counts_from_one(self):
+        src = _ios("Views", "CockpitView.swift")
+        self.assertIn('presetName = "布局 \(profiles.custom.filter { !$0.hasShaping && $0.mode == s.mode }.count + 1)"',
+                      src, "默认名从头数，别从 2 开始（用户会以为少了一个）")

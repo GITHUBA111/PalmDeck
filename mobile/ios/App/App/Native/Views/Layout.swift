@@ -12,24 +12,12 @@ struct WRect: Codable, Equatable {
     }
 }
 
-/// 命名布局快照（布局模板）。
-///
-/// 内置「默认」**不入库**：直接取 `LayoutStore.defaults(mode:)`，只读、不可删。
-struct LayoutTemplate: Codable, Identifiable, Equatable {
-    var name: String
-    var widgets: [DeckWidget]
-    var id: String { name }
-}
-
 /// 各模式的组件列表（可自定义、持久化）
+///
+/// 命名快照（“我摆好的一套”）已不分居两处：**统一走 `GameProfileStore`**
+/// （整机预设 / 布局预设 / 内置「默认」），见 `docs/PalmDeck-v4-unified-presets.md`。
+/// 本类只负责：当前布局、组件增删改、还原点、撤销槽、对齐线、与电脑同步。
 final class LayoutStore: ObservableObject {
-    /// 内置只读模板名（即“还原点”）
-    static let builtinName = "默认"
-    /// 每模式模板数上限（UserDefaults 不是数据库，防手滑存爆）
-    static let maxTemplates = 12
-    /// 模板名长度上限
-    static let maxNameLength = 16
-
     @Published var editing = false {
         didSet { if !editing { clearGuides() } }   // 退出编辑别留一条线
     }
@@ -40,8 +28,6 @@ final class LayoutStore: ObservableObject {
     @Published private var layouts: [String: [DeckWidget]] = [:]
     /// 与电脑同步的状态提示（设置页显示）
     @Published var syncMessage = ""
-    /// 模板：`{模式: [模板]}`（不含内置「默认」）
-    @Published private(set) var templatesByMode: [String: [LayoutTemplate]] = [:]
     /// 撤销槽（单格 / 按模式）：破坏性操作前压入
     @Published private(set) var undoSlots: [String: [DeckWidget]] = [:]
     /// 整表替换计数。画布用 `.id(revision)` 强制重建，
@@ -49,12 +35,10 @@ final class LayoutStore: ObservableObject {
     @Published private(set) var revision = 0
 
     private let key = "palmdeck_widgets_v10"
-    private let tplKey = "palmdeck_layout_templates_v1"
     private let undoKey = "palmdeck_layout_undo_v1"
 
     init() {
         load()
-        loadTemplates()
         loadUndo()
         // 只在「从未存过该模式」时播种内置默认。
         // 用 == nil（而不是 isEmpty），否则用户主动「清空」的空白布局会在重启后被默认布局覆盖。
@@ -130,13 +114,8 @@ final class LayoutStore: ObservableObject {
         replaceWidgets([], mode: mode)
     }
 
-    func reset(mode: CockpitMode) {
-        pushUndo(mode: mode)
-        replaceWidgets(LayoutStore.defaults(mode: mode), mode: mode)
-    }
-
     /// 整表替换：落盘 + 通知画布重建。
-    /// 仅用于 clear / reset / 应用模板 / 撤销——**不得**用于拖拽保存（`update`），
+    /// 仅用于 clear / applyDefault / 应用预设布局 / 撤销——**不得**用于拖拽保存（`update`），
     /// 否则拖动中画布会被重建，手势直接断掉。
     private func replaceWidgets(_ list: [DeckWidget], mode: CockpitMode) {
         layouts[mode.rawValue] = list
@@ -144,29 +123,39 @@ final class LayoutStore: ObservableObject {
         revision &+= 1
     }
 
-    // MARK: - 布局模板（本地）
+    // MARK: - 还原点与「当前」判定（命名快照本身在 `GameProfileStore`）
 
-    /// 全部模板（内置「默认」永远排第一）。
-    func templates(mode: CockpitMode) -> [LayoutTemplate] {
-        [LayoutTemplate(name: LayoutStore.builtinName, widgets: LayoutStore.defaults(mode: mode))]
-            + (templatesByMode[mode.rawValue] ?? [])
+    /// 内置还原点名（= 预设列表里那一行只读的「默认」）。
+    static var builtinName: String { GameProfileBuiltin.reservedLayoutName }
+
+    /// 把该模式铺回出厂布局（应用前先压撤销槽），= 应用内置「默认」预设。
+    func applyDefault(mode: CockpitMode) {
+        pushUndo(mode: mode)
+        replaceWidgets(LayoutStore.defaults(mode: mode), mode: mode)
     }
 
-    /// 用户自建模板（不含内置）——滑动删除/重命名只对它生效。
-    func customTemplates(mode: CockpitMode) -> [LayoutTemplate] {
-        templatesByMode[mode.rawValue] ?? []
+    /// 当前布局是否就是出厂默认。
+    func isCurrentDefault(mode: CockpitMode) -> Bool {
+        sameShape(widgets(mode: mode), LayoutStore.defaults(mode: mode))
     }
 
-    func isBuiltin(_ tpl: LayoutTemplate) -> Bool { tpl.name == LayoutStore.builtinName }
-
-    /// 模板内容是否等于当前布局。
-    ///
-    /// **不能直接 `==`**：`DeckWidget.make`（`Widgets.swift:76`）每次都生成新 `UUID`，
-    /// 而 `Equatable` 是合成实现、含 `id`——内置默认布局回回重建都是新 id，永远比不等。
-    /// 所以只比“形状”：kind / binding / rect / label（顺序敏感）。
-    func isCurrent(_ tpl: LayoutTemplate, mode: CockpitMode) -> Bool {
-        sameShape(widgets(mode: mode), tpl.widgets)
+    /// 当前布局是否等于某个预设带的布局（解码失败 = 不相等）。
+    func isCurrentLayout(_ widgetsJSON: Data?, mode: CockpitMode) -> Bool {
+        guard let data = widgetsJSON,
+              let list = try? JSONDecoder().decode([DeckWidget].self, from: data),
+              !list.isEmpty else { return false }
+        return sameShape(widgets(mode: mode), list)
     }
+
+    /// 某个预设带的组件数（列表里显示「N 个组件」用）。
+    func widgetCount(_ widgetsJSON: Data?) -> Int {
+        guard let data = widgetsJSON,
+              let list = try? JSONDecoder().decode([DeckWidget].self, from: data) else { return 0 }
+        return list.count
+    }
+
+    /// 当前模式的组件数。
+    func widgetCount(mode: CockpitMode) -> Int { widgets(mode: mode).count }
 
     /// 只比“形状”（kind / binding / rect / label，顺序敏感），忽略每次重建都变的 UUID。
     func sameShape(_ a: [DeckWidget], _ b: [DeckWidget]) -> Bool {
@@ -175,55 +164,9 @@ final class LayoutStore: ObservableObject {
         }
     }
 
-    /// 存为模板（快照当前布局）。重名覆盖。返回错误文案，nil = 成功。
-    @discardableResult
-    func saveTemplate(name raw: String, mode: CockpitMode) -> String? {
-        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let err = LayoutStore.validate(name: name) { return err }
-        var list = customTemplates(mode: mode)
-        let tpl = LayoutTemplate(name: name, widgets: widgets(mode: mode))
-        if let i = list.firstIndex(where: { $0.name == name }) {
-            list[i] = tpl                                   // 覆盖
-        } else {
-            guard list.count < LayoutStore.maxTemplates else {
-                return "最多 \(LayoutStore.maxTemplates) 个模板，请先删掉一个"
-            }
-            list.append(tpl)
-        }
-        templatesByMode[mode.rawValue] = list
-        saveTemplates()
-        return nil
-    }
-
-    @discardableResult
-    func renameTemplate(_ old: String, to raw: String, mode: CockpitMode) -> String? {
-        let new = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let err = LayoutStore.validate(name: new) { return err }
-        var list = customTemplates(mode: mode)
-        guard let i = list.firstIndex(where: { $0.name == old }) else { return "模板不存在" }
-        if new != old, list.contains(where: { $0.name == new }) { return "已有同名模板" }
-        list[i].name = new
-        templatesByMode[mode.rawValue] = list
-        saveTemplates()
-        return nil
-    }
-
-    func deleteTemplate(_ name: String, mode: CockpitMode) {
-        var list = customTemplates(mode: mode)
-        list.removeAll { $0.name == name }
-        templatesByMode[mode.rawValue] = list
-        saveTemplates()
-    }
-
-    /// 应用模板（应用前先压撤销槽）。
-    func applyTemplate(_ tpl: LayoutTemplate, mode: CockpitMode) {
-        pushUndo(mode: mode)
-        replaceWidgets(tpl.widgets, mode: mode)
-    }
-
     // MARK: - 游戏预设（G2）
 
-    /// 预设携带的布局：**整表替换**，落盘 + `revision++`（同 `applyTemplate` 的语义）。
+    /// 预设携带的布局：**整表替换**，落盘 + `revision++`（同 `replaceWidgets` 的语义）。
     ///
     /// 接收**编码后的 JSON** 而不是 `[DeckWidget]`，因为 `GameProfile` 是纯类型
     /// （见 `Model/GameProfile.swift`）；解码在这一层做。
@@ -257,13 +200,6 @@ final class LayoutStore: ObservableObject {
         let list = widgets(mode: mode)
         guard !list.isEmpty else { return nil }
         return try? JSONEncoder().encode(list)
-    }
-
-    private static func validate(name: String) -> String? {
-        if name.isEmpty { return "名称不能为空" }
-        if name.count > maxNameLength { return "名称最多 \(maxNameLength) 个字符" }
-        if name == builtinName { return "「\(builtinName)」是内置模板，换个名字" }
-        return nil
     }
 
     // MARK: - 编辑会话（「放弃」的回滚点）
@@ -310,18 +246,6 @@ final class LayoutStore: ObservableObject {
     private func pushUndo(mode: CockpitMode) {
         undoSlots[mode.rawValue] = widgets(mode: mode)
         saveUndo()
-    }
-
-    private func loadTemplates() {
-        guard let data = UserDefaults.standard.data(forKey: tplKey),
-              let obj = try? JSONDecoder().decode([String: [LayoutTemplate]].self, from: data) else { return }
-        templatesByMode = obj
-    }
-
-    private func saveTemplates() {
-        if let data = try? JSONEncoder().encode(templatesByMode) {
-            UserDefaults.standard.set(data, forKey: tplKey)
-        }
     }
 
     private func loadUndo() {

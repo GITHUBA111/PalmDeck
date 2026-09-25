@@ -9,8 +9,10 @@ struct CockpitView: View {
     @StateObject private var profiles = GameProfileStore()
     @State private var showLibrary = false
     @State private var showTutorial = false
-    @State private var naming = false
-    @State private var tplName = ""
+    @State private var savingPreset = false
+    @State private var presetName = ""
+    /// 编辑条上「存为预设」的结果回执（成功/失败都说话）。空字符串=不显示。
+    @State private var presetNote = ""
     var onExit: () -> Void = {}
     private var stripH: CGFloat { 28 }   // 底部仪表条高度
 
@@ -213,6 +215,7 @@ struct CockpitView: View {
         VStack(spacing: 0) {
             if layout.editing { editBar }
             else { notConnectedBanner }
+            presetNoteRow
             // 应用模板 / 撤销 / 恢复默认是整表替换，用 revision 强制重建画布，
             // 否则 EditableWidget 的 @State dragStart 会残留到新布局上。
             WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
@@ -221,21 +224,43 @@ struct CockpitView: View {
         }
         .frame(width: W, height: H)
         .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-        .alert("存为模板", isPresented: $naming) {
-            TextField("模板名称", text: $tplName)
-                .onChange(of: tplName) { v in
-                    if v.count > LayoutStore.maxNameLength {
-                        tplName = String(v.prefix(LayoutStore.maxNameLength))
+        .alert("存为布局预设", isPresented: $savingPreset) {
+            TextField("预设名称", text: $presetName)
+                .onChange(of: presetName) { v in
+                    if v.count > GameProfileStore.maxNameLength {
+                        presetName = String(v.prefix(GameProfileStore.maxNameLength))
                     }
                 }
             Button("取消", role: .cancel) { }
             Button("确定") {
-                _ = layout.saveTemplate(name: tplName, mode: s.mode)
+                saveLayoutPreset()
                 Haptics.success()
             }
         } message: {
-            Text("快照当前布局（\(layout.widgets(mode: s.mode).count) 个组件），名称最多 \(LayoutStore.maxNameLength) 个字符；可在设置 → 布局里切换。")
+            Text("只存这 \(layout.widgetCount(mode: s.mode)) 个组件（不含手感），可在「设置 → 预设」里切换。名称最多 \(GameProfileStore.maxNameLength) 个字符。")
         }
+    }
+
+    /// 「存为预设」的回执：占编辑条下面一行，不盖画布（和提示横幅同规矩）。
+    /// 存成功、重名、名字非法都在这里说一句 —— 以前失败是静默的，点了跟没点一样。
+    @ViewBuilder
+    private var presetNoteRow: some View {
+        if layout.editing && !presetNote.isEmpty {
+            Text(presetNote)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 4)
+        }
+    }
+
+    /// 编辑条上的「存为预设」：存的是**布局**预设（人在摆布局，手感不在这件事的范围里）。
+    /// 想连手感一起存，去设置 → 预设里的「存为整机预设」。
+    private func saveLayoutPreset() {
+        let p = GameProfile.layoutOnly(name: presetName, mode: s.mode,
+                                       widgetsJSON: layout.snapshotWidgetsJSON(mode: s.mode))
+        presetNote = profiles.save(p) ?? "已存为「\(p.name.trimmingCharacters(in: .whitespacesAndNewlines))」· 设置 → 预设里能看到"
     }
 
     /// 编辑态下的顶部工具条（加组件 / 存模板 / 放弃 / 完成）。
@@ -256,25 +281,30 @@ struct CockpitView: View {
                     libraryButton("仪表盘", .panel, .roll)
                 }
             }
-            Button("存为模板") {
-                tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
-                naming = true
+            Button("存为预设") {
+                presetName = "布局 \(profiles.custom.filter { !$0.hasShaping && $0.mode == s.mode }.count + 1)"
+                presetNote = ""
+                savingPreset = true
             }
+            .disabled(layout.widgetCount(mode: s.mode) == 0)
             .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
             // 整表操作放这里：以前「清空 / 恢复默认 / 撤销」只藏在设置 → 布局，
             // 而它们恰恰是改布局时最想用的三个（清空、恢复默认都会压一道撤销槽，能后悔）。
             Menu {
                 Button(role: .destructive) {
-                    layout.reset(mode: s.mode)
+                    layout.applyDefault(mode: s.mode)
+                    presetNote = ""
                     Haptics.success()
                 } label: { Label("恢复默认布局", systemImage: "arrow.counterclockwise") }
                 Button(role: .destructive) {
                     layout.clear(mode: s.mode)
+                    presetNote = ""
                     Haptics.warning()
                 } label: { Label("清空画布", systemImage: "trash") }
                 Divider()
                 Button {
                     layout.undoLast(mode: s.mode)
+                    presetNote = ""
                     Haptics.select()
                 } label: { Label("撤销上一次改动", systemImage: "arrow.uturn.backward") }
                     .disabled(!layout.canUndo(mode: s.mode))
@@ -286,6 +316,7 @@ struct CockpitView: View {
             Button("放弃") {
                 layout.discardEditing(mode: s.mode)
                 layout.editing = false
+                presetNote = ""
                 Haptics.tap()
             }
             .disabled(!layout.canDiscardEditing(mode: s.mode))
@@ -293,6 +324,7 @@ struct CockpitView: View {
             Button("完成") {
                 layout.commitEditing(mode: s.mode)
                 layout.editing = false
+                presetNote = ""
                 Haptics.press()
             }
             .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))

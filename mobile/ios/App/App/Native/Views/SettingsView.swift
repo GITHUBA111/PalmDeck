@@ -61,10 +61,11 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .profiles:
             return [
-                .init(self, "切换游戏预设", "预设 profile 游戏 game 切换 switch 一键"),
+                .init(self, "切换预设", "预设 profile 游戏 game 切换 switch 一键 整机 布局"),
                 .init(self, "WARDOGS", "wardogs 飞机 heli 直升机 预设"),
                 .init(self, "欧洲卡车模拟", "ets2 ets 欧洲卡车 卡车 truck 开车 drive 预设"),
-                .init(self, "将当前状态存为预设", "保存 save 预设 profile 新增 快照"),
+                .init(self, "存为预设", "保存 save 预设 profile 新增 快照 整机 布局"),
+                .init(self, "默认布局", "默认 default 还原 恢复 reset 内置"),
                 .init(self, "电脑轴映射表", "轴 mapping 映射 axis 轴表 hotas fbw 电脑"),
             ]
         case .layout:
@@ -72,10 +73,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
                 .init(self, "自定义组件布局", "自定义 custom 组件 widget 布局 layout 手柄"),
                 .init(self, "编辑布局", "编辑 edit 拖动 移动 缩放 删除"),
                 .init(self, "放弃本次编辑", "放弃 回滚 撤销 取消 discard cancel revert"),
-                .init(self, "模板", "模板 template 预设 preset 方案 切换 switch 还原 恢复 快照"),
-                .init(self, "将当前布局存为模板", "保存 save 快照 snapshot 模板 template 新增"),
+                .init(self, "预设里恢复默认", "默认 default 预设 恢复 还原 reset"),
                 .init(self, "撤销上一次改动", "撤销 undo 还原 回退 恢复 revert"),
-                .init(self, "恢复默认布局", "恢复 reset 默认 default 重置"),
                 .init(self, "清空当前模式", "清空 clear 删除 移除"),
                 .init(self, "从电脑拉取布局", "拉取 下载 download fetch 同步 sync 电脑"),
                 .init(self, "上传当前模式到电脑", "上传 upload 同步 sync 电脑"),
@@ -139,21 +138,15 @@ struct SettingsResultGroup: Identifiable {
 
 // MARK: - 设置页
 
-/// 模板命名/重命名弹窗状态。`original == nil` 表示新建。
-private struct TplPrompt: Identifiable {
-    let id = UUID()
-    var original: String?
-    var text: String
-}
-
-/// 游戏预设命名/重命名弹窗状态。`original == nil` 表示新建（从当前状态快照）。
+/// 预设命名/重命名弹窗状态。`original == nil` 表示新建。
 private struct ProfPrompt: Identifiable {
+    enum NewKind { case machine, layout }
     let id = UUID()
     var original: String?
     var text: String
-    var template: GameProfile?   // 新建时：以哪个预设为模板（模式/轴表/手感）
+    /// 新建时存哪种形态（重命名时无意义）。
+    var kind: NewKind = .machine
 }
-
 /// 设置页：Apple「设置」风格。横屏双栏——左分类、右详情（inset-grouped）。
 struct SettingsView: View {
     @ObservedObject var ctrl: CockpitController
@@ -169,8 +162,6 @@ struct SettingsView: View {
 
     @State private var sel: SettingsCategory = .connection
     @State private var query = ""
-    @State private var tplPrompt: TplPrompt? = nil
-    @State private var tplNote = ""
     @State private var profPrompt: ProfPrompt? = nil
     @State private var profNote = ""
 
@@ -377,25 +368,8 @@ struct SettingsView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .alert(tplPrompt?.original == nil ? "存为模板" : "重命名模板",
-                   isPresented: Binding(get: { tplPrompt != nil },
-                                        set: { if !$0 { tplPrompt = nil } })) {
-                TextField("模板名称", text: Binding(
-                    get: { tplPrompt?.text ?? "" },
-                    set: { tplPrompt?.text = $0 }))
-                    .onChange(of: tplPrompt?.text ?? "") { v in
-                        if v.count > LayoutStore.maxNameLength {
-                            tplPrompt?.text = String(v.prefix(LayoutStore.maxNameLength))
-                        }
-                    }
-                Button("取消", role: .cancel) { tplPrompt = nil }
-                Button("确定") { commitTemplatePrompt() }
-            } message: {
-                Text("名称最多 \(LayoutStore.maxNameLength) 个字符；重名则覆盖。")
-            }
-            .alert(profPrompt?.original == nil ? "存为游戏预设" : "重命名预设",
-                   isPresented: Binding(get: { profPrompt != nil },
-                                        set: { if !$0 { profPrompt = nil } })) {
+            .alert(alertTitle, isPresented: Binding(get: { profPrompt != nil },
+                                                   set: { if !$0 { profPrompt = nil } })) {
                 TextField("预设名称", text: Binding(
                     get: { profPrompt?.text ?? "" },
                     set: { profPrompt?.text = $0 }))
@@ -413,14 +387,10 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func commitTemplatePrompt() {
-        guard let p = tplPrompt else { return }
-        if let old = p.original {
-            tplNote = layout.renameTemplate(old, to: p.text, mode: s.mode) ?? ""
-        } else {
-            tplNote = layout.saveTemplate(name: p.text, mode: s.mode) ?? ""
-        }
-        tplPrompt = nil
+    /// 弹窗标题：新建看形态，改名看原名。
+    private var alertTitle: String {
+        guard let p = profPrompt, p.original == nil else { return "重命名预设" }
+        return p.kind == .machine ? "存为整机预设" : "存为布局预设"
     }
 
     private func commitProfilePrompt() {
@@ -428,16 +398,27 @@ struct SettingsView: View {
         if let old = p.original {
             profNote = profiles.rename(old, to: p.text) ?? ""
         } else {
-            // 新建 = 快照当前状态（模式 / 手感 / 布局），轴表名沿用模板或当前电脑值
-            var np = p.template ?? GameProfile(
-                name: p.text, mode: s.mode,
-                axesPreset: s.axisProfile.isEmpty ? "hotas" : s.axisProfile,
-                sensX: s.sensX, sensY: s.sensY, dz: s.dz,
-                invX: s.invX, invY: s.invY, invYaw: s.invYaw, invColl: s.invColl,
-                wheelMaxDeg: s.wheelMaxDeg, wheelReturnSpeed: s.wheelReturnSpeed)
-            np.name = p.text
-            np.widgetsJSON = layout.snapshotWidgetsJSON(mode: s.mode)
-            profNote = profiles.save(np) ?? ""
+            let axes = s.axisProfile.isEmpty ? "hotas" : s.axisProfile
+            let np: GameProfile
+            switch p.kind {
+            case .machine:
+                // 整机 = 快照当前状态（模式 / 手感 / 布局）
+                var m = GameProfile(
+                    name: p.text, mode: s.mode, axesPreset: axes,
+                    sensX: s.sensX, sensY: s.sensY, dz: s.dz,
+                    invX: s.invX, invY: s.invY, invYaw: s.invYaw, invColl: s.invColl,
+                    wheelMaxDeg: s.wheelMaxDeg, wheelReturnSpeed: s.wheelReturnSpeed)
+                m.widgetsJSON = layout.snapshotWidgetsJSON(mode: s.mode)
+                np = m
+            case .layout:
+                // 布局 = 只快照当前模式的组件（手感一点不记）
+                np = GameProfile.layoutOnly(name: p.text, mode: s.mode,
+                                            widgetsJSON: layout.snapshotWidgetsJSON(mode: s.mode),
+                                            axesPreset: axes)
+            }
+            var named = np
+            named.name = p.text
+            profNote = profiles.save(named) ?? (p.kind == .machine ? "已存为整机预设" : "已存为布局预设")
         }
         profPrompt = nil
     }
@@ -456,21 +437,21 @@ struct SettingsView: View {
         }
 
         Section {
-            ForEach(profiles.all) { p in
+            ForEach(presetRows) { row in
                 Button {
-                    applyProfile(p)
+                    applyPreset(row)
                 } label: {
-                    profileRow(p)
+                    presetRowView(row)
                 }
                 .buttonStyle(.plain)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if !profiles.isBuiltin(p) {
+                    if case .profile(let p) = row.kind, !profiles.isBuiltin(p) {
                         Button(role: .destructive) {
                             profiles.delete(p.name)
                             profNote = "已删除「\(p.name)」"
                         } label: { Label("删除", systemImage: "trash") }
                         Button {
-                            profPrompt = ProfPrompt(original: p.name, text: p.name, template: p)
+                            profPrompt = ProfPrompt(original: p.name, text: p.name)
                         } label: { Label("重命名", systemImage: "pencil") }
                             .tint(.orange)
                     }
@@ -478,46 +459,107 @@ struct SettingsView: View {
             }
 
             Button {
-                profPrompt = ProfPrompt(original: nil, text: "", template: nil)
+                profPrompt = ProfPrompt(original: nil, text: "", kind: .machine)
             } label: {
-                Label("将当前状态存为预设", systemImage: "plus.circle")
+                Label("将当前状态存为预设（整机）", systemImage: "plus.circle")
             }
+            Button {
+                profPrompt = ProfPrompt(original: nil, text: "", kind: .layout)
+            } label: {
+                Label("将当前布局存为预设（仅布局）", systemImage: "plus.circle")
+            }
+            .disabled(layout.widgetCount(mode: s.mode) == 0)
         } header: {
             SettingsHeader("预设")
         } footer: {
             if profNote.isEmpty {
-                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机；内置预设不可删改。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件（行尾标「仅手感」）。想要“连布局一起记”，用「将当前状态存为预设」。")
+                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机，内置的不可删改。\n\n**整机**（行尾章「整机」）跨模式出现：切模式 + 写手感 + 有布局就换。**仅布局**（「布局」）只装组件、不碰手感，**只在自己那个模式下出现**（它就属于那套面板）。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件。")
             } else {
                 Text(profNote).foregroundColor(Theme.orange)
             }
         }
     }
 
-    private func profileRow(_ p: GameProfile) -> some View {
+    /// 列表里的一行：一个预设，或内置「默认」（还原点）。
+    private struct PresetRow: Identifiable {
+        enum Kind { case profile(GameProfile), restoreDefault }
+        let id: String
+        let kind: Kind
+    }
+
+    /// 行顺序：内置整机 → 用户整机 → 当前模式的布局预设 → 内置「默认」。
+    /// 「布局」预设只在自己那个模式下出现：它存的是那套面板，在别的模式下没有意义。
+    private var presetRows: [PresetRow] {
+        let visible = profiles.all.filter { $0.hasShaping || $0.mode == s.mode }
+        let machines = visible.filter { $0.hasShaping }.map { PresetRow(id: $0.name, kind: .profile($0)) }
+        let layouts = visible.filter { !$0.hasShaping }.map { PresetRow(id: $0.name, kind: .profile($0)) }
+        return machines + layouts + [PresetRow(id: LayoutStore.builtinName, kind: .restoreDefault)]
+    }
+
+    @ViewBuilder private func presetRowView(_ row: PresetRow) -> some View {
+        switch row.kind {
+        case .restoreDefault:
+            rowBody(title: LayoutStore.builtinName,
+                    chips: ["内置", "布局"],
+                    detail: "\(s.mode.label) · 出厂布局 · \(LayoutStore.defaults(mode: s.mode).count) 个组件",
+                    current: layout.isCurrentDefault(mode: s.mode),
+                    warn: false)
+        case .profile(let p):
+            rowBody(title: p.name,
+                    chips: (profiles.isBuiltin(p) ? ["内置"] : []) + [p.kindLabel],
+                    detail: detail(p),
+                    current: isCurrent(p),
+                    warn: !s.axisProfile.isEmpty && s.axisProfile != p.axesPreset)
+        }
+    }
+
+    private func detail(_ p: GameProfile) -> String {
+        if p.hasShaping {
+            let layoutText = p.hasLayout ? "含布局" : "仅手感"
+            return "\(p.mode.label) · 轴表 \(p.axesPreset) · 死区 \(String(format: "%.2f", p.dz)) · \(layoutText)"
+        }
+        return "\(p.mode.label) · 只装组件 · \(layout.widgetCount(p.widgetsJSON)) 个组件"
+    }
+
+    /// 「当前」标记：整机预设看“最后应用的那个”；布局预设看**内容是否相等**
+    /// （它就是一套组件，比形状最直接，且不受“手动改了一个角”以外的影响）。
+    private func isCurrent(_ p: GameProfile) -> Bool {
+        p.hasShaping ? profiles.activeName == p.name
+                     : layout.isCurrentLayout(p.widgetsJSON, mode: p.mode)
+    }
+
+    private func rowBody(title: String, chips: [String], detail: String,
+                         current: Bool, warn: Bool) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(p.name).foregroundColor(.primary)
-                    if profiles.isBuiltin(p) {
-                        Text("内置")
+                    Text(title)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    ForEach(chips, id: \.self) { c in
+                        Text(c)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
                     }
                 }
-                Text("\(p.mode.label) · 轴表 \(p.axesPreset) · 死区 \(String(format: "%.2f", p.dz))")
+                Text(detail)
                     .font(.system(size: 12)).foregroundColor(.secondary)
-                Text(p.widgetsJSON == nil ? "仅手感，不动布局" : "含布局")
-                    .font(.system(size: 11)).foregroundColor(Theme.textFaint)
+                    .lineLimit(2)
             }
             Spacer(minLength: 8)
-            if profiles.activeName == p.name {
+            if current {
                 Text("当前")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Theme.cyan)
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            if !s.axisProfile.isEmpty && s.axisProfile != p.axesPreset {
+            if warn {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.orange)
@@ -532,6 +574,18 @@ struct SettingsView: View {
         return s.link == .live ? "旧版（未上报）" : "未连接"
     }
 
+    private func applyPreset(_ row: PresetRow) {
+        switch row.kind {
+        case .restoreDefault:
+            layout.applyDefault(mode: s.mode)
+            profiles.markActive(nil)
+            Haptics.press()
+            profNote = "已恢复到「\(LayoutStore.builtinName)」布局"
+        case .profile(let p):
+            applyProfile(p)
+        }
+    }
+
     private func applyProfile(_ p: GameProfile) {
         GameProfileApplier.apply(p, to: s,
                                  setMode: { ctrl.setMode($0) },
@@ -540,9 +594,13 @@ struct SettingsView: View {
                                  })
         profiles.markActive(p.name)
         Haptics.press()
-        profNote = p.widgetsJSON == nil
-            ? "已切换到「\(p.name)」· 布局保持不动"
-            : "已切换到「\(p.name)」· 布局已换成预设的"
+        if !p.hasShaping {
+            profNote = "已应用「\(p.name)」· 只换了布局，手感没动"
+        } else {
+            profNote = p.hasLayout
+                ? "已切换到「\(p.name)」· 布局已换成预设的"
+                : "已切换到「\(p.name)」· 布局保持不动"
+        }
     }
 
     // ---- 连接 ----
@@ -631,16 +689,17 @@ struct SettingsView: View {
             Text("三个模式都用同一套通用组件（引擎内不再有固定皮肤）。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。座舱编辑条上的「放弃」可一键回滚到本次编辑开始前。")
         }
 
-        templateSection
-
         Section {
-            Button(role: .destructive) { layout.reset(mode: s.mode) } label: {
-                Label("恢复默认布局", systemImage: "arrow.counterclockwise")
-            }
             Button(role: .destructive) { layout.clear(mode: s.mode) } label: {
                 Label("清空当前模式", systemImage: "trash")
             }
+        } header: {
+            SettingsHeader("清空")
+        } footer: {
+            Text("清空后画布是空的（会有占位提示）。想回到出厂布局？去「预设」里点内置那一行「\(LayoutStore.builtinName)」；两者都会压一道撤销槽，当场能后悔。")
         }
+
+        undoSection
 
         Section {
             Button { ctrl.requestLayouts() } label: {
@@ -660,75 +719,20 @@ struct SettingsView: View {
         }
     }
 
-    // ---- 布局模板 ----
+    // ---- 撤销上一次改动（整表操作的回退；命名快照已统一到「预设」） ----
 
-    @ViewBuilder private var templateSection: some View {
+    @ViewBuilder private var undoSection: some View {
         Section {
-            ForEach(layout.templates(mode: s.mode)) { tpl in
-                Button {
-                    layout.applyTemplate(tpl, mode: s.mode)
-                    Haptics.select()
-                    tplNote = "已应用「\(tpl.name)」"
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(tpl.name).foregroundColor(.primary)
-                        if layout.isBuiltin(tpl) {
-                            Text("内置")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
-                        }
-                        Spacer(minLength: 8)
-                        Text("\(tpl.widgets.count)")
-                            .font(.system(size: 15)).monospacedDigit()
-                            .foregroundColor(.secondary)
-                        if layout.isCurrent(tpl, mode: s.mode) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(Theme.cyan)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if !layout.isBuiltin(tpl) {
-                        Button(role: .destructive) {
-                            layout.deleteTemplate(tpl.name, mode: s.mode)
-                            tplNote = "已删除「\(tpl.name)」"
-                        } label: { Label("删除", systemImage: "trash") }
-                        Button {
-                            tplPrompt = TplPrompt(original: tpl.name, text: tpl.name)
-                        } label: { Label("重命名", systemImage: "pencil") }
-                            .tint(.orange)
-                    }
-                }
-            }
-
             Button {
-                tplPrompt = TplPrompt(original: nil, text: "")
+                layout.undoLast(mode: s.mode)
+                Haptics.select()
+                profNote = "已撤销上一次改动"
             } label: {
-                Label("将当前布局存为模板", systemImage: "plus.circle")
+                Label("撤销上一次改动", systemImage: "arrow.uturn.backward")
             }
-
-            if layout.canUndo(mode: s.mode) {
-                Button {
-                    layout.undoLast(mode: s.mode)
-                    Haptics.select()
-                    tplNote = "已撤销上一次改动"
-                } label: {
-                    Label("撤销上一次改动", systemImage: "arrow.uturn.backward")
-                }
-            }
-        } header: {
-            SettingsHeader("模板")
+            .disabled(!layout.canUndo(mode: s.mode))
         } footer: {
-            if tplNote.isEmpty {
-                Text("模板只存本机（不上传电脑）。点模板即切换；左滑可重命名/删除；「\(LayoutStore.builtinName)」是内置还原点。")
-            } else {
-                Text(tplNote).foregroundColor(Theme.orange)
-            }
+            Text("回退到上一次**整表操作**之前（应用预设 / 恢复默认 / 清空 / 添加 / 删除）。拖拽与改名不压撤销槽（要保持拖动流畅），这种细粒度反悔用座舱里的「放弃」。")
         }
     }
 

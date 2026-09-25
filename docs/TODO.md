@@ -35,14 +35,19 @@
 - **版本号语义统一** —— 产品版本 `updater.APP_VERSION`（4.0.0）与协议版本
   `bridge.PROTOCOL_VERSION`（4.0）分开，`tests/test_version.py` 守卫。
   此前漏改 `APP_VERSION` 会让老用户收不到更新（拿 0.3.2 比 0.3.2）。
-- **布局模板（保存 / 切换 / 还原）** —— 每模式 12 个命名快照，点行即切换，左滑重命名/删除，
-  内置「默认」即还原点；`清空`/`恢复默认`/`应用模板` 前压撤销槽。
-  存储 `palmdeck_layout_templates_v1` / `palmdeck_layout_undo_v1`。
-  规格见 `docs/PalmDeck-v4-app-interaction.md` §7.2，方案留存于 `docs/PalmDeck-proposal-template.md` §2。
-- **游戏预设（G2）** —— 设置新增「游戏预设」分类：一键把「模式 + 手感 + 轴表名 + 布局」
+- **预设合并（P1.5）** —— 「布局模板」与「游戏预设」合并成一个概念：都是命名快照，
+  只分**两种形态** —— **整机**（模式 + 手感 + 有布局就换，跨模式出现）与
+  **布局**（只装组件、不碰手感，**只在自己那个模式下出现**）。
+  「模板」这个词从 UI 与代码里删干净（`LayoutTemplate` 类型已不存在）；
+  内置「默认」变成列表里最后一行只读的「布局」预设（不入库）；上限 24；空预设在模型层与 UI 层被拦。
+  编辑条上的「存为预设」存布局预设，并给一行回执。
+  存储 `palmdeck_game_profiles_v2`（老键 `…_v1` / `palmdeck_layout_templates_v1` 一次性迁移后**只读**）、
+  `palmdeck_layout_undo_v1`。方案与机器验证记录：`docs/PalmDeck-v4-unified-presets.md`；
+  交互规格：`docs/PalmDeck-v4-app-interaction.md` §7.2 / §12.14。
+- **游戏预设（G2）** —— 设置新增「预设」分类：一键把「模式 + 手感 + 轴表名 + 布局」
   一起切到位，不重建虚拟设备、不打断游戏。内置 **WARDOGS**（heli / hotas / dz 0.06，现状固化）
-  与 **欧洲卡车模拟**（drive / **dz 0** / 线性 / **900° 满舵** / 720°/s）；用户可自建（上限 12）。
-  存储 `palmdeck_game_profiles_v1` / `palmdeck_active_game_profile`。
+  与 **欧洲卡车模拟**（drive / **dz 0** / 线性 / **900° 满舵** / 720°/s）；用户可自建（上限 24，同模板合并后）。
+  存储 `palmdeck_game_profiles_v2` / `palmdeck_active_game_profile`。
   类型与应用顺序见 `Model/GameProfile.swift`，规格见 `docs/PalmDeck-v4-app-interaction.md` §12.5。
   **G3 之前 App 不改电脑轴表**：只读显示电脑实际 `axis_profile`，不一致时给黄标。
 - **通用模块化（E2）** —— App 不再替游戏硬编码按钮语义：飞机 / 开车**默认只有轴控件、
@@ -119,7 +124,8 @@
 - **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）→ ~~**G1**~~（已施工）
   → ~~**G2**~~（已施工）→ ~~**E2**~~（已施工）→ **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
   取证与理由见 `docs/PalmDeck-v4-game-profiles.md`。
-- **G2 起预设 = 模式 + 手感 + 轴表名 + 布局**：`GameProfileStore`（`palmdeck_game_profiles_v1`），
+- **G2 起预设 = 模式 + 手感 + 轴表名 + 布局**：`GameProfileStore`（P1.5 起是 `palmdeck_game_profiles_v2`，
+  老键 `…_v1` / `palmdeck_layout_templates_v1` 一次性迁移后只读），
   内置 WARDOGS / 欧洲卡车模拟。G4 的「两个预设」其实是**把 §3.6 的定义坐实**——
   当前 `GameProfileBuiltin` 已按规格填好，剩下的 G4 是**真机验收**（对照游戏内绑定/参数），
   以及把 ETS2 的两条“必须游戏内确认”（LS Y 归属、序列式变速箱）在实机对一遍。
