@@ -105,12 +105,14 @@ idle ──connect()──► connecting ──open──► live
 
 | 组件 | 绑定 | 说明 |
 |---|---|---|
+| 仪表盘 `panel` | 无（只读） | COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 杆位条；读本机平滑杆位，不读游戏遥测、不绑定任何键 |
 | 周期杆 `stick` | `roll` / `pitch` | 2D 摇杆，抓取增量，松手回中 |
 | 总距 `slider` | `throttle` | 单极滑条 |
 | 脚舵 `slider` | `yaw` | 双极滑条 |
 | 视角 `pad` | `look` | 触摸板 |
 
-按键完全由用户自己添加、命名、绑定（见 §12.6）。
+按键完全由用户自己添加、命名、绑定（见 §12.6）。仪表盘是**只读显示**，不带任何游戏语义，
+所以默认留下；不想要就 `✕` 删掉。
 
 ### 3.3 开车 drive — 通用模块（只有轴）
 
@@ -240,8 +242,8 @@ y = 0                                              |x| <  dz
 ### 7.1 编辑
 
 - 入口：顶栏 `[布局]`（三个模式都有）。
-- 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球；
-  有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定。
+- 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球 / 仪表盘；
+  有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定（只读的「仪表盘」跳过绑定选择）。
 - 画布操作：拖动移动、右下角手柄缩放、左上 `✕` 删除、右上 `Aa` **重命名**
   （名称留空回落绑定的默认名，如「按钮 3」；名称只存本机，不改变发出去的键位）。
 - **组件库条右侧**：`存为模板`（快照当前布局，弹命名框）／ `完成`。
@@ -446,6 +448,8 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
 **落地范围**（分两步：E2 → E2 续）：
 
 - `LayoutStore.defaultHeli()` / `defaultDrive()`：**只有轴、没有任何按键**；
+  飞机额外带一块**只读**仪表盘 `panel`（`Views/FlightPanel.swift`，
+  纯显示、无手势、无绑定）；
   `defaultGamepad()` 保留一套 Xbox 起步布局（ABXY/LB-RB/摇杆/扳机轴）。
 - `LayoutStore.supportsCustom(mode:)`：**已删除**——引擎里不再有「固定皮肤」可供切换。
 - `Views/FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`：**整份删除**。
@@ -469,6 +473,11 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
 - `TestNoFixedSkins`：三个皮肤文件不得存在；`CockpitView` 必须渲染 `WidgetCanvas`，
   且不得再出现 `FlightDeckView` / `DriveDeck` / `GamepadDeck` / `经典皮肤`；
   代码里不得残留 `palmdeck_*_custom` 开关。
+- `TestInstrumentPanel`：`WidgetKind.panel` 存在且 `isReadOnly`；`FlightPanel.swift`
+  必须有 `ArcGauge` / `BarGauge` / `FlightPanel`，且**不得**出现 `DragGesture` / `@Binding` /
+  `onButton?(` / `btnMask`（只读）；组件库有入口；`project.pbxproj` 有登记。
+- `TestDefaultHeliLayout::test_keeps_the_readonly_instrument_panel`：飞机默认布局必须含
+  `.make(.panel, .roll, ...)`。
 - `TestLayoutModuleWiring`：`defaults(mode:)` 三个模式都对、`init` 都播种。
 - `func_body()` 把 `defaultGamepad()` / `defaultHeli()` / `defaultDrive()` 的断言隔开。
 

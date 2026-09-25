@@ -94,7 +94,8 @@ Capacitor 打包壳引用，标为 deprecated，后续删除。
 
 > **E2 续（已落地）**：本节 P4–P6 的「固定皮肤」已**整份删除**（`FlightDeck.swift` /
 > `DriveDeck.swift` / `GamepadDeck.swift`）。现在三个模式共用一块通用组件画布
-> `WidgetCanvas`，下面列出的控件作为**组件**保留（仪表盘/档杆这类整体外观不再内置，
+> `WidgetCanvas`；仪表盘作为**只读组件** `panel`（`Views/FlightPanel.swift`）回归，
+> 可以摆在画布上，其余控件也都作为**组件**保留（档杆这类整体外观不再内置，
 > 按键也不再内置语义）。详见 `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 三种皮肤，各自对应一类真实硬件，组件库按「真实控件」建模（外观 + 行程 + 回中 + 触感）。

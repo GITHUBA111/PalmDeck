@@ -85,6 +85,7 @@ final class LayoutStore: ObservableObject {
         case .stick:  size = .r(0.38, 0.35, 0.18, 0.30)
         case .hat:    size = .r(0.40, 0.35, 0.12, 0.20)
         case .attitude: size = .r(0.40, 0.10, 0.22, 0.34)
+        case .panel:  size = .r(0.30, 0.28, 0.40, 0.28)
         }
         var list = widgets(mode: mode)
         list.append(.make(kind, binding, size))
@@ -307,7 +308,7 @@ final class LayoutStore: ObservableObject {
         }
     }
 
-    /// 游戏手柄皮肤默认布局（P4 会再细化外观，这里先给出可用控件集）。
+    /// 游戏手柄默认布局（Xbox 式的起步布局；可自由改）。
     static func defaultGamepad() -> [DeckWidget] {
         [
             .make(.stick,  .roll,     .r(0.05, 0.30, 0.20, 0.34), label: "左摇杆"),
@@ -328,20 +329,24 @@ final class LayoutStore: ObservableObject {
         ]
     }
 
-    /// 飞机默认布局（**只有轴，没有任何按键**）。
+    /// 飞机默认布局（**只有轴 + 只读仪表盘，没有任何按键**）。
     ///
     /// 按键完全由用户自己添加、命名——“开火/投弹/起落架”这些语义
     /// 在竞品之间并不通用，硬编码进去只会闦用户。
+    /// 仪表盘（`panel`）是只读显示，不携带任何游戏语义，所以默认留下。
     static func defaultHeli() -> [DeckWidget] {
         [
-            // 周期变距杆：2D，写 roll + pitch
-            .make(.stick,  .roll,     .r(0.06, 0.34, 0.26, 0.44), label: "周期杆"),
+            // 仪表盘：COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 条（只读）
+            // y 从 0.10 起：给顶部「未连接」横幅让位（横幅是 overlay）
+            .make(.panel,  .roll,     .r(0.37, 0.10, 0.49, 0.38), label: "仪表盘"),
             // 总距杆：单极，写 throttle
-            .make(.slider, .throttle, .r(0.36, 0.16, 0.14, 0.62), label: "总距"),
+            .make(.slider, .throttle, .r(0.02, 0.10, 0.10, 0.78), label: "总距"),
             // 脚舵：双极，写 yaw
-            .make(.slider, .yaw,      .r(0.54, 0.34, 0.16, 0.44), label: "脚舵"),
+            .make(.slider, .yaw,      .r(0.14, 0.10, 0.21, 0.24), label: "脚舵"),
+            // 周期变距杆：2D，写 roll + pitch
+            .make(.stick,  .roll,     .r(0.14, 0.38, 0.21, 0.50), label: "周期杆"),
             // 视角：触摸板，写 lookX/lookY
-            .make(.pad,    .look,     .r(0.78, 0.34, 0.18, 0.44), label: "视角"),
+            .make(.pad,    .look,     .r(0.60, 0.54, 0.26, 0.34), label: "视角"),
         ]
     }
 

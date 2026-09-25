@@ -46,7 +46,8 @@
   类型与应用顺序见 `Model/GameProfile.swift`，规格见 `docs/PalmDeck-v4-app-interaction.md` §12.5。
   **G3 之前 App 不改电脑轴表**：只读显示电脑实际 `axis_profile`，不一致时给黄标。
 - **通用模块化（E2）** —— App 不再替游戏硬编码按钮语义：飞机 / 开车**默认只有轴控件、
-  不放任何按键**（`defaultHeli()` / `defaultDrive()`）；按键由用户自己添加（默认叫「按钮 N」）、
+  不放任何按键**（`defaultHeli()` / `defaultDrive()`）；飞机另带一块**只读**仪表盘
+  （`panel` / `Views/FlightPanel.swift`，纯显示、无绑定）；按键由用户自己添加（默认叫「按钮 N」）、
   编辑态 `Aa` 重命名。三个模式共用一块通用组件画布；**固定皮肤已整份删除**
   （`FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`，含 `supportsCustom`
   与三个 `palmdeck_*_custom` 开关）。

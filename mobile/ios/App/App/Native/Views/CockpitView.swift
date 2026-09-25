@@ -242,6 +242,7 @@ struct CockpitView: View {
                 libraryButton("滑条", .slider, nil)
                 libraryButton("苦力帽", .hat, .look)
                 libraryButton("姿态球", .attitude, .roll)
+                libraryButton("仪表盘", .panel, .roll)
                 Spacer(minLength: 0)
                 Button("存为模板") {
                     tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
@@ -350,19 +351,28 @@ struct LibrarySheet: View {
                         ForEach(WidgetKind.allCases, id: \.self) { k in Text(k.label).tag(k) }
                     }.pickerStyle(.segmented)
                 }
-                Section("绑定功能") {
-                    Picker("绑定", selection: $binding) {
-                        ForEach(WidgetBinding.allCases, id: \.self) { b in
-                            Text(b.onlyOnVJoy ? "\(b.label) · 仅飞行" : b.label).tag(b)
+                if kind.isReadOnly {
+                    Section {
+                        Label("\(kind.label)是只读显示，不绑定轴或按键：弧表/杆位条读的是本机发出去的杆位。",
+                              systemImage: "gauge")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.textDim)
+                    }
+                } else {
+                    Section("绑定功能") {
+                        Picker("绑定", selection: $binding) {
+                            ForEach(WidgetBinding.allCases, id: \.self) { b in
+                                Text(b.onlyOnVJoy ? "\(b.label) · 仅飞行" : b.label).tag(b)
+                            }
                         }
                     }
-                }
-                if binding.onlyOnVJoy {
-                    Section {
-                        Label("第 11–16 号键只存在于 vJoy。Xbox 虚拟手柄只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，开车和手柄模式里选它不会生效。",
-                              systemImage: "exclamationmark.triangle")
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.amber)
+                    if binding.onlyOnVJoy {
+                        Section {
+                            Label("第 11–16 号键只存在于 vJoy。Xbox 虚拟手柄只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，开车和手柄模式里选它不会生效。",
+                                  systemImage: "exclamationmark.triangle")
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.amber)
+                        }
                     }
                 }
                 Section {
@@ -395,15 +405,15 @@ struct CockpitTutorialView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header
                         section(icon: "switch.2", title: "顶部",
-                                text: "中间切「飞机 / 开车 / 手柄」；右侧是连接状态 + 齿轮设置（手柄模式多一个「布局」按钮）")
+                                text: "中间切「飞机 / 开车 / 手柄」；右侧是连接状态 + 齿轮设置 + 「布局」按钮（三个模式都有）")
                         section(icon: "airplane", title: "飞机模式",
-                                text: "硬件飞行甲板：总距杆（IDLE/FLY/MAX 止动）+ 脚舵 + 周期变距杆 + 仪表板（姿态球 / 扭矩 / 滚转俯仰）；按键簇：开火/投弹/起落架/灯光/悬停/视角")
+                                text: "只读仪表盘（COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 条）+ 周期杆（横滚/俯仰）+ 总距 + 脚舵 + 视角。默认只有轴，按键自己加")
                         section(icon: "car", title: "开车模式",
-                                text: "方向盘（多圈、可调回正速度）+ 离合/刹车/油门三踏板 + 序列式档杆 + 转速表与仪表盘 + 视角板 + 按键簇")
+                                text: "方向盘（多圈、可调回正速度）+ 离合/刹车/油门三踏板 + 视角。默认只有轴，换档/转向灯这些按键自己在游戏里绑")
                         section(icon: "gamepad", title: "手柄模式",
-                                text: "Xbox 硬件皮肤：双摇杆 / 十字键 / ABXY / LB·RB / LT·RT / 视图·菜单；轴停发、不抢电脑键鼠。设置里可切回「自定义组件布局」")
-                        section(icon: "square.grid.2x2", title: "自定义布局（仅手柄）",
-                                text: "手柄模式点右上角「布局」：拖动移动、拖右下角缩放、✕ 删除；顶部组件库可加方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/按键，可从电脑拉取 / 上传")
+                                text: "双摇杆 / 十字键 / ABXY / LB·RB / LT·RT / 视图·菜单 的起步布局；轴停发、不抢电脑键鼠")
+                        section(icon: "square.grid.2x2", title: "自定义布局（全部模式）",
+                                text: "任意模式点右上角「布局」：拖动移动、拖右下角缩放、✕ 删除、Aa 改名；顶部组件库可加方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/仪表盘/按键，可从电脑拉取 / 上传")
                         section(icon: "checklist", title: "第一次使用（三步）",
                                 text: "1) 电脑先启动 PalmDeck（start.bat 或 python3 bridge.py）\n2) 手机点「连接」，顶栏变绿即连上\n3) 进游戏把这只虚拟手柄绑一次即可")
                     }

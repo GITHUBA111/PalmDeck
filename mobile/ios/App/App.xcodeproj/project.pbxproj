@@ -30,6 +30,7 @@
 		3ED0008CB7BF7DCC5163A285 /* Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 879EBE79CC8F407E2436F748 /* Widgets.swift */; };
 		C385D24574D1DC420CB70EB1 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D7EF90A6E5C37E51774F390 /* Haptics.swift */; };
 		01A14233474B76E0D5CF6B08 /* AttitudeBall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1048D6CFF80C301602231B5C /* AttitudeBall.swift */; };
+		01A14233474B76E0D5CF6B09 /* FlightPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1048D6CFF80C301602231B5D /* FlightPanel.swift */; };
 		36312F93A5F18BA37C2B1408 /* Discovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3411FB375B171C1DF307C85C /* Discovery.swift */; };
 		0F1E2D3C4B5A69788796A5B4C3D2E1F0 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E1D2C3B4A5968778695A4B3C2D1E0F /* Theme.swift */; };
 /* End PBXBuildFile section */
@@ -60,6 +61,7 @@
 		879EBE79CC8F407E2436F748 /* Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Widgets.swift; path = Native/Views/Widgets.swift; sourceTree = "<group>"; };
 		9D7EF90A6E5C37E51774F390 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Haptics.swift; path = Native/Model/Haptics.swift; sourceTree = "<group>"; };
 		1048D6CFF80C301602231B5C /* AttitudeBall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AttitudeBall.swift; path = Native/Views/AttitudeBall.swift; sourceTree = "<group>"; };
+		1048D6CFF80C301602231B5D /* FlightPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FlightPanel.swift; path = Native/Views/FlightPanel.swift; sourceTree = "<group>"; };
 		3411FB375B171C1DF307C85C /* Discovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Discovery.swift; path = Native/Model/Discovery.swift; sourceTree = "<group>"; };
 		F0E1D2C3B4A5968778695A4B3C2D1E0F /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Theme.swift; path = Native/Views/Theme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -97,6 +99,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				3411FB375B171C1DF307C85C /* Discovery.swift */,
 				1048D6CFF80C301602231B5C /* AttitudeBall.swift */,
+				1048D6CFF80C301602231B5D /* FlightPanel.swift */,
 				9D7EF90A6E5C37E51774F390 /* Haptics.swift */,
 				879EBE79CC8F407E2436F748 /* Widgets.swift */,
 				84A63FEED2F98804AD52E180 /* Layout.swift */,
@@ -201,6 +204,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				36312F93A5F18BA37C2B1408 /* Discovery.swift in Sources */,
 				01A14233474B76E0D5CF6B08 /* AttitudeBall.swift in Sources */,
+				01A14233474B76E0D5CF6B09 /* FlightPanel.swift in Sources */,
 				C385D24574D1DC420CB70EB1 /* Haptics.swift in Sources */,
 				3ED0008CB7BF7DCC5163A285 /* Widgets.swift in Sources */,
 				0F281265CD94BDE925BEF299 /* Layout.swift in Sources */,

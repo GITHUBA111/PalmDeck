@@ -102,7 +102,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 .init(self, "查看使用教程", "教程 tutorial 帮助 help 说明 引导"),
                 .init(self, "App 版本", "版本 version 关于 about build"),
-                .init(self, "当前皮肤", "皮肤 skin 模式 mode 飞机 开车 手柄"),
+                .init(self, "当前模式", "皮肤 skin 模式 mode 飞机 开车 手柄"),
             ]
         }
     }
@@ -301,11 +301,8 @@ struct SettingsView: View {
     private var matchedGroups: [SettingsResultGroup] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return [] }
-        // heli/drive 用固定硬件皮肤，整个「布局」分类下的条目都不存在
-        // （面板里只剩一句锁定说明），搜出跳过去却看不到行的死结果不如不给。
-        let hiddenCat: SettingsCategory? = s.mode == .gamepad ? nil : .layout
+        // 三个模式都有完整的「布局」分类，搜索不再需要按模式隐藏。
         return SettingsCategory.allCases.compactMap { c in
-            guard c != hiddenCat else { return nil }
             let items = c.entries.filter {
                 $0.title.lowercased().contains(q) || $0.keywords.lowercased().contains(q)
             }
@@ -822,7 +819,7 @@ struct SettingsView: View {
         Section {
             InfoRow(label: "App 版本", value: appVersion)
             InfoRow(label: "电脑端版本", value: pcVersion, warn: pcVersionMismatch)
-            InfoRow(label: "当前皮肤", value: s.mode.label)
+            InfoRow(label: "当前模式", value: s.mode.label)
         } header: {
             SettingsHeader("关于")
         } footer: {

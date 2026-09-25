@@ -5,7 +5,8 @@
 组件画布：按键由用户自己添加、命名、绑定，所以现在守的是：
 
 1. 三个模式的默认布局不替游戏拍板语义——飞机/开车默认只有轴、没有任何按键
-   （见 `TestDefaultHeliLayout` / `TestDefaultDriveLayout`）。
+   （见 `TestDefaultHeliLayout` / `TestDefaultDriveLayout`）。飞机额外带一块**只读**
+   仪表盘（`panel`），它不绑定任何轴/键，不携带游戏语义（见 `TestInstrumentPanel`）。
 2. 手柄默认布局里凡是有名字的按键，名字必须与真实 Xbox 键号一致
    （`gearUp`→RB=b6、`gearDown`→LB=b5，且不得用 Xbox 没有的键号）。
 3. 引擎里不再残留任何固定/经典皮肤，否则硬编码语义会从后门回来。
@@ -184,6 +185,41 @@ class TestDefaultHeliLayout(unittest.TestCase):
         body = self._body()
         for word in ("开火", "投弹", "起落架", "灯光", "悬停"):
             self.assertNotIn(word, body, "飞机默认布局仍硬编码了游戏语义：%s" % word)
+
+    def test_keeps_the_readonly_instrument_panel(self):
+        body = self._body()
+        self.assertRegex(body, r"\.make\(\.panel,\s*\.roll,",
+                         "飞机默认布局缺仪表盘（只读显示，不算按键）")
+        self.assertIn("仪表盘", body)
+
+
+class TestInstrumentPanel(unittest.TestCase):
+    """仪表盘 = 只读组件：有显示、无绑定、无游戏语义。"""
+
+    def test_widget_kind_exists_and_is_read_only(self):
+        widgets = _ios("Views", "Widgets.swift")
+        self.assertIn("case panel", widgets)
+        self.assertIn('case .panel: return "仪表盘"', widgets)
+        self.assertIn("var isReadOnly: Bool { self == .panel }", widgets)
+        self.assertIn("case .panel:\n            FlightPanel(s: s)", widgets)
+
+    def test_panel_view_is_pure_display(self):
+        src = _ios("Views", "FlightPanel.swift")
+        for want in ("struct ArcGauge", "struct BarGauge", "struct FlightPanel"):
+            self.assertIn(want, src, "FlightPanel.swift 缺 %s" % want)
+        # 只读：不得有手势、不得写回 state、不得碰按键回调
+        for banned in ("DragGesture", "@Binding", "onButton?(", "btnMask"):
+            self.assertNotIn(banned, src, "仪表盘应只读，不该出现 %s" % banned)
+
+    def test_panel_is_in_the_component_library(self):
+        cockpit = _ios("Views", "CockpitView.swift")
+        self.assertIn('libraryButton("仪表盘", .panel, .roll)', cockpit)
+        self.assertIn("kind.isReadOnly", cockpit, "组件库没有对只读组件隐藏绑定选择")
+
+    def test_panel_file_is_registered_in_the_project(self):
+        pbx = _read("mobile", "ios", "App", "App.xcodeproj", "project.pbxproj")
+        self.assertIn("FlightPanel.swift in Sources", pbx,
+                      "FlightPanel.swift 没登记进 Xcode 工程，真机会漏编")
 
 
 class TestLayoutModuleWiring(unittest.TestCase):

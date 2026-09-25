@@ -62,14 +62,14 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
   `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现，
   也会拦住无后缀的全局手感键（G1 起手感参数按模式分键）。
-- `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
+- `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`FlightPanel`（只读飞行仪表盘：`ArcGauge`/`BarGauge`/`FlightPanel`）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
 v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `GamepadDeck` 已整份删除，
 三个模式共用一块通用组件画布 `WidgetCanvas`；各模式的默认布局 = 一组基本轴模块
 （飞机：周期杆/总距/脚舵/视角；开车：方向盘/三踏板/视角；手柄：双摇杆/ABXY/扳机轴）。
 
 ### 三种模式（共用通用组件画布）
-- **飞机 heli**：默认 `defaultHeli()` —— 周期杆（`stick`→roll/pitch）+ 总距（`slider`→throttle）+ 脚舵（`slider`→yaw）+ 视角（`pad`），**只有轴、无按键**。
+- **飞机 heli**：默认 `defaultHeli()` —— 仪表盘（`panel`，只读：COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 条）+ 周期杆（`stick`→roll/pitch）+ 总距（`slider`→throttle）+ 脚舵（`slider`→yaw）+ 视角（`pad`），**只有轴、无按键**。
 - **开车 drive**：默认 `defaultDrive()` —— 方向盘（多圈+回正）+ 离合/刹车/油门三滑条 + 视角，**只有轴、无按键**。
 - **游戏手柄 gamepad**：默认 `defaultGamepad()` —— 双摇杆 + LT/RT 滑条 + ABXY + LB/RB + 视图/菜单 + L3/R3 + 十字键，均可改。此时轴停发，不抢电脑键鼠。
 
@@ -78,7 +78,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 > `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 ### 组件系统（模块化/乐高式）
-- 7 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球，各绑定一个语义轴或 vJoy 键。
+- 8 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球/仪表盘；除只读的「仪表盘」外，各绑定一个语义轴或 vJoy 键。
 - 编辑模式：顶栏组件库添加、拖拽移动、右下角缩放手柄、✕ 删除、一键清空/恢复默认；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
 
 ### 无遥测
@@ -88,7 +88,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 113 项
+python3 -m unittest discover -s tests -t .      # 118 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

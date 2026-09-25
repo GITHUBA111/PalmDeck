@@ -9,6 +9,7 @@ enum WidgetKind: String, Codable, CaseIterable {
     case stick      // 2D 摇杆
     case hat        // 苦力帽
     case attitude   // 姿态球
+    case panel      // 飞行仪表盘（只读）
 
     var label: String {
         switch self {
@@ -19,8 +20,12 @@ enum WidgetKind: String, Codable, CaseIterable {
         case .stick: return "摇杆"
         case .hat: return "苦力帽"
         case .attitude: return "姿态球"
+        case .panel: return "仪表盘"
         }
     }
+
+    /// 只读组件：不绑定任何轴/键，摆上去只做显示。
+    var isReadOnly: Bool { self == .panel }
 }
 
 /// 组件绑定的功能（轴或按钮）
@@ -124,6 +129,8 @@ struct WidgetView: View {
             HatPad(hat: $s.hat, lookX: $s.lookX, lookY: $s.lookY)
         case .attitude:
             AttitudeBall(s: s)
+        case .panel:
+            FlightPanel(s: s)
         }
     }
 

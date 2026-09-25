@@ -15,8 +15,8 @@ enum CockpitMode: String, CaseIterable, Codable {
         }
     }
 
-    /// 是否使用可自定义的组件画布（只有手柄）。heli/drive 走固定硬件皮肤。
-    var usesWidgetCanvas: Bool { self == .gamepad }
+    /// 三个模式共用同一块通用组件画布（引擎里已无固定皮肤）。
+    var usesWidgetCanvas: Bool { true }
 
     /// 兼容旧值：UserDefaults / 旧服务端可能仍给 `infantry`（v3 遗留）。
     static func parse(_ raw: String?) -> CockpitMode {

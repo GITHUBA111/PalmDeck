@@ -36,7 +36,7 @@ protocol ShapingTarget: AnyObject {
 /// 存取走 `widgets` / `setWidgets`，SwiftUI 侧只管调用，不知道底下是 Data。
 struct GameProfile: Codable, Equatable, Identifiable {
     var name: String            // 预设名，如「WARDOGS」
-    var mode: CockpitMode       // 用哪套机身皮肤
+    var mode: CockpitMode       // 套哪个模式的机组布局（三个模式都是通用画布）
     var axesPreset: String      // 电脑侧轴表名，如 "hotas" / "fbw"
     var sensX: Double
     var sensY: Double
@@ -49,12 +49,12 @@ struct GameProfile: Codable, Equatable, Identifiable {
     var wheelMaxDeg: Double?
     /// 卡车方向盘不应快速回正；nil = 不改。
     var wheelReturnSpeed: Double?
-    /// 编码后的 `[DeckWidget]`（nil = 空布局，固定皮肤模式的常态）。
+    /// 编码后的 `[DeckWidget]`（nil = 空布局，让该模式用自己的默认布局）。
     var widgetsJSON: Data?
 
     var id: String { name }
 
-    /// 该预设是否使用组件画布（heli/drive 是固定硬件皮肤，布局通常为空）。
+    /// 该预设是否携带组件布局（三个模式都用通用画布；false = 不改用户当前布局）。
     var usesWidgetCanvas: Bool { mode.usesWidgetCanvas }
 
     /// 解码布局。坏数据返回空数组而不是抛错 —— 一个预设的布局坏了

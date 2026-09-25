@@ -22,7 +22,7 @@ App 侧（`ControllerState.swift` / `Layout.swift` / `SettingsView.swift`）、
 
 | 模式 | 手里是什么 | file:line |
 |---|---|---|
-| `heli` | 通用模块：周期杆 / 总距 / 脚舵 / 视角 | `Views/Layout.swift` `defaultHeli()` |
+| `heli` | 通用模块：仪表盘（只读）+ 周期杆 / 总距 / 脚舵 / 视角 | `Views/Layout.swift` `defaultHeli()` |
 | `drive` | 通用模块：方向盘 / 三踏板 / 视角 | `Views/Layout.swift` `defaultDrive()` |
 | `gamepad` | 通用模块：双摇杆 / ABXY / 扳机轴 | `Views/Layout.swift` `defaultGamepad()` |
 
@@ -368,7 +368,7 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 | 死区 `dz` | 0.06（默认） | 现有值 |
 | 灵敏度 | 1.0 / 1.0 | 现有值 |
 | 反转 | 全 false | 总距不要开 self-centering（`docs/.../§7`） |
-| 布局 | 不绑定（`widgetsJSON = nil`） | 走 `defaultHeli()` 通用模块（周期杆/总距/脚舵/视角，**只有轴**）；预设不覆盖用户布局 |
+| 布局 | 不绑定（`widgetsJSON = nil`） | 走 `defaultHeli()` 通用模块（仪表盘（只读）/周期杆/总距/脚舵/视角，**只有轴**）；预设不覆盖用户布局 |
 
 **这个预设的价值不是「改了参数」，而是「它是一个可保存、可还原、不会被下一个游戏的调整污染的快照」。**
 
@@ -588,7 +588,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 |---|---|---|
 | 按钮标签 | 「降档」「危险灯」 | 默认不内置按键；用户加的按键默认叫「按钮 N」，可 `Aa` 改名 |
 | 可用模式 | 仅 gamepad | **三个模式都行**（不再有「模式是否支持自定义」这一说） |
-| 飞机默认 | `FlightDeckView` 硬编码（含 6 个内部按键） | `defaultHeli()` = 周期杆/总距/脚舵/视角（**只有轴**） |
+| 飞机默认 | `FlightDeckView` 硬编码（含 6 个内部按键） | `defaultHeli()` = 仪表盘（只读）/周期杆/总距/脚舵/视角（**只有轴、无按键**） |
 | 开车默认 | `DriveDeck` 硬编码 | `defaultDrive()` = 方向盘/三踏板/视角（**只有轴**） |
 | 固定皮肤 | 唯一外观 | **整份删除**（`FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`） |
 

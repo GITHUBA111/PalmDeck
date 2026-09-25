@@ -221,9 +221,8 @@ func testModeParse() {
     expect(CockpitMode.parse(nil) == .heli, "nil 回落 heli")
     expect(CockpitMode.parse("") == .heli, "空串回落 heli")
     expect(CockpitMode.allCases.count == 3, "只有三个模式")
-    expect(CockpitMode.gamepad.usesWidgetCanvas, "只有 gamepad 用组件画布")
-    expect(!CockpitMode.heli.usesWidgetCanvas && !CockpitMode.drive.usesWidgetCanvas,
-           "heli/drive 不用组件画布")
+    expect(CockpitMode.heli.usesWidgetCanvas && CockpitMode.drive.usesWidgetCanvas
+           && CockpitMode.gamepad.usesWidgetCanvas, "三个模式都用通用组件画布（引擎里已无固定皮肤）")
 }
 
 // MARK: - PacketFormat：字节布局（最容易错、最难查的一块）
