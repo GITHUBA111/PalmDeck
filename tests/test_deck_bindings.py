@@ -607,5 +607,30 @@ class TestEmptyCanvasHasAHint(unittest.TestCase):
                       "提示不能被点/拖（不能抢画布手势）")
 
 
+class TestDeleteAndAddAreUndoable(unittest.TestCase):
+    """✕ 删除只有 22pt，又在「抓组件拖拽时手会按到」的左上角，误删必须能后悔。
+
+    add / remove 各压一道撤销槽（整表快照），⋯ 菜单里的「撤销上一次改动」就把它捞回来。
+    拖动 / 改名走 `update`（高频），**不能**压撤销槽。
+    """
+
+    def setUp(self):
+        self.layout = _ios("Views", "Layout.swift")
+
+    def _body(self, sig):
+        self.assertIn(sig, self.layout, "LayoutStore 缺 %s" % sig)
+        return self.layout.split(sig, 1)[1].split("\n    }", 1)[0]
+
+    def test_add_pushes_undo(self):
+        self.assertIn("pushUndo(mode: mode)", self._body("func add(kind: WidgetKind"))
+
+    def test_remove_pushes_undo(self):
+        self.assertIn("pushUndo(mode: mode)", self._body("func remove(id: String"))
+
+    def test_update_does_not_push_undo(self):
+        self.assertNotIn("pushUndo", self._body("func update(_ w: DeckWidget"),
+                         "拖拽是高频调用，压撤销槽会打断手势")
+
+
 if __name__ == "__main__":
     unittest.main()

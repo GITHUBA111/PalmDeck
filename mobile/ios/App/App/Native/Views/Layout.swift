@@ -75,6 +75,9 @@ final class LayoutStore: ObservableObject {
     }
 
     func add(kind: WidgetKind, binding: WidgetBinding, mode: CockpitMode) {
+        // 压一道撤销槽：误点「添加」、误点 ✕ 都该能退回来
+        //（✕ 只有 22pt，而且就在抓组件拖拽时手会按到的角上）
+        pushUndo(mode: mode)
         // 新组件放在中间偏下，尺寸按类型
         let size: WRect
         switch kind {
@@ -93,8 +96,11 @@ final class LayoutStore: ObservableObject {
     }
 
     func remove(id: String, mode: CockpitMode) {
+        pushUndo(mode: mode)
         setWidgets(widgets(mode: mode).filter { $0.id != id }, mode: mode)
     }
+
+    /// 拖动 / 改名用。**高频调用，不得压撤销槽**（会打断手势），也不得递增 `revision`。
 
     func update(_ w: DeckWidget, mode: CockpitMode) {
         var list = widgets(mode: mode)

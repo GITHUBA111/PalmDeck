@@ -101,6 +101,9 @@
   （`allowsHitTesting(false)`，不抢手势）。以前这三件事只在设置 → 布局 里，而改布局的人就在编辑态。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.12，`TestEditBarReachesWholeTableActions` +
   `TestEmptyCanvasHasAHint` 守卫。
+- **误删能后悔** —— `add` / `remove` 各压一道撤销槽（`✕` 只有 22pt、就在抓组件拖拽时手会按到
+  的左上角），`⋯` → 撤销上一次改动即可捞回；`update`（拖动/改名，高频）仍然不压槽。
+  `TestDeleteAndAddAreUndoable` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。
