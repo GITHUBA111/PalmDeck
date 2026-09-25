@@ -214,14 +214,13 @@ msedge.exe --app=http://127.0.0.1:8080     （或 chrome.exe --app=...）
 （注册表 `App Paths` 或标准安装路径），找不到就退回现在的 `webbrowser.open`。
 **不新增任何依赖、不影响打包体积。**
 
-**O3-full（L，建议先不做）**：用 WebView2 把控制台做成真窗口
-（pywebview 或自写宿主），能记住窗口大小位置、关闭 = 最小化回托盘。
-代价：新增依赖 + 需要 WebView2 Runtime（Win11 自带，Win10 可能没有，安装包里要兜底）+
-打包体积 + 一套「窗口已关/托盘还活着」的状态机。
-**建议等 O2 落地、G4 真机问过玩家的真实反应再决定** —— 这正是仓库一贯的「有证据再改」。
-（`docs/PalmDeck-v4-windows-product.md:178` 已定过「不做托盘里的设置窗口，
-避免两套 UI 分家」，WebView2 只是把同一个网页放进自己的窗口，不违反那条；
-但 Win10 上的 Runtime 缺失路径必须先在真机验过。）
+**O3-full（已落地 → 见 `PalmDeck-v4-native-window.md`）**：用 WebView2 把控制台做成
+真窗口（pywebview 宿主），记住窗口大小位置、关闭 = 最小化回托盘、托盘联动（唤出 / 退出）。
+代价兑现：新增 `pywebview` 依赖 + WebView2 Runtime 兜底（Win11 自带；安装包用
+`#if FileExists` 决定要不要带引导器、缺失时静默装，**装不上也不崩 —— 运行期退回 O3-lite**）
++ 打包体积 + 一套窗口状态机。原本推迟的理由是「有证据再改」：v4.0.0 发完、真机反馈到位，
+本条即接上。（`docs/PalmDeck-v4-windows-product.md:178` 那条「不做托盘里的设置窗口、避免两套 UI
+分家」仍成立：WebView2 只是把**同一个网页**放进自己的窗口，没有第二套 UI。）
 
 ### 3.5 数据 / 接口
 

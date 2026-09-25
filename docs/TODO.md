@@ -30,6 +30,11 @@
     必须在 `run_tray()` **之前**判断 —— 写在里面等于没写。
   - **控制台窗口化**（O3-lite）：`open_console()` 优先用 Edge/Chrome 的 `--app=`（没有地址栏，
     像个原生窗口），逐层回退到默认浏览器；托盘 / 自检 / 重复双击三个入口都走它。
+  - **控制台真窗口**（O3-full，已落地）：见 `docs/PalmDeck-v4-native-window.md` —— 用
+    pywebview/WebView2 把控制台放进 **PalmDeck 自己的窗口**（任务栏是自己的图标）、关闭 = 最小化回托盘、
+    记忆窗口几何、托盘联动（唤出 / 退出）；任一层不可用自动退回上面那条 O3-lite。
+    守卫 `tests/test_window.py` 34 条；spec 收 pywebview / CI 断言 `webview=ok` / `.iss` 的
+    WebView2 检测与 `palmdeck_window` 逐字对账。真机行为（任务栏图标 / × 只隐藏 / 位置记忆）待 G4。
   - **托盘图标统一**（O1b）：以前托盘是 PIL 自绘的青色方向盘、exe 是产品图标 ——
     同一台机器两个 logo。现在优先读打进包的 `packaging/PalmDeck.ico`，自绘降为兜底。
   - 守卫：`tests/test_installer.py` 38 条 + `tests/test_ci.py` 22 条，**15 条探针**验过会咬
