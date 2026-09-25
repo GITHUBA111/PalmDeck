@@ -434,24 +434,23 @@ struct SettingsView: View {
 
         Section {
             ForEach(presetRows) { row in
-                Button {
-                    applyPreset(row)
-                } label: {
-                    presetRowView(row)
-                }
-                .buttonStyle(.plain)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if case .profile(let p) = row.kind, !profiles.isBuiltin(p) {
-                        Button(role: .destructive) {
-                            profiles.delete(p.name)
-                            profNote = "已删除「\(p.name)」"
-                        } label: { Label("删除", systemImage: "trash") }
-                        Button {
-                            profPrompt = ProfPrompt(original: p.name, text: p.name)
-                        } label: { Label("重命名", systemImage: "pencil") }
-                            .tint(.orange)
+                // 行不再整行当 Button：行尾要放一个可单独点开的 `⋯` 菜单，
+                // Button 套 Button 在 SwiftUI 里点不动（外层会把点击吃掉）。
+                presetRowView(row)
+                    .contentShape(Rectangle())
+                    .onTapGesture { applyPreset(row) }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if case .profile(let p) = row.kind, !profiles.isBuiltin(p) {
+                            Button(role: .destructive) {
+                                profiles.delete(p.name)
+                                profNote = "已删除「\(p.name)」"
+                            } label: { Label("删除", systemImage: "trash") }
+                            Button {
+                                profPrompt = ProfPrompt(original: p.name, text: p.name)
+                            } label: { Label("重命名", systemImage: "pencil") }
+                                .tint(.orange)
+                        }
                     }
-                }
             }
 
             Button {
@@ -469,7 +468,7 @@ struct SettingsView: View {
             SettingsHeader("预设")
         } footer: {
             if profNote.isEmpty {
-                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机，内置的不可删改。\n\n**整机**（行尾章「整机」）跨模式出现：切模式 + 写手感 + 有布局就换。**布局**（行尾章「布局」）只装组件、不碰手感，**只在自己那个模式下出现**（它就属于那套面板）。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件。")
+                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机，内置的不可删改。\n\n**整机**（行尾章「整机」）跨模式出现：切模式 + 写手感 + 有布局就换。**布局**（行尾章「布局」）只装组件、不碰手感，**只在自己那个模式下出现**（它就属于那套面板）。\n\n**改名字 / 删掉**：行尾的 ⋯ 菜单（也可以左滑）。内置预设与「默认」没有这个菜单。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件。")
             } else {
                 Text(profNote).foregroundColor(Theme.orange)
             }
@@ -505,7 +504,8 @@ struct SettingsView: View {
                     chips: (profiles.isBuiltin(p) ? ["内置"] : []) + [p.kindLabel],
                     detail: detail(p),
                     current: isCurrent(p),
-                    warn: !s.axisProfile.isEmpty && s.axisProfile != p.axesPreset)
+                    warn: !s.axisProfile.isEmpty && s.axisProfile != p.axesPreset,
+                    editable: profiles.isBuiltin(p) ? nil : p)
         }
     }
 
@@ -525,7 +525,7 @@ struct SettingsView: View {
     }
 
     private func rowBody(title: String, chips: [String], detail: String,
-                         current: Bool, warn: Bool) -> some View {
+                         current: Bool, warn: Bool, editable: GameProfile? = nil) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -559,6 +559,25 @@ struct SettingsView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.orange)
+            }
+            if let p = editable {
+                // 行尾菜单：重命名 / 删除以前只能左滑，iPad 上没人猜得到。
+                Menu {
+                    Button {
+                        profPrompt = ProfPrompt(original: p.name, text: p.name)
+                    } label: { Label("重命名", systemImage: "pencil") }
+                    Button(role: .destructive) {
+                        profiles.delete(p.name)
+                        profNote = "已删除「\(p.name)」"
+                    } label: { Label("删除", systemImage: "trash") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 17))
+                        .foregroundColor(Theme.textDim)
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)   // List 行里：不抢整行的点击
             }
         }
         .contentShape(Rectangle())

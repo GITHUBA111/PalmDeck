@@ -13,6 +13,8 @@ struct CockpitView: View {
     @State private var presetName = ""
     /// 编辑条上「存为预设」的结果回执（成功/失败都说话）。空字符串=不显示。
     @State private var presetNote = ""
+    /// 已连接时点另一个模式：先弹确认（换模式=电脑端换后端，游戏里手柄会掉一下）。
+    @State private var pendingMode: CockpitMode?
     var onExit: () -> Void = {}
     private var stripH: CGFloat { 28 }   // 底部仪表条高度
 
@@ -78,12 +80,12 @@ struct CockpitView: View {
                         accent: cells[i].tone == .active ? Theme.cyan : Theme.textDim)
             }
             divider
-            HudCell(label: "LINK", value: s.link == .live ? String(format: "%.0fHz", s.hz) : linkShort,
+            HudCell(label: "链路", value: s.link == .live ? String(format: "%.0fHz", s.hz) : linkShort,
                     accent: s.link == .live ? Theme.green : (s.link == .connecting ? Theme.orange : Theme.textFaint))
             Spacer(minLength: 0)
-            HudCell(label: "MODE", value: s.mode.label, accent: Theme.cyan)
+            HudCell(label: "模式", value: s.mode.label, accent: Theme.cyan)
             divider
-            HudCell(label: "SRC", value: s.transport == "idle" ? "—" : s.transport.uppercased(),
+            HudCell(label: "通道", value: s.transport == "idle" ? "—" : s.transport.uppercased(),
                     accent: s.transport == "udp" ? Theme.green : (s.transport == "ws" ? Theme.cyan : Theme.textDim))
         }
         .frame(height: stripH)
@@ -110,11 +112,7 @@ struct CockpitView: View {
             // 居中：模式开关（贴顶）
             HStack(spacing: 6) {
                 ForEach(CockpitMode.allCases, id: \.self) { m in
-                    Button(m.label) {
-                        // 换模式即结束编辑会话（已改的先当成「完成」留下）
-                        if layout.editing { layout.commitEditing(mode: s.mode); layout.editing = false }
-                        ctrl.setMode(m); Haptics.press()
-                    }
+                    Button(m.label) { requestMode(m) }
                         .buttonStyle(CardButton(active: s.mode == m, accent: Theme.cyan, height: height))
                         .frame(width: 68)
                 }
@@ -124,10 +122,13 @@ struct CockpitView: View {
                 Spacer(minLength: 0)
                 connectionChip(height: height)
                 Button { showSettings = true } label: {
-                    Image(systemName: "gearshape.fill").font(.system(size: 15))
+                    HStack(spacing: 4) {
+                        Image(systemName: "gearshape.fill").font(.system(size: 13))
+                        Text("设置").font(.system(size: 11, weight: .medium))
+                    }
                 }
                 .buttonStyle(CardButton(fillWidth: false, height: height))
-                .frame(width: 40)
+                .frame(width: 64)
                 Button {
                     if layout.editing { layout.commitEditing(mode: s.mode) }
                     else { layout.beginEditing(mode: s.mode) }
@@ -147,6 +148,15 @@ struct CockpitView: View {
             }
         }
         .frame(height: height)
+        .alert("切换到「\(pendingMode?.label ?? "")」？", isPresented: Binding(
+            get: { pendingMode != nil },
+            set: { if !$0 { pendingMode = nil } }
+        )) {
+            Button("切换") { if let m = pendingMode { applyMode(m) } }
+            Button("取消", role: .cancel) { pendingMode = nil }
+        } message: {
+            Text("电脑端要从 vJoy 换成虚拟 Xbox 手柄（或换回来），游戏里这只手柄会掉一下，重连或重进即可。当前的布局会先保存。")
+        }
         .overlay(alignment: .top) {
             LinearGradient(colors: [Theme.cyan.opacity(0.55), Theme.cyan.opacity(0.05)],
                            startPoint: .leading, endPoint: .trailing)
@@ -157,6 +167,21 @@ struct CockpitView: View {
             showSettings = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTutorial = true }
         }) }
+    }
+
+    /// 切模式：**未连接就直接切**（本机换模式没有代价）；
+    /// 已连接先问一句 —— 电脑端会换后端（vJoy ↔ 虚拟 Xbox），游戏里手柄会掉一下，
+    /// 用户却只会看到「手柄没了」。
+    private func requestMode(_ m: CockpitMode) {
+        guard m != s.mode else { return }
+        if s.link == .live { pendingMode = m; Haptics.tap() } else { applyMode(m) }
+    }
+
+    private func applyMode(_ m: CockpitMode) {
+        pendingMode = nil
+        // 换模式即结束编辑会话（已改的先当成「完成」留下）
+        if layout.editing { layout.commitEditing(mode: s.mode); layout.editing = false }
+        ctrl.setMode(m); Haptics.press()
     }
 
     /// 顶栏连接胶囊：已连显示 IP + Hz + 绿灯；未连显示“连接”按钮
@@ -439,13 +464,13 @@ struct LibrarySheet: View {
                     Section("绑定功能") {
                         Picker("绑定", selection: $binding) {
                             ForEach(WidgetBinding.allCases, id: \.self) { b in
-                                Text(b.onlyOnVJoy ? "\(b.label) · 仅飞行" : b.label).tag(b)
+                                Text(b.onlyOnVJoy ? "\(b.label) · 开车/手柄不生效" : b.label).tag(b)
                             }
                         }
                     }
                     if binding.onlyOnVJoy {
                         Section {
-                            Label("第 11–16 号键只存在于 vJoy。Xbox 虚拟手柄只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，开车和手柄模式里选它不会生效。",
+                            Label("第 11–16 号键只在飞行模式里存在（电脑侧那只 vJoy 手柄）。开车与手柄模式用的是 Xbox 虚拟手柄，只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，选它不会生效。",
                                   systemImage: "exclamationmark.triangle")
                                 .font(.system(size: 12))
                                 .foregroundColor(Theme.amber)
@@ -482,7 +507,9 @@ struct CockpitTutorialView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header
                         section(icon: "switch.2", title: "顶部",
-                                text: "中间切「飞机 / 开车 / 手柄」；右侧是连接状态 + 齿轮设置 + 「布局」按钮（三个模式都有）")
+                                text: "中间切「飞机 / 开车 / 手柄」；右侧是连接状态 + 「设置」 + 「布局」（三个模式都有）")
+                        section(icon: "arrow.triangle.2.circlepath", title: "换模式",
+                                text: "已连接时换模式会问一句：电脑端要换手柄后端（vJoy ↔ 虚拟 Xbox），游戏里这只手柄会掉一下，重连或重进即可。")
                         section(icon: "airplane", title: "飞机模式",
                                 text: "只读仪表盘（COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 条）+ 周期杆（横滚/俯仰）+ 总距 + 脚舵 + 视角。默认只有轴，按键自己加")
                         section(icon: "car", title: "开车模式",
@@ -491,6 +518,8 @@ struct CockpitTutorialView: View {
                                 text: "双摇杆 / 十字键 / ABXY / LB·RB / LT·RT / 视图·菜单 的起步布局；轴停发、不抢电脑键鼠")
                         section(icon: "square.grid.2x2", title: "自定义布局（全部模式）",
                                 text: "任意模式点右上角「布局」：拖动移动、拖右下角缩放、✕ 删除、Aa 改名；顶部组件库可加方向盘/滑条/触摸板/摇杆/苦力帽/姿态球/仪表盘/按键，可从电脑拉取 / 上传")
+                        section(icon: "chart.bar", title: "底部状态条",
+                                text: "左边按模式显示真正发出去的轴（开车是转向/离合/油门/刹车）；「链路」是连接与帧率；「模式」是当前模式；最右的「通道」是电脑实际用的传输通道：UDP 是轴的快速通道，WS 是 WebSocket 控制通道")
                         section(icon: "checklist", title: "第一次使用（三步）",
                                 text: "1) 电脑先启动 PalmDeck（start.bat 或 python3 bridge.py）\n2) 手机点「连接」，顶栏变绿即连上\n3) 进游戏把这只虚拟手柄绑一次即可")
                     }

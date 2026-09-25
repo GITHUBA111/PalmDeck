@@ -858,3 +858,92 @@ class TestSettingsConsistency(unittest.TestCase):
 
     def test_empty_search_gives_a_next_step(self):
         self.assertIn("试试「死区」", self.s, "搜不到时给个例子，别只说「没有」")
+
+
+class TestDiscoverability(unittest.TestCase):
+    """P2 残留：看得见、点得到、说人话。
+
+    上一轮（`TestSettingsConsistency`）管的是「命名一致性」；这一轮管的是
+    **界面上有没有入口、说没说清代价、词是不是人话**：
+
+    a. 顶栏三个入口等权：齿轮也要带字（它是唯一没有标签的入口）；
+    b. 预设的改名 / 删除不能只藏在左滑里，行尾要有 `⋯` 菜单（左滑保留）；
+    c. 已连接时换模式要先问一句（电脑端换后端，游戏里手柄会掉）；
+    d. 状态条与绑定列表说人话（`链路/模式/通道`、「开车/手柄不生效」）。
+
+    方案与理由：`docs/PalmDeck-v4-discoverability.md`。
+    """
+
+    def setUp(self):
+        self.s = _ios("Views", "SettingsView.swift")
+        self.c = _ios("Views", "CockpitView.swift")
+
+    # ---- a. 顶栏三个入口等权 ----
+
+    def test_top_bar_settings_has_a_label(self):
+        self.assertNotIn('Image(systemName: "gearshape.fill").font(.system(size: 15))', self.c,
+                         "纯齿轮是顶栏唯一没字的入口，新用户不知道它是什么")
+        body = self.c.split("connectionChip(height: height)", 1)[1]
+        body = body.split("private func connectionChip", 1)[0]
+        self.assertIn('Image(systemName: "gearshape.fill")', body)
+        self.assertIn('Text("设置")', body, "齿轮旁边要有「设置」两个字")
+        self.assertIn(".frame(width: 64)", body, "与「布局」同宽，才像同一类控件")
+
+    def test_tutorial_does_not_say_gear(self):
+        self.assertNotIn("齿轮设置", self.c, "教程要与顶栏同字：「设置」")
+
+    # ---- b. 预设行的改名 / 删除看得见 ----
+
+    def test_preset_row_has_a_visible_menu(self):
+        self.assertIn("ellipsis.circle", self.s, "只藏在左滑里 = 大部分用户永远找不到")
+        row = self.s.split("private func rowBody", 1)[1]
+        self.assertIn('Label("重命名", systemImage: "pencil")', row)
+        self.assertIn('Label("删除", systemImage: "trash")', row)
+
+    def test_swipe_still_works(self):
+        self.assertIn(".swipeActions(edge: .trailing, allowsFullSwipe: false)", self.s,
+                      "老路径（左滑）删掉会让已经会用的用户困惑")
+
+    def test_row_is_not_a_button_anymore(self):
+        """行整行当 Button 时，行尾的 Menu 点不动（外层把点击吃掉）。"""
+        self.assertIn(".onTapGesture { applyPreset(row) }", self.s)
+        self.assertNotIn("} label: {\n                    presetRowView(row)", self.s)
+
+    def test_builtin_rows_have_no_menu(self):
+        self.assertIn("editable: profiles.isBuiltin(p) ? nil : p", self.s,
+                      "内置预设不可删改 —— 菜单点进去发现点不动，比没有菜单更糟")
+
+    def test_footer_says_where_to_rename(self):
+        self.assertIn("行尾的 ⋯ 菜单", self.s)
+
+    # ---- c. 已连接时换模式先问一句 ----
+
+    def test_mode_switch_confirms_when_connected(self):
+        self.assertIn("pendingMode", self.c)
+        self.assertIn("if s.link == .live { pendingMode = m; Haptics.tap() } else { applyMode(m) }",
+                      self.c, "未连接时不要多弹一层窗")
+        self.assertIn('Button("切换")', self.c)
+        self.assertIn('Button("取消", role: .cancel)', self.c)
+        # 确认后仍要结束编辑会话（原来是 Button 里直接干这件事）
+        apply = self.c.split("private func applyMode", 1)[1].split("/// 顶栏连接胶囊", 1)[0]
+        self.assertIn("layout.commitEditing(mode: s.mode)", apply)
+
+    def test_confirm_text_explains_the_cost(self):
+        self.assertIn("虚拟 Xbox", self.c, "要说清为什么手柄会掉")
+
+    # ---- d. 说人话 ----
+
+    def test_status_strip_labels_are_chinese(self):
+        for gone in ('HudCell(label: "LINK"', 'HudCell(label: "SRC"', 'HudCell(label: "MODE"'):
+            self.assertNotIn(gone, self.c, "同一行里轴标签是中文，这三个不该是英文：%s" % gone)
+        for good in ('HudCell(label: "链路"', 'HudCell(label: "模式"', 'HudCell(label: "通道"'):
+            self.assertIn(good, self.c)
+        self.assertIn('s.transport.uppercased()', self.c,
+                      "UDP / WS 是协议名，值不动（改了就对不上控制台）")
+
+    def test_binding_list_uses_plain_words(self):
+        self.assertNotIn("仅飞行", self.c, "「仅飞行」太省，没说清开车/手柄为什么不生效")
+        self.assertIn("开车/手柄不生效", self.c)
+        self.assertNotIn("只存在于 vJoy", self.c)
+        self.assertIn("只在飞行模式里存在", self.c)
+        self.assertIn("vJoy", self.c, "对照电脑侧时仍然要点名，不然没法在游戏里找")
