@@ -44,7 +44,6 @@ struct CockpitView: View {
             .palmCockpitType()
         }
         .background(CockpitBackdrop())
-        .palmAppearance()
         .sheet(item: $libraryKind) { kind in
             LibrarySheet(store: layout, mode: s.mode, initialKind: kind)
         }
@@ -593,7 +592,6 @@ struct CockpitTutorialView: View {
                 .padding(24)
             }
         }
-        .palmAppearance()
         .palmDynamicType()
     }
 

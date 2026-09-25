@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 设置分类（左栏）。顺序即显示顺序。
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case connection, profiles, layout, controls, haptics, appearance, help
+    case connection, profiles, layout, controls, haptics, help
 
     var id: String { rawValue }
 
@@ -15,7 +15,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .layout: return "布局"
         case .controls: return "操纵与手感"
         case .haptics: return "触觉"
-        case .appearance: return "外观"
         case .help: return "帮助"
         }
     }
@@ -28,7 +27,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .layout: return "square.grid.2x2.fill"
         case .controls: return "slider.horizontal.3"
         case .haptics: return "hand.tap.fill"
-        case .appearance: return "circle.lefthalf.filled"
         case .help: return "questionmark.circle.fill"
         }
     }
@@ -40,7 +38,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .layout: return Color(red: 0.69, green: 0.32, blue: 0.87)       // 紫
         case .controls: return Color(red: 0.20, green: 0.78, blue: 0.35)     // 绿
         case .haptics: return Color(red: 1.00, green: 0.18, blue: 0.33)      // 粉红
-        case .appearance: return Color(red: 0.37, green: 0.36, blue: 0.90)   // 靖蓝
         case .help: return Color(red: 0.56, green: 0.56, blue: 0.58)         // 灰
         }
     }
@@ -97,10 +94,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
                 .init(self, "开启振动", "开启 启用 开关 触觉 haptics 振动"),
                 .init(self, "试一下振动", "测试 test 振动 试一下 预览"),
             ]
-        case .appearance:
-            return [
-                .init(self, "外观模式", "外观 appearance 主题 theme 皮肤 skin 深色 dark 浅色 light 夜间"),
-            ]
         case .help:
             return [
                 .init(self, "查看使用教程", "教程 tutorial 帮助 help 说明 引导"),
@@ -150,7 +143,6 @@ struct SettingsView: View {
     @ObservedObject var layout: LayoutStore
     @ObservedObject var profiles: GameProfileStore
     @AppStorage("palmdeck_haptics") private var haptics = true
-    @AppStorage(AppAppearance.key) private var appearanceRaw = AppAppearance.fallback.rawValue
     var discovery: Discovery? = nil
     var onExit: () -> Void = {}
     var onShowTutorial: () -> Void = {}
@@ -172,7 +164,6 @@ struct SettingsView: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .palmAppearance()
         // 设置是文字为主、可滚动：放开到无障碍档（覆盖座舱 chrome 的收紧）。
         .palmDynamicType()
         .tint(Theme.cyan)
@@ -361,7 +352,6 @@ struct SettingsView: View {
                 case .layout:     layoutSections
                 case .controls:   controlsSections
                 case .haptics:    hapticsSections
-                case .appearance: appearanceSections
                 case .help:       helpSections
                 }
             }
@@ -853,23 +843,6 @@ struct SettingsView: View {
             SettingsHeader("触觉反馈")
         } footer: {
             Text("抓住控件、模式切换、总距卡位、过中位等会在支持的机型上触发原生 Taptic 振动。")
-        }
-    }
-
-    // ---- 外观 ----
-    @ViewBuilder private var appearanceSections: some View {
-        Section {
-            Picker("外观模式", selection: $appearanceRaw) {
-                ForEach(AppAppearance.allCases) { a in
-                    Label(a.label, systemImage: a.symbol).tag(a.rawValue)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        } header: {
-            SettingsHeader("主题")
-        } footer: {
-            Text("默认浅色；选「深色」适合暗光环境。座舱仪表（姿态球）保持深底亮线，不随主题变。")
         }
     }
 

@@ -86,7 +86,6 @@ struct PreflightView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .palmAppearance()
         .onAppear { discovery.start() }
         .onDisappear { discovery.stop() }
         .toolbar {

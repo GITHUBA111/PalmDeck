@@ -3,17 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
   <title>PalmDeck 控制台</title>
   <style>
+    /* 只浅色：与 App 同一套调色板（Theme 浅色侧）。不提供深色，也不跟随系统深浅。 */
     :root {
-      --bg:#070b12; --card:#101826; --card2:#0c1420; --line:#243044;
-      --cyan:#5ce1ff; --green:#3dff9a; --amber:#ffbf3c; --red:#ff5a4d;
-      --muted:#8ea0b8; --text:#e8f1ff;
+      color-scheme: light;
+      --bg:#f4f7fb; --bg-soft:#e7eef7; --card:#ffffff; --card2:#f6f8fc; --line:#c9d4e2;
+      --line-soft:#dde5ef; --sunken:#eef3f9; --track:#dfe7f1; --track-mid:#9fb2c8;
+      --cyan:#007aaf; --green:#0e8b4a; --amber:#8a6100; --red:#c32724;
+      --muted:#5f6d80; --text:#0e1724; --on-accent:#ffffff;
+      --accent-soft:#e3f2fb; --live-edge:#a8d9bd; --warn-edge:#e5d3a0; --err-edge:#eeb7b4;
     }
     * { box-sizing: border-box; }
     body {
       margin:0; min-height:100vh; color:var(--text);
-      background: radial-gradient(1200px 600px at 10% -10%, #123, var(--bg));
+      background: radial-gradient(1200px 600px at 10% -10%, var(--bg-soft), var(--bg));
       font-family:"SF Pro Display","PingFang SC","Noto Sans SC",system-ui,sans-serif;
     }
     .top {
@@ -23,8 +28,8 @@
     .brand { display:flex; align-items:center; gap:14px; }
     .mark {
       width:44px; height:44px; border-radius:12px; display:grid; place-items:center;
-      background:radial-gradient(circle at 30% 30%, #7af, #1a6aa0 55%, #0b2);
-      color:#041018; font-weight:800;
+      background:radial-gradient(circle at 30% 30%, #8fe3ff, #2b86c5 60%, #0f5f8f);
+      color:#062634; font-weight:800;
     }
     h1 { margin:0; letter-spacing:.12em; font-size:20px; }
     .sub { color:var(--muted); margin-top:3px; font-size:13px; }
@@ -51,19 +56,19 @@
     .cols-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
     .card h2 { margin:0 0 12px; font-size:14px; color:var(--muted); font-weight:600; letter-spacing:.06em; }
-    .row { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #1b2738; font-size:14px; }
+    .row { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); font-size:14px; }
     .row:last-child { border-bottom:0; }
     .k { color:var(--muted); }
     .ok { color:var(--green); } .bad { color:var(--amber); } .err { color:var(--red); }
     button.action {
-      background:#162033; color:var(--text); border:1px solid var(--line);
+      background:var(--sunken); color:var(--text); border:1px solid var(--line);
       border-radius:10px; padding:9px 14px; cursor:pointer; font:inherit;
     }
     button.action:hover { border-color:var(--cyan); }
     button.action:disabled { opacity:.45; cursor:not-allowed; }
-    button.action.primary { background:#0e2a3a; border-color:var(--cyan); color:var(--cyan); }
+    button.action.primary { background:var(--accent-soft); border-color:var(--cyan); color:var(--cyan); }
     .modes { display:flex; gap:8px; }
-    .modes button.on { background:#0e2a3a; border-color:var(--cyan); color:var(--cyan); }
+    .modes button.on { background:var(--accent-soft); border-color:var(--cyan); color:var(--cyan); }
     /* QR */
     .qr { width:220px; height:220px; background:#fff; border-radius:12px; margin:0 auto 12px; display:grid; place-items:center; overflow:hidden; }
     .qr canvas, .qr img { width:200px; height:200px; }
@@ -71,37 +76,37 @@
     /* monitor */
     .axis { display:grid; grid-template-columns:70px 1fr 64px; align-items:center; gap:10px; padding:5px 0; }
     .axis .name { color:var(--muted); font-size:13px; }
-    .track { position:relative; height:12px; background:#0a1220; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
-    .track .mid { position:absolute; left:50%; top:0; bottom:0; width:1px; background:#33445c; }
-    .fill { position:absolute; top:0; bottom:0; background:linear-gradient(90deg,#1b6f9a,#5ce1ff); }
-    .fill.bi { background:linear-gradient(90deg,#1b6f9a,#3dff9a); }
+    .track { position:relative; height:12px; background:var(--track); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+    .track .mid { position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--track-mid); }
+    .fill { position:absolute; top:0; bottom:0; background:linear-gradient(90deg,#0d6f9c,#2fa8d8); }
+    .fill.bi { background:linear-gradient(90deg,#0d6f9c,#17a35c); }
     .axis .val { text-align:right; font-variant-numeric:tabular-nums; font-size:13px; color:var(--text); }
     .btnGrid { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
-    .btnCell { padding:8px 0; text-align:center; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--muted); background:#0a1220; }
-    .btnCell.on { background:#0e2a3a; border-color:var(--cyan); color:var(--cyan); }
+    .btnCell { padding:8px 0; text-align:center; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--muted); background:var(--sunken); }
+    .btnCell.on { background:var(--accent-soft); border-color:var(--cyan); color:var(--cyan); }
     .hat { display:grid; grid-template-columns:repeat(3,32px); grid-template-rows:repeat(3,32px); gap:4px; }
-    .hat div { border:1px solid var(--line); border-radius:6px; background:#0a1220; }
-    .hat div.on { background:#0e2a3a; border-color:var(--cyan); }
+    .hat div { border:1px solid var(--line); border-radius:6px; background:var(--sunken); }
+    .hat div.on { background:var(--accent-soft); border-color:var(--cyan); }
     /* config */
-    .field { display:grid; grid-template-columns:200px 1fr; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid #1b2738; }
+    .field { display:grid; grid-template-columns:200px 1fr; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-soft); }
     .field:last-child { border-bottom:0; }
     .field label { color:var(--muted); font-size:13px; }
     .field input[type=text], .field input[type=number], .field select {
-      background:#0a1220; border:1px solid var(--line); color:var(--text);
+      background:var(--card); border:1px solid var(--line); color:var(--text);
       border-radius:8px; padding:8px 10px; font:inherit; width:100%; max-width:320px;
     }
     .tag { font-size:11px; padding:2px 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-left:8px; }
-    .tag.live { color:var(--green); border-color:#23543c; }
-    .tag.restart { color:var(--amber); border-color:#5a4a1e; }
-    pre.logs { margin:0; max-height:60vh; overflow:auto; font-size:12px; line-height:1.5; color:#b9c7da; white-space:pre-wrap; }
+    .tag.live { color:var(--green); border-color:var(--live-edge); }
+    .tag.restart { color:var(--amber); border-color:var(--warn-edge); }
+    pre.logs { margin:0; max-height:60vh; overflow:auto; font-size:12px; line-height:1.5; color:#2f3d4f; white-space:pre-wrap; }
     /* 自检 */
-    .tabs button .badge { display:inline-block; min-width:16px; padding:0 5px; margin-left:6px; border-radius:999px; font-size:11px; background:#5a4a1e; color:var(--amber); }
-    .check { display:flex; align-items:flex-start; gap:12px; padding:11px 0; border-bottom:1px solid #1b2738; }
+    .tabs button .badge { display:inline-block; min-width:16px; padding:0 5px; margin-left:6px; border-radius:999px; font-size:11px; background:#f3e6bf; color:var(--amber); }
+    .check { display:flex; align-items:flex-start; gap:12px; padding:11px 0; border-bottom:1px solid var(--line-soft); }
     .check:last-child { border-bottom:0; }
     .check .dot { flex:0 0 22px; height:22px; border-radius:50%; display:grid; place-items:center; font-size:13px; font-weight:700; border:1px solid var(--line); color:var(--muted); }
-    .check .dot.ok { color:var(--green); border-color:#23543c; }
-    .check .dot.warn { color:var(--amber); border-color:#5a4a1e; }
-    .check .dot.error { color:var(--red); border-color:#5c2b28; }
+    .check .dot.ok { color:var(--green); border-color:var(--live-edge); }
+    .check .dot.warn { color:var(--amber); border-color:var(--warn-edge); }
+    .check .dot.error { color:var(--red); border-color:var(--err-edge); }
     .check .body { flex:1; min-width:0; }
     .check .t { font-size:14px; }
     .check .d { color:var(--muted); font-size:12.5px; margin-top:3px; line-height:1.5; }
@@ -238,7 +243,7 @@
       <div class="card">
         <h2>布局（App 组件）</h2>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
-          <select id="layoutMode" style="background:#0a1220;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px">
+          <select id="layoutMode" style="background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px">
             <option value="heli">飞机 heli</option>
             <option value="drive">开车 drive</option>
             <option value="gamepad">手柄 gamepad</option>
@@ -250,7 +255,7 @@
           <button class="action" id="layoutReset">重置为内置默认</button>
         </div>
         <textarea id="layoutJson" spellcheck="false"
-          style="width:100%;height:50vh;background:#0a1220;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre;resize:vertical"></textarea>
+          style="width:100%;height:50vh;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre;resize:vertical"></textarea>
         <p class="sub" id="layoutMsg" style="margin-top:8px"></p>
         <p class="sub" style="margin-top:4px">未存储的模式 = App 用内置默认布局；重置即恢复内置默认。合法 kind/binding 见下方提示。</p>
       </div>

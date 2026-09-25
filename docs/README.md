@@ -95,7 +95,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 251 项
+python3 -m unittest discover -s tests -t .      # 262 项
 ```
 
 其中四个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑；
@@ -105,9 +105,10 @@ python3 -m unittest discover -s tests -t .      # 251 项
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
-| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签）；**`TestConnectBanner`**（连接横幅行高锛死、`connecting` 不收起、`live` 才收、动画）；**`TestInstantRecenter`**（脚舵/视角松手瞬回 0、周期杆保留平滑回中、保持轴仍走单极滑条） |
+| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签）；**`TestConnectBanner`**（连接横幅行高锛死、`connecting` 不收起、`live` 才收、动画）；**`TestInstantRecenter`**（脚舵/视角松手瞬回 0、周期杆保留平滑回中、保持轴仍走单极滑条）；**`TestThemeAppearance`**（只浅色：主题色是常量、`Info.plist` 钉 `UIUserInterfaceStyle=Light`、设置里没有「外观 / 深色」、仪表固定深色） |
 | `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）、**P1.5 迁移**（两个老键合并 / 重名加后缀 / 幂等 / 垃圾 JSON）、`hasShaping = false` 不碰手感；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
+| `tests/test_light_only.py` | 「不要再出现任何深色模式」的**全仓扫描**（11 条）：任何 `.swift` 不得再有 `preferredColorScheme` / `colorScheme` / `Color.pd(` / `AppAppearance` / `palmAppearance`；`Info.plist` 钉 Light；**启动页图片必须是浅底**（`sips` 降采样 + 纯 Python 解码算平均亮度，旧黑底图 0.01 / 新浅底 0.74）；网页控制台 `:root` 底与面为浅色、文字为深色、无 `prefers-color-scheme`、旧深色值已清、二维码仍黑模块白底 |
 | `tests/test_doctor.py` | Windows 端**自检**守卫（25 条）：报告结构 / 等级合法 / id 不重、`palmdeck_doctor` **不许 import bridge**（要能单独跑）、防火墙端口只有 `palmdeck_config` 一处真相源、`.bat` 里不许再写 `New-NetFirewallRule`、`bridge` 两路由 + `note_listener` 记录 bind 失败、`host.html` 自检页与 `#doctor` 直达、托盘带版本号 + 「自检…」、`pack_windows.FILES` / `.spec` 覆盖；另含**真 bind 失败**（TEST-NET-1）仍返回不抛、非 Windows 上不报故障 |
 
 不引入 Xcode unit-test target —— 被测对象全是**纯函数 / 纯状态**，

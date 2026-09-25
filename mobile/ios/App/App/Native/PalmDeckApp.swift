@@ -22,7 +22,7 @@ struct PalmDeckApp: App {
                     }
                 }
             }
-            .palmAppearance()
+            // 只浅色：系统深色由 Info.plist 的 UIUserInterfaceStyle=Light 挡住
             .palmDynamicType()
         }
     }

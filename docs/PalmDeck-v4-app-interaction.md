@@ -247,7 +247,6 @@ y = 0                                              |x| <  dz
 | 布局 | 编辑 / 重置 / 撤销 / 与电脑同步 | 编辑布局开关 + 放弃本次编辑；清空画布；撤销上一次改动；从电脑拉取 / 上传当前模式 | — |
 | 操纵与手感 | 轴反向 / 摇杆 / 灵敏度与死区 / 响应曲线 / **方向盘（全局项）** | 横滚 / 俯仰 / 方向舵 / 总距；松手回中；灵敏度 X / Y、死区（点值精确输入）；双轴响应曲线预览；满舵角度 / 回正速度（点值精确输入） | ✅ `invX/invY/invYaw/invColl`、`stickReturn`、`sensX/sensY/dz`、`wheelMaxDeg/wheelReturnSpeed` |
 | 触觉 | 触觉反馈 | 开启振动 + 「试一下振动」 | ✅ `palmdeck_haptics` |
-| 外观 | 主题 | 外观模式（跟随系统 / 浅色 / 深色） | ✅ `palmdeck_appearance`（默认浅色） |
 | 帮助 | 教程 / 关于 | 查看使用教程；App 版本、当前模式 | `palmdeck_tutored` |
 
 > 历史问题（已修）：轴反向/摇杆/方向盘这些参数此前是**普通 `var`，既不 `@Published` 也不落盘**，
@@ -471,7 +470,7 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
 > 所以顺序有专门的断言（`tests/ios/GameProfileTests.swift`）。
 
 **UI**：设置新增分类「游戏预设」（放在「布局」上方）——**P1.5 起该分类改名「预设」**（它同时装整机与布局预设），
-**P2 起侧栏固定 7 项**（`连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 外观 / 帮助`，见 §12.15）。
+**P2 起侧栏固定，P9 只浅色后为 6 项**（`连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 帮助`，见 §12.15、§12.7）。
 顶部一行只读显示**电脑实际轴表**
 （取自 `hello.axis_profile`）；下面是预设列表，点行即切换，左滑重命名/删除，
 底部「将当前状态存为预设」（快照模式+手感+布局）。
@@ -538,55 +537,64 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
   与 `.disabled(!layout.canDiscardEditing(mode: s.mode))`；顶栏与设置两个入口都 `beginEditing`；
   离开编辑态的路径（完成 / 顶栏 [完成] / 换模式）至少 3 处 `commitEditing`。
 - `TestLayoutModuleWiring`：`defaults(mode:)` 三个模式都对、`init` 都播种。
-- `TestThemeAppearance`：`Theme` 必须有 `Color.pd(浅,深)` 动态色助手且 18 个主题色都给了两套值；
-  视图层不得出现 `preferredColorScheme(.dark)` / `(.light)`；`AppAppearance` + `palmAppearance()`
-  必须同时落在根视图与三个 presentation（sheet/cover 不一定继承窗口 override）；
-  外观分类要进 `SettingsCategory` 与搜索索引；仪表固定色（`instr*`/`hud*`）不得用 `Color.pd(`。
+- `TestThemeAppearance`：`Theme` 里不得再有双色助手（`Color.pd`）/ `UIColor(dynamicProvider:)` / `colorScheme`；
+  `Info.plist` 必须钉 `UIUserInterfaceStyle = Light`；设置里不得再有「外观 / 深色 / 跟随系统」；
+  仪表固定色（`instr*`/`hud*`）不随主题变。
+- `TestLightOnly`（`tests/test_light_only.py`）：全仓扫描——任何 `.swift` 不得出现
+  `preferredColorScheme` / `colorScheme` / `Color.pd(` / `AppAppearance` / `palmAppearance`；
+  启动页图片必须是浅底（走 `sips` 降采样后算平均亮度）；网页控制台 `:root` 的底/面为浅色、
+  文字为深色，且没有 `prefers-color-scheme`。
 - `func_body()` 把 `defaultGamepad()` / `defaultHeli()` / `defaultDrive()` 的断言隔开。
 
 ---
 
-## 12.7 浅色 / 深色双主题（默认浅色）
+## 12.7 只浅色：深色模式已删除（含启动页与网页控制台）
 
-**背景**：整套界面原来只有一套写死的暗色调色板，再加 4 处 `.preferredColorScheme(.dark)`，
-在亮环境（户外、白天开车）下反光严重。改为**双主题 + 可切换**。
+**背景（两集）**：整套界面原来只有一套写死的暗色调色板，加 4 处 `.preferredColorScheme(.dark)`，
+亮环境（户外、白天开车）下反光严重 → 改成浅/深双主题 + 「外观」开关（`af62a5f`）。
+走查要求「**不要再出现任何深色模式**」→ 深色整套删掉，不是隐藏：没有开关、没有兜底分支、
+没有第二套色值留在源码里等着被重新打开。
 
-**做法**：把「主题」做成一次查表，而不是往 120 个引用点里插 `@Environment(\.colorScheme)`。
+**真正拦系统深色的是 `Info.plist`**：
 
-```swift
-enum Theme {
-    static let panel = Color.pd(Color(red: 1, green: 1, blue: 1),        // 浅色：白卡片
-                                Color(red: 0.11, green: 0.15, blue: 0.21)) // 深色：原值
-}
+```xml
+<key>UIUserInterfaceStyle</key>
+<string>Light</string>
 ```
 
-`Color.pd(_:_:)` 走 `UIColor(dynamicProvider:)`（`#if canImport(UIKit)` 守，iOS + Mac Catalyst 都适用），
-系统按 `traitCollection.userInterfaceStyle` 自动解析——**视图层一行都不用改**，主题切换也不需要
-任何全局可变状态。浅色侧的强调色整体压深一档（否则白底对比度不够）：
+以前靠 `.preferredColorScheme` 在每个 presentation 上各贴一份，**漏过**：`LibrarySheet`
+（组件库弹窗）就没贴，系统深色下会出现「外面浅色、弹窗黑底」。`UIUserInterfaceStyle` 在 UIWindow
+层生效，alert / 键盘 / 分享面板 / LaunchScreen / Catalyst 菜单栏全都跑不掉，也不会再漏。
 
-| 语义 | 浅色 | 深色 |
+**删掉的东西**：
+
+| 删掉 | 原来在哪 | 现在 |
 |---|---|---|
-| cyan（主强调） | `#007AB0` | `#33D1FF` |
-| green（连接/确认） | `#0E8B4A` | `#4DDB80` |
-| orange（编辑/注意） | `#CD6F00` | `#FF9E33` |
-| red（危险） | `#CD2928` | `#FF5C5C` |
-| panel / panelHi / border | `#FFFFFF` / `#F2F6FA` / `#BDC9D7` | 原值 |
-| text / textDim / textFaint | `#0E1724` / `#47556B` / `#5F6D80` | 原值 |
+| `Color.pd(_:_:)` | `Theme.swift`（18 个主题色各给两套值） | 主题色变回普通常量（保留浅色侧那套） |
+| `AppAppearance` / `AppearanceModifier` / `View.palmAppearance()` | `Theme.swift` + 5 处调用点 | 全删；视图层不再做任何主题解析 |
+| 「外观」设置分类 | `SettingsView`（`SettingsCategory` / 侧栏 / 搜索索引 / `@AppStorage`） | 分类从 7 项变 6 项 |
+| `palmdeck_appearance` 键 | `UserDefaults` | 不再读也不再写（旧值留着不影响行为） |
 
-**外观开关**：`AppAppearance`（`system` / `light` / `dark`，键 `palmdeck_appearance`，
-**默认 `.light`**），设置新增分类「外观」（靖蓝图标，排在「方向盘」后）→ 内联 `Picker`；
-搜索词「外观 / appearance / 主题 / theme / 深色 / 浅色 / 夜间」都能命中。
+**启动页**：`Splash.imageset` 原来是**黑底**的一张图（旧暗色主题留下的），冷启动必闪一下黑屏——
+这本身就是「深色模式又出现了」。已换成浅底（`#F7FBFE → #DAE5F1` 渐变 + 青环姿态球，
+色值同 Theme 浅色侧）；storyboard 背景继续用 `systemBackgroundColor`，跟着 Light 走。
 
-**落到哪里**：`.palmAppearance()` 是个读 `@AppStorage` 的 `ViewModifier`，只抛 `preferredColorScheme`。
-它必须挂在**根视图**（`PalmDeckApp` 的 `WindowGroup` 内容包一层 `Group`）**以及**
-`CockpitView` / `PreflightView` / `SettingsView` 三处——sheet / `fullScreenCover` 不保证
-继承窗口的 override，漏一处就会出现“外面浅色、弹窗黑底”。
+**网页控制台也是浅色**：`web/host.html` 与 App 是同一个产品，原来是一块固定深底
+（`--bg:#070b12`）。现在换成同一套调色板（`--bg:#f4f7fb` / `--card:#fff` / `--text:#0e1724`
+/ 强调色用 App 浅色侧那四个），并声明 `<meta name="color-scheme" content="light">` +
+`color-scheme: light`，不接受系统深色与浏览器自动变暗。监测页的轴轨道改成浅灰轨道
+（`--track`）+ 高饱和填充，白底上仍看得出指针在哪；二维码仍是黑模块白底（反色扫不出来）。
 
 **仪表是例外（故意不跟随）**：姿态球是真仪表，白底上放一块黑表盘反而更像真机也更清楚，
 所以它用一组**固定色**（`Theme.instrBg` 天/地渐变、`instrLine`、`hudAmber`、`hudOrange`）。
-`ArcGauge` / `BarGauge` 不在此列——它们只读 `Theme.border` / `panelHi` / 强调色，跟着主题走反而更好看。
+这是表盘语义，不是主题；要连表盘也改浅底，那是另一个需求（得重画整套刻度对比色）。
+`ArcGauge` / `BarGauge` 不在此列——它们只读 `Theme.border` / `panelHi` / 强调色，本来就是浅色。
 
-**未动**：`Model/` 一层与电脑侧协议完全没碰（`swiftc` 单测也只编 `Model/`，所以主题改动不影响纯逻辑层）。
+**验证**：模拟器把系统切深色（`xcrun simctl ui <udid> appearance dark`）后座舱 / 首启页仍是浅色；
+Catalyst 用 `open -a App --args -AppleInterfaceStyle Dark` 强推深色也仍是浅色。
+回归守则见 §12.6 的 `TestThemeAppearance` / `TestLightOnly`。
+
+**未动**：`Model/` 一层与电脑侧协议完全没碰。
 
 ---
 
@@ -854,7 +862,7 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 
 | 位置 | 之前 | 之后 | 理由 |
 |---|---|---|---|
-| 侧栏 | 8 项（含独立的「方向盘」） | **7 项**：连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 外观 / 帮助 | 满舵角度 / 回正速度只占两个滑条，不值得一个顶级分类；想知道“方向盘为什么自己回正”的人会先点“操纵与手感” |
+| 侧栏 | 8 项（含独立的「方向盘」） | **7 项**：连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 外观 / 帮助（P9 删「外观」后 **6 项**） | 满舵角度 / 回正速度只占两个滑条，不值得一个顶级分类；想知道“方向盘为什么自己回正”的人会先点“操纵与手感” |
 | 侧栏 `.profiles` | 「游戏预设」 | **「预设」** | P1.5 起它同时装整机与布局预设 |
 | 方向盘段头 | 「参数」 | **「方向盘」**（并进操纵与手感最后一段） | 头要说得出这一组是什么；且它们**是全局键**，footer 必须写明“三个模式共用” |
 | 布局页段头 | 模式 / 清空 /（无） | **编辑 / 重置 / 撤销** | 动作词不当头；`undoSection` 是唯一没头的段 |
@@ -882,7 +890,7 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 
 | 看哪 | 结果 |
 |---|---|
-| 设置侧栏 | 7 项，无「游戏预设」、无独立「方向盘」 |
+| 设置侧栏 | 7 项（P9 起 6 项），无「游戏预设」、无独立「方向盘」、无「外观」 |
 | 预设页 | 段头「电脑」（`电脑当前轴表` 只读）、「预设」段；行上是 `WARDOGS`(整机) / `欧洲卡车模拟`(整机) / `WARDOGS·布局`(布局) / `机舱台`(布局) / `默认`(内置·布局)；底部 `⊕ 存为整机预设`、`⊕ 存为布局预设`（画布为空时后者**置灰**） |
 | 布局页 | 段头「重置 → 清空画布」「撤销 → 撤销上一次改动」「与电脑同步 → 从电脑拉取布局 / 上传当前模式到电脑」 |
 | 操纵与手感页末尾 | 段头「方向盘」+ `满舵角度 2.5 圈` / `回正速度 720°/s`，footer「这两个是**全局项**：三个模式共用…」 |

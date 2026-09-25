@@ -67,11 +67,17 @@
   一键退回本次编辑前；「完成」/ 顶栏「完成」/ 换模式都会 `commitEditing`。
   放弃走 `replaceWidgets` 但**故意不压撤销槽**（它本身就是回滚）。
   `TestEditSession` 守卫。
-- **浅色模式（默认浅色）** —— `Theme` 全色值改成 `Color.pd(浅, 深)`（`UIColor(dynamicProvider:)`），
-  视图层 120 个引用点一行未改；新增 `AppAppearance`（跟随系统/浅色/深色，
-  `palmdeck_appearance`，默认 `.light`）+ `.palmAppearance()`，挂在根视图与三个 presentation。
-  姿态球是真仪表，用固定色 `instr*`/`hud*` 保持深底亮线。
-  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.7，`TestThemeAppearance` 守卫。
+- **只浅色：深色模式已删除（含启动页与网页控制台）** —— 走查要求「不要再出现任何深色模式」。
+  以前是 `Color.pd(浅, 深)`（`UIColor(dynamicProvider:)`）+ `AppAppearance`（跟随系统/浅色/深色）
+  + `.palmAppearance()` 挂在根视图与三个 presentation；
+  真拦系统深色的是 **`Info.plist` 的 `UIUserInterfaceStyle = Light`**（UIWindow 层，
+  alert / 键盘 / 分享 / LaunchScreen / Catalyst 菜单栏都挡得住；
+  以前靠 `.preferredColorScheme` 漏过组件库弹窗）。
+  启动页那张 **黑底** 图也换了（冷启动闪黑屏 = 最显眼的深色）；
+  `web/host.html` 从深底换成与 App 同一套浅色调色板 + `color-scheme: light`。
+  姿态球是真仪表，用固定色 `instr*`/`hud*` 保持深底亮线（表盘语义，不是主题）。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.7、`docs/PalmDeck-v4-light-only.md`，
+  `TestThemeAppearance` / `tests/test_light_only.py` 守卫。
 - **切预设把画布擦成白板** —— 内置预设的 `widgetsJSON` 是 nil（它们只是“手感快照”），
   而 `LayoutStore.applyProfile` 把 nil 当空布局整表替换了。
   现在 nil / 空数组 / 坏 JSON 一律 = “不带布局”→ 不碰用户画布；

@@ -223,58 +223,52 @@ class TestInstrumentPanel(unittest.TestCase):
 
 
 class TestThemeAppearance(unittest.TestCase):
-    """浅/深双主题：色值必须动态解析，且没有任何地方再把界面锁死成单一主题。
+    """只浅色：主题色是常量，深色模式连「可选」都不存在。
 
-    历史上从 `Theme` 到 4 处 `.preferredColorScheme(.dark)` 全是写死的暗色，
-    白底上直接看不见字。现在只允许在 `AppAppearance` 里出现 `.light` / `.dark`。
+    历史（两集）：先是 `Theme` 到 4 处 `.preferredColorScheme(.dark)` 写死暗色，白底上看不见字；
+    后来改成浅/深双主题 + 「外观」开关；走查要求「不要再出现任何深色模式」，于是深色整套删掉。
+    现在把关的是 `Info.plist` 的 `UIUserInterfaceStyle = Light`（UIWindow 层，
+    alert / 键盘 / 分享面板 / Catalyst 菜单栏都挡得住），视图层不再自己做主题解析。
     """
 
     VIEWS = ("CockpitView.swift", "PreflightView.swift", "SettingsView.swift",
              "Theme.swift", "Widgets.swift", "Layout.swift", "Controls.swift",
              "AttitudeBall.swift", "SteeringWheel.swift", "FlightPanel.swift")
 
-    def test_theme_colors_are_dynamic(self):
+    def test_theme_colors_are_flat_constants(self):
         theme = _ios("Views", "Theme.swift")
-        self.assertIn("static func pd(", theme, "缺 Color.pd 动态色助手")
-        self.assertIn("UIColor { traits in", theme, "动态色没有走 UIColor(dynamicProvider:)")
-        # 两套色值都得到位
+        self.assertNotIn("func pd(_ light: Color", theme, "Color.pd 双色助手应该已经删掉")
+        self.assertNotIn("extension Color", theme, "不该再有按 traits 解析的动态色")
+        self.assertNotIn("UIColor", theme, "不该再有按 traits 解析的动态色")
         for token in ("bgTop", "bgBottom", "panel", "panelHi", "border",
                       "text", "textDim", "textFaint", "onAccent",
                       "cyan", "green", "orange", "red", "amber",
                       "glass", "glassBorder", "gridStroke", "glowTop", "glowBottom"):
             self.assertIn("static let %s" % token, theme, "Theme 缺 %s" % token)
-        self.assertEqual(theme.count("= Color.pd("), 18,
-                         "每个主题色都必须给出浅/深两套值")
 
-    def test_no_view_locks_the_color_scheme(self):
+    def test_no_view_locks_or_parses_the_color_scheme(self):
         for name in self.VIEWS:
             src = _ios("Views", name)
-            self.assertNotIn("preferredColorScheme(.dark)", src,
-                             "%s 还在把界面写死成暗色" % name)
-            self.assertNotIn("preferredColorScheme(.light)", src, name)
+            for banned in ("preferredColorScheme", "colorScheme", "Color.pd(",
+                           "palmAppearance", "AppAppearance"):
+                self.assertNotIn(banned, src, "%s 还留着主题解析：%s" % (name, banned))
         app = _ios("PalmDeckApp.swift")
-        self.assertNotIn("preferredColorScheme", app,
-                         "根视图应该用 .palmAppearance() 而不是写死")
+        self.assertNotIn("preferredColorScheme", app, "根视图不该自己管主题")
 
-    def test_appearance_modifier_is_applied_at_every_presentation(self):
-        theme = _ios("Views", "Theme.swift")
-        for want in ("enum AppAppearance", "static let key = \"palmdeck_appearance\"",
-                     "static let fallback: AppAppearance = .light",
-                     "struct AppearanceModifier", "func palmAppearance()"):
-            self.assertIn(want, theme, "Theme.swift 缺 %s" % want)
-        # 根 + 三个 presentation（sheet/cover 不一定继承窗口 override）
-        for name in ("PalmDeckApp.swift", "Views/CockpitView.swift",
-                     "Views/PreflightView.swift", "Views/SettingsView.swift"):
-            self.assertIn(".palmAppearance()", _ios(*name.split("/")),
-                          "%s 没带 .palmAppearance()" % name)
+    def test_system_dark_mode_is_blocked_at_the_window_level(self):
+        """真正拦住系统深色的只有 Info.plist —— 这也是唯一需要守的地方。"""
+        plist = _read("mobile", "ios", "App", "App", "Info.plist")
+        self.assertIn("<key>UIUserInterfaceStyle</key>", plist,
+                      "没有 UIUserInterfaceStyle，系统深色下 App 会变黑")
+        seg = plist.split("<key>UIUserInterfaceStyle</key>", 1)[1]
+        self.assertIn("<string>Light</string>", seg.split("<key>", 1)[0],
+                      "UIUserInterfaceStyle 必须是 Light")
 
-    def test_appearance_setting_is_reachable_from_search(self):
+    def test_appearance_category_is_gone(self):
         s = _ios("Views", "SettingsView.swift")
-        self.assertIn("case connection, profiles, layout, controls, haptics, appearance, help", s)
-        self.assertIn('case .appearance: return "外观"', s)
-        self.assertIn("case .appearance: appearanceSections", s)
-        self.assertIn(".init(self, \"外观模式\",", s, "外观没进搜索索引")
-        self.assertIn("@AppStorage(AppAppearance.key)", s)
+        self.assertIn("case connection, profiles, layout, controls, haptics, help", s)
+        for banned in ("appearance", "AppAppearance", "外观模式", "跟随系统", "深色"):
+            self.assertNotIn(banned, s, "设置里还留着外观/深色：%s" % banned)
 
     def test_instruments_stay_dark_on_purpose(self):
         """姿态球是真仪表：白底上放黑表盘，所以它的色值不跟着主题走。"""
@@ -890,7 +884,7 @@ class TestSettingsConsistency(unittest.TestCase):
                       "搜索索引也要跟着搬（否则搜索结果指向不存在的分类）")
 
     def test_wheel_section_says_it_is_global(self):
-        body = self.s.split("private var wheelSection", 1)[1].split("// ---- 外观", 1)[0]
+        body = self.s.split("private var wheelSection", 1)[1].split("// ---- 帮助", 1)[0]
         self.assertIn("全局项", body,
                       "旁边全是按模式分的，这里是全局的 —— 不说清会一直有人找「为什么改了飞机也变」")
 
