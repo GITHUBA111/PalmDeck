@@ -456,9 +456,17 @@ class TestNoTraySwitch(unittest.TestCase):
         self.src = _read(START)
 
     def test_flag_short_circuits_the_tray(self):
+        """开关必须挡在「启动任何 UI」之前。
+
+        O3-full 之后 UI 有两个入口（`run_tray()` / `run_desktop()`），且 `run_desktop()`
+        内部又缩进调了一次 `run_tray()`。所以只认 **main 里 4 空格缩进**的调用 ——
+        否则会被函数体里的缩进调用骗到（那行在 main 之前，比较大小就反了）。
+        """
         self.assertIn('os.environ.get("PALMDECK_NO_TRAY")', self.src)
-        self.assertLess(self.src.index("PALMDECK_NO_TRAY"), self.src.index("    run_tray()"),
-                        "开关必须在 run_tray() 之前判断，否则等于没写")
+        starts = [m.start() for m in re.finditer(r"^    (run_tray|run_desktop)\(\)", self.src, re.M)]
+        self.assertTrue(starts, "main 里找不到启动 UI 的调用（run_tray/run_desktop）")
+        self.assertLess(self.src.index("PALMDECK_NO_TRAY"), min(starts),
+                        "开关必须在启动任何 UI 之前判断，否则等于没写")
         self.assertIn("run_headless()", self.src)
 
     def test_style_matches_the_existing_no_update_switch(self):

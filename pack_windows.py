@@ -20,6 +20,8 @@ FILES = [
     # 自检：托盘 / 控制台 / 安装脚本 / 命令行共用（缺了 zip 一启动就 ImportError）
     "palmdeck_doctor.py",
     "updater.py",
+    # O3-full 真窗口（start.py import，见 docs/PalmDeck-v4-native-window.md）
+    "palmdeck_window.py",
     "start.py",
     "start.bat",
     "setup_windows.bat",

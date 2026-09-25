@@ -63,6 +63,10 @@ hiddenimports = [
     # 自检（bridge 与 start.py 都 import）
     "palmdeck_doctor",
     "updater",
+    # O3-full 真窗口（start.py import；内部 `import webview` 是函数内动态 import）
+    "palmdeck_window",
+    "webview",
+    "webview.platforms.edgechromium",
     # 系统托盘（Windows 后端动态 import，需显式收进来）
     "pystray._win32",
     # vendored vgamepad（vendor/ 在 pathex 里）
@@ -90,8 +94,11 @@ datas = [
 ]
 binaries = []
 
-# 这些后端是函数内 try/except 动态 import，PyInstaller 静态扫描会漏，需显式 collect_all
-for pkg in ("pyvjoy", "zeroconf", "qrcode", "pystray"):
+# 这些后端是函数内 try/except 动态 import，PyInstaller 静态扫描会漏，需显式 collect_all。
+# pywebview（O3-full 真窗口）在 Windows 上靠 pythonnet/clr_loader 驱动 WebView2，
+# 这些都收进来；某个名字在非目标平台取不到时下面的 except 会跳过。
+for pkg in ("pyvjoy", "zeroconf", "qrcode", "pystray",
+            "webview", "clr_loader", "pythonnet"):
     try:
         d, b, h = collect_all(pkg)
         datas += d

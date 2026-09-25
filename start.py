@@ -8,7 +8,8 @@ PalmDeck 桌面守护程序（罗技驱动式：托盘常驻 + 后台桥接 + �
   3. 后台线程跑 bridge（vJoy / Xbox 虚拟设备 + 手机服务）
   4. 系统托盘：打开控制台 / 自检… / 检查更新 / 打开日志 / 开机自启 / 退出
   5. 启动自检有故障时气泡提醒一次（缺驱动 / 防火墙 / 端口被占 —— 见 palmdeck_doctor.py）
-  6. 无控制台窗口（日志写到 %APPDATA%\\PalmDeck\\palmdeck.log）
+  6. 控制台跑在**自己的窗口**里（O3-full，见 palmdeck_window.py）；不可用时退回
+     浏览器应用窗口；日志写到 %APPDATA%\\PalmDeck\\palmdeck.log
 """
 
 from __future__ import annotations
@@ -30,9 +31,15 @@ from updater import (  # noqa: E402
     restart_after_update,
 )
 
+# O3-full：真窗口（Windows + pywebview/WebView2）。设计见 docs/PalmDeck-v4-native-window.md
+import palmdeck_window  # noqa: E402
+
 # 单实例锁（同时充当"重复双击→打开控制台"的命令通道）
 LOCK_HOST, LOCK_PORT = "127.0.0.1", 47800
 _lock_sock: "socket.socket | None" = None
+
+# 真窗口启用时的全局手柄：托盘 / 单实例命令通道都靠它「唤出已有窗口」。
+_window_host: "palmdeck_window.WindowHost | None" = None
 
 # vgamepad 内置在 vendor/（详见 hotas.py 顶部注释），无需 pip 安装
 if not getattr(sys, "frozen", False):
@@ -255,7 +262,12 @@ def open_console(frag: str = "") -> None:
     """打开网页控制台：优先 Edge/Chrome 的**应用窗口**（无地址栏），否则用默认浏览器。
 
     绝不让「没装 Edge」变成「控制台打不开」—— 所以每一层失败都往下退。
+
+    O3-full 启用时优先唤出**自己的窗口**；没有窗口（或唤不出）才走浏览器这条老路。
     """
+    host = _window_host
+    if host is not None and host.show(frag):
+        return
     url = http_url(frag)
     exe = _browser_exe()
     if exe:
@@ -342,7 +354,8 @@ def notify_doctor(icon) -> None:  # noqa: ANN001
         pass
 
 
-def run_tray() -> None:
+def run_tray(window_host=None) -> None:  # noqa: ANN001
+    """托盘常驻。O3-full 时传 window_host（本函数跑在子线程），否则占主线程。"""
     try:
         import pystray
     except Exception as e:
@@ -351,10 +364,12 @@ def run_tray() -> None:
         return
 
     def open_console_item(icon, item):  # noqa: ANN001
-        open_console()
+        if not (window_host and window_host.show()):
+            open_console()
 
     def open_doctor(icon, item):  # noqa: ANN001
-        open_console("#doctor")
+        if not (window_host and window_host.show("#doctor")):
+            open_console("#doctor")
 
     def open_log(icon, item):  # noqa: ANN001
         p = os.path.join(appdata_dir(), "PalmDeck", "palmdeck.log")
@@ -382,6 +397,8 @@ def run_tray() -> None:
         set_autostart(not autostart_enabled())
 
     def quit_app(icon, item):  # noqa: ANN001
+        if window_host is not None:
+            window_host.quit()  # 放行关闭 + 销毁窗口，主线程的 GUI 循环随之返回
         icon.stop()
 
     menu = pystray.Menu(
@@ -404,8 +421,56 @@ def run_tray() -> None:
         run_headless()
 
 
+# ---------------------------------------------------------------- 真窗口（O3-full）
+def run_desktop() -> None:
+    """窗口占主线程、托盘让位到子线程（见 docs/PalmDeck-v4-native-window.md §3.2）。
+
+    任何一步失败都退回 `run_tray()`（O3-lite / 浏览器），不让「真窗口」变成新的失败点。
+    """
+    global _window_host
+    host = palmdeck_window.WindowHost(http_url(), log=log)
+    if not host.open():
+        log("真窗口建不出来，退回托盘 + 应用窗口")
+        run_tray()
+        return
+    _window_host = host
+    threading.Thread(target=run_tray, args=(host,), daemon=True).start()
+    host.start()  # 阻塞到窗口被销毁（退出）
+    if not host.quitting:
+        # 窗口真被关掉（hide 不可用时的降级）：托盘还在，进程不退，等托盘「退出」
+        log("窗口已关闭，托盘继续运行；可从托盘重新打开（走应用窗口/浏览器）")
+        while not host.quitting:
+            time.sleep(0.5)
+    _window_host = None
+
+
+def selftest(path: str) -> int:
+    """打包后自检（`PALMDECK_SELFTEST=<输出文件>`）：确认可选依赖真的进了包。
+
+    O3-full 的 `import webview` 是**函数内惰性** import —— 冒烟测试跑的是无界面
+    路径，根本碰不到它；所以「包里漏了 pywebview」在本机跟冒烟里都是绿的，
+    只有玩家双击时才发现「真窗口一直开不出来」。这个开关把「包里到底有没有
+    pywebview」变成一条看得见的断言。
+
+    **写文件而不是 print**：exe 是 `console=False` 的窗口程序，没有 stdout。
+    """
+    ok = palmdeck_window.webview_importable()
+    line = ("selftest version=%s webview=%s reason=%s"
+            % (APP_VERSION, "ok" if ok else "missing",
+               palmdeck_window.unavailable_reason()))
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+    return 0 if ok else 3
+
+
 # ---------------------------------------------------------------- main
 def main() -> None:
+    selftest_path = os.environ.get("PALMDECK_SELFTEST")
+    if selftest_path:
+        sys.exit(selftest(selftest_path))
     redirect_stdio()
     log(f"PalmDeck 守护程序 v{APP_VERSION} 启动")
 
@@ -442,7 +507,14 @@ def main() -> None:
         log("PALMDECK_NO_TRAY 已设：不启动托盘，无界面运行")
         run_headless()
         return
-    run_tray()
+
+    # 5. O3-full 真窗口；不可用就说明原因并退回托盘 + 浏览器应用窗口（O3-lite）
+    reason = palmdeck_window.unavailable_reason()
+    if reason:
+        log(f"真窗口不可用（{reason}），控制台走应用窗口/默认浏览器")
+        run_tray()
+        return
+    run_desktop()
 
 
 if __name__ == "__main__":

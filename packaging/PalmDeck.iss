@@ -71,6 +71,15 @@ Name: "autostart"; Description: "开机自动启动（可随时在托盘菜单�
 [Files]
 Source: "..\dist\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 
+; ── O3-full 真窗口的 Runtime 兜底（见 docs/PalmDeck-v4-native-window.md）──
+; 没有 WebView2 Runtime 时，真窗口会退回 O3-lite（浏览器应用窗口）—— 功能不丢。
+; 打包时若 packaging\ 里放了 MicrosoftEdgeWebview2Setup.exe（CI 会下），就带进去、
+; 缺失时静默装；没放就 #if 跳过 —— 安装包照常能编、能用。
+#if FileExists(AddBackslash(SourcePath) + "MicrosoftEdgeWebview2Setup.exe")
+Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; \
+    Flags: deleteafterinstall; Check: WebView2Missing
+#endif
+
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
@@ -82,9 +91,38 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+; 缺 WebView2 时先装 Runtime（装了才会出真窗口），再启动程序。只用用户权限，不弹 UAC。
+#if FileExists(AddBackslash(SourcePath) + "MicrosoftEdgeWebview2Setup.exe")
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; \
+    StatusMsg: "正在安装 WebView2 运行时…"; Flags: waituntilterminated; Check: WebView2Missing
+#endif
 Filename: "{app}\{#AppExe}"; Description: "立即启动 {#AppName}"; \
     Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; 只清程序自己装的目录；%APPDATA%\PalmDeck（日志 / 配置 / 布局）特意不动
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+; WebView2 Runtime 的 EdgeUpdate client GUID —— 与 palmdeck_window._WEBVIEW2_CLIENT 逐字相同
+; （tests/test_window.py 会对账）。查不到就当「没装」：宁可多装一次 Runtime，
+; 也不要拿一个缺渲染引擎的真窗口去唬玩家。
+const
+  WebView2Client = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+
+function WebView2Installed(): Boolean;
+var
+  pv: String;
+begin
+  Result :=
+    RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + WebView2Client, 'pv', pv) or
+    RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + WebView2Client, 'pv', pv) or
+    RegQueryStringValue(HKCU, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + WebView2Client, 'pv', pv);
+  if Result then
+    Result := (pv <> '') and (pv <> '0.0.0.0');
+end;
+
+function WebView2Missing(): Boolean;
+begin
+  Result := not WebView2Installed();
+end;

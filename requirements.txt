@@ -9,3 +9,6 @@
 # Windows 桌面守护程序（托盘图标）：
 pystray
 Pillow
+# O3-full 真窗口（控制台跑在自己的窗口里；Windows 后端 = Edge WebView2，
+# 见 docs/PalmDeck-v4-native-window.md）。缺了它/缺 Runtime 会退回浏览器应用窗口。
+pywebview

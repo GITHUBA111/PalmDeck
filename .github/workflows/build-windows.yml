@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: 安装依赖
-        run: pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
+        run: pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow pywebview
 
       # 版本号只有一处真相源（updater.APP_VERSION）：exe 的文件属性、安装包的文件名、
       # Release 的说明全从它来。下面几步都拿这个 output 去对账。
@@ -86,6 +86,24 @@ jobs:
           if (-not $info.ProductName) { throw "文件属性里 ProductName 是空的" }
           if (-not $info.FileDescription) { throw "文件属性里 FileDescription 是空的" }
 
+      # O3-full 真窗口靠函数内惰性 `import webview` —— 冒烟测试跑无界面路径碰不到它，
+      # 包漏了 pywebview 也是绿的。所以专门让 exe 自己报一声「包里有没有 pywebview」。
+      - name: 断言 exe 里真的带了 pywebview（O3-full 真窗口）
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:TEMP "palmdeck-selftest.txt"
+          Remove-Item $out -ErrorAction SilentlyContinue
+          $env:PALMDECK_SELFTEST = $out
+          Start-Process -FilePath "dist\PalmDeck.exe" -Wait
+          if (-not (Test-Path $out)) {
+            throw "selftest 没写出结果 —— 打包后的 exe 起不来（多半是缺模块）"
+          }
+          $txt = Get-Content $out -Raw
+          Write-Host $txt
+          if ($txt -notmatch "webview=ok") {
+            throw "打包后的 exe 里没有 pywebview —— O3-full 真窗口会永远退回浏览器窗口。检查 spec 的 collect_all(\"webview\")。"
+          }
+
       - name: 找 Inno Setup（镜像自带，缺了就装）
         id: iscc
         shell: pwsh
@@ -101,6 +119,20 @@ jobs:
           if (-not (Test-Path $cand)) { throw "装完 Inno Setup 还是找不到 ISCC.exe" }
           "iscc=$cand" >> $env:GITHUB_OUTPUT
           Write-Host "ISCC：$cand"
+
+      # WebView2 Runtime 引导器（可选）：装了才会出真窗口，没装就退回浏览器窗口。
+      # 下不到不算失败 —— .iss 用 #if FileExists 兜底，安装包照编。
+      - name: 准备 WebView2 Runtime 引导器
+        shell: pwsh
+        run: |
+          $dst = "packaging\MicrosoftEdgeWebview2Setup.exe"
+          try {
+            Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
+              -OutFile $dst -UseBasicParsing -TimeoutSec 120
+            Write-Host ("WebView2 引导器已就绪：" + [math]::Round((Get-Item $dst).Length / 1MB, 2) + " MB")
+          } catch {
+            Write-Host "::warning::WebView2 引导器下载失败（$($_.Exception.Message)）；安装包不带 Runtime 兜底，缺失时运行期退回浏览器窗口"
+          }
 
       - name: 编译安装包
         shell: pwsh

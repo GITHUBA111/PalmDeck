@@ -5,6 +5,9 @@
 _palmdeck_win/
 PalmDeck-Windows.zip
 
+# 安装包用的 WebView2 Runtime 引导器（CI 现下，不入库）
+packaging/MicrosoftEdgeWebview2Setup.exe
+
 # Node（Capacitor 依赖）
 node_modules/
 mobile/node_modules/
