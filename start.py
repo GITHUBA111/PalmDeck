@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from updater import (  # noqa: E402
     APP_VERSION,
     apply_update,
-    check_update,
+    check_update_status,
     restart_after_update,
 )
 
@@ -281,16 +281,19 @@ def run_tray() -> None:
             pass
 
     def check_update_manual(icon, item):  # noqa: ANN001
-        newver = check_update()
-        if newver:
-            icon.notify(f"发现新版本 v{newver}，正在下载…", "PalmDeck")
-            if apply_update(newver):
+        st = check_update_status()
+        # 结果**同时**写日志：Windows 的通知气泡可能被系统静默（专注助手 / 通知关了），
+        # 只靠 notify 的话玩家点了「检查更新」会感觉「没反应」。日志里永远查得到。
+        log("更新检查：" + st["message"])
+        if st["reason"] == "update":
+            icon.notify(st["message"] + "，正在下载…", "PalmDeck")
+            if apply_update(st["latest"]):
                 icon.notify("更新完成，即将重启", "PalmDeck")
                 restart_after_update()
             else:
                 icon.notify("更新下载失败，请稍后再试", "PalmDeck")
         else:
-            icon.notify(f"已是最新版本 v{APP_VERSION}", "PalmDeck")
+            icon.notify(st["message"], "PalmDeck")
 
     def toggle_autostart(icon, item):  # noqa: ANN001
         set_autostart(not autostart_enabled())
@@ -325,14 +328,17 @@ def main() -> None:
 
     # 1. 自动更新（仅 Windows 打包版，源码运行不自我替换）
     if getattr(sys, "frozen", False) and os.name == "nt":
-        newver = check_update()
-        if newver:
-            log(f"发现新版本 v{newver}（当前 v{APP_VERSION}），自动更新…")
-            if apply_update(newver):
+        st = check_update_status()
+        if st["reason"] == "update":
+            log(st["message"] + "，自动更新…")
+            if apply_update(st["latest"]):
                 log("更新完成，正在重启")
                 restart_after_update()
             else:
                 log("自动更新失败，继续用当前版本")
+        elif not st["ok"]:
+            # 「为什么这次没更新」也留一条：排查「收不到更新」时全靠它
+            log("启动时跳过自动更新：" + st["message"])
 
     ensure_deps()
 

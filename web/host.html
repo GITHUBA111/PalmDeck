@@ -292,6 +292,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let CONFIG = null, DEFAULTS = null, LIVE = [], RESTART = [];
+    let LATEST = "";   // 检查更新查到的版本号（空 = 没有新版 / 没查成）
     let status = {}, info = {};
 
     function toast(msg) {
@@ -570,15 +571,24 @@
       $("curVer").textContent = "v" + info.version;
       $("platform").textContent = info.platform + (info.frozen ? " · 打包版" : " · 源码");
       $("canUpdate").innerHTML = info.can_self_update ? '<span class="ok">是</span>' : "否";
-      $("applyUp").disabled = !info.can_self_update;
+      // 「可自替换」只是**能力**；还要真的**有**新版才让点 ——
+      // 否则 GITHUB_EXE 指向的是 latest 资产，可能比当前版本还旧（装它=降级）。
+      $("applyUp").disabled = !info.can_self_update || !LATEST;
       $("pillVer").innerHTML = "<b>v" + info.version + "</b>";
     }
     $("checkUp").onclick = async () => {
       $("latestVer").textContent = "检查中…";
       try {
         const r = await api("/api/update/check");
-        $("latestVer").innerHTML = r.latest ? `<span class="ok">v${r.latest}</span>` : "已是最新";
-      } catch (e) { $("latestVer").textContent = "检查失败"; }
+        LATEST = r.latest || "";
+        // 服务端把「为什么」一起给了（已是最新 / 连不上网络 / 仓库没发过版）。
+        // 以前这里只认「有版本号」和「空」，于是三种情况都显示「已是最新」——
+        // 玩家会以为程序在骗他（也确实在骗）。
+        if (r.latest) $("latestVer").innerHTML = `<span class="ok">v${r.latest}</span>`;
+        else $("latestVer").innerHTML = r.ok ? r.message
+                                            : `<span class="bad">${r.message || "检查失败"}</span>`;
+        $("applyUp").disabled = !info.can_self_update || !LATEST;
+      } catch (e) { $("latestVer").textContent = "检查失败：" + e.message; }
     };
     $("applyUp").onclick = async () => {
       if (!confirm("下载新版本并重启 PalmDeck？")) return;

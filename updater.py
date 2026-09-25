@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 # 发版版本号（唯一来源）。托盘、网页控制台、自更新比较都用它。
@@ -40,10 +41,32 @@ def _ver_tuple(v: str) -> tuple:
         return (0, 0, 0)
 
 
-def check_update() -> str:
-    """返回远端最新版本号（如 4.1.0）；无更新/离线/出错返回空串。"""
+# ---- 「检查更新」的结论 ----------------------------------------------------
+# 以前只有一个空串表示「没有新版」，于是三种完全不同的情况 —— 「真的是最新」
+# 「连不上 GitHub」「仓库根本没发过 Release」—— 在界面上长得一模一样：
+# 玩家点「检查更新」，得到的是一句可能是假话的「已是最新版本」。
+# 现在把结论和原因分开带出来（`reason` 给机器判，`message` 直接给人看）。
+UPD_UPDATE = "update"          # 有新版本，latest 非空
+UPD_CURRENT = "current"        # 检查成功，确实已是最新
+UPD_DISABLED = "disabled"      # PALMDECK_NO_UPDATE：主动关掉的
+UPD_NO_RELEASE = "no_release"  # 仓库还没有任何 Release（GitHub 404）
+UPD_OFFLINE = "offline"        # 网络不通 / 被限流 / 返回不可解析
+
+
+def _upd(ok: bool, reason: str, message: str, latest: str = "") -> dict:
+    return {"ok": ok, "reason": reason, "message": message,
+            "current": APP_VERSION, "latest": latest}
+
+
+def check_update_status() -> dict:
+    """检查更新，并把「为什么是这个结论」一起带回来。
+
+    `ok` 表示**检查本身**是否成功完成（不是「有没有新版」）；
+    `reason` 见上面的 UPD_* 常量；`message` 是可直接显示的中文。
+    """
+    cur = APP_VERSION
     if os.environ.get("PALMDECK_NO_UPDATE"):
-        return ""
+        return _upd(False, UPD_DISABLED, f"已关闭更新检查（当前 v{cur}）")
     try:
         req = urllib.request.Request(
             GITHUB_API,
@@ -51,12 +74,32 @@ def check_update() -> str:
         )
         with urllib.request.urlopen(req, timeout=8) as r:
             tag = str(json.loads(r.read().decode("utf-8", "replace")).get("tag_name", ""))
-        latest = tag.lstrip("vV")
-        if _ver_tuple(latest) > _ver_tuple(APP_VERSION):
-            return latest
-    except Exception:
-        pass
-    return ""
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return _upd(False, UPD_NO_RELEASE,
+                        f"仓库还没有发布过版本，暂时无法检查（当前 v{cur}）")
+        return _upd(False, UPD_OFFLINE,
+                    f"检查失败：GitHub 返回 {e.code}（当前 v{cur}）")
+    except Exception as e:
+        return _upd(False, UPD_OFFLINE,
+                    f"检查失败：连不上 GitHub（{type(e).__name__}）（当前 v{cur}）")
+
+    latest = tag.lstrip("vV")
+    if _ver_tuple(latest) == (0, 0, 0):
+        # tag_name 拿不到或不是版本号：不能猜成「已是最新」
+        return _upd(False, UPD_OFFLINE,
+                    f"检查失败：远端 tag「{tag}」不是版本号（当前 v{cur}）")
+    if _ver_tuple(latest) > _ver_tuple(cur):
+        return _upd(True, UPD_UPDATE, f"发现新版本 v{latest}（当前 v{cur}）", latest)
+    return _upd(True, UPD_CURRENT, f"已是最新（当前 v{cur}）")
+
+
+def check_update() -> str:
+    """返回远端最新版本号（如 4.1.0）；无更新/离线/出错返回空串。
+
+    想看「为什么」就用 `check_update_status()` —— 这个方法只保留老契约。
+    """
+    return check_update_status()["latest"]
 
 
 def apply_update(_newver: str) -> bool:

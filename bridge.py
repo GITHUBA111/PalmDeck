@@ -45,7 +45,7 @@ from updater import (
     APP_VERSION,
     apply_update,
     can_self_update,
-    check_update,
+    check_update_status,
     restart_after_update,
 )
 
@@ -1044,10 +1044,16 @@ class CockpitHandler(SimpleHTTPRequestHandler):
                     self, {**layouts.meta(), "mode": mode, "layout": layouts.get_layout(mode)})
             return _send_json(self, {**layouts.meta(), "layouts": layouts.load_layouts()})
         if path == "/api/update/check":
+            # 结论 + 原因一起给：`latest` 为空不再是唯一的「没有新版」信号
+            # （它分不清「真最新」「连不上网」「仓库没发过版」）。
+            st = check_update_status()
             return _send_json(self, {
                 "current": APP_VERSION,
-                "latest": check_update(),
+                "latest": st["latest"],
                 "can_self_update": can_self_update(),
+                "ok": st["ok"],
+                "reason": st["reason"],
+                "message": st["message"],
             })
         if path in ("/", "/host", "/host.html"):
             self.path = "/host.html"
@@ -1099,9 +1105,13 @@ class CockpitHandler(SimpleHTTPRequestHandler):
             if not can_self_update():
                 return _send_json(
                     self, {"ok": False, "error": "仅打包版 Windows 支持自助更新"}, 400)
-            latest = check_update()
-            if not latest:
-                return _send_json(self, {"ok": False, "error": f"已是最新版本 v{APP_VERSION}"})
+            st = check_update_status()
+            if not st["latest"]:
+                # 别把「连不上网 / 仓库没发过版」说成「已是最新」——
+                # 用户看到的那句话必须是**真的**，否则他永远不会去查网络。
+                return _send_json(self, {"ok": False, "error": st["message"],
+                                         "reason": st["reason"]}, 400)
+            latest = st["latest"]
             if not apply_update(latest):
                 return _send_json(self, {"ok": False, "error": "下载失败，请稍后再试"}, 500)
             _send_json(self, {"ok": True, "version": latest, "restarting": True})
