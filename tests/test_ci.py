@@ -81,6 +81,17 @@ class TestReleaseWorkflowRunsTests(unittest.TestCase):
         """PR 也该跑——不然只有打 tag 才发现红。"""
         self.assertIn("pull_request", self.wf)
 
+    def test_outcome_and_diagnostics_go_to_a_branch(self):
+        """结果与诊断写回 `ci-diag` 分支（绿也写，好让 git 能判红绿）。
+
+        job 日志要 admin（403）；REST API 匿名额度 60/h、又和整个 NAT 出口共用，
+        一查就爆。只有 git 是稳的 —— 所以每次构建都要留下这条分支，
+        否则红了就只能干看着。
+        """
+        self.assertIn("ci-diag", self.wf, "构建结果没写回分支，红了拿不到证据")
+        self.assertRegex(self.wf, r"(?m)^      - name: .+\n        if: always\(\)",
+                         "回写结果/诊断的步骤必须挂 if: always()（红绿都写）")
+
 
 class TestWindowsAcceptanceChecklist(unittest.TestCase):
     """G4 真机验收清单：文件在、内容真、被 docs 索引收录。"""

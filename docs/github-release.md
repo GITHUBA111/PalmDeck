@@ -40,6 +40,17 @@ git push -u origin main
 >
 > 工作流里 `test` job 先跑（macos-latest：iOS 纯逻辑要 `swiftc`、启动页亮度要 `sips`，
 > 只有 macOS 两样齐全），**测试红了不会出包**。
+>
+> `build` job 红了怎么查（很重要，踩过坑）：**别用 REST API**。
+> job 日志要仓库 admin（返回 403）；匿名 REST API 额度 60/h、又和整个 NAT 出口共用，
+> 一查就见底。所以**每次构建**都会把结果与诊断（`status=success/failure` +
+> ISCC 输出、自检结果、冒烟日志尾巴）force-add 到 **`ci-diag` 分支**，本地用 git 拿：
+>
+> ```bash
+> git fetch origin ci-diag && git show origin/ci-diag:.ci-diag.txt
+> ```
+>
+> 另外失败步骤会发 `::error::` 注解（注解是公开可读的），但长久渠道是 `ci-diag`。
 
 ## 三、使用（目标电脑）
 

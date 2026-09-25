@@ -105,14 +105,16 @@ jobs:
           for ($i = 0; $i -lt 30 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 500 }
           if (-not (Test-Path $out)) {
             Write-Host "::error::selftest 没写出结果 —— 打包后的 exe 起不来（多半是缺模块）"
+            "== selftest 没写出结果（exe 起不来）==" | Add-Content .ci-diag.txt
             exit 1
           }
           $txt = (Get-Content $out -Raw).Trim()
           Write-Host $txt
           if ($txt -notmatch "webview=ok") {
-            # 发成注解：job 日志要 admin 才看得到，注解是公开可读的
-            # —— 这是我们排查这张红叉时唯一能拿到的证据。
+            # 发成注解（公开可读）+ 写进 .ci-diag.txt（git 能拿到）
             Write-Host "::error::打包后的 exe 里 pywebview 不可用：$txt"
+            "== pywebview 不可用 ==" | Add-Content .ci-diag.txt
+            $txt | Add-Content .ci-diag.txt
             exit 1
           }
 
@@ -155,6 +157,8 @@ jobs:
             # ISCC 的报错写在 stdout，而 job 日志要 admin 才看得到 —— 发成注解才算留下证据
             $tail = ($isccLog -split "`r?`n" | Where-Object { $_ -match "\S" } | Select-Object -Last 12) -join " %0A "
             Write-Host "::error::ISCC 编译失败（退出码 $LASTEXITCODE）：$tail"
+            "== ISCC 编译失败（退出码 $LASTEXITCODE）==" | Add-Content .ci-diag.txt
+            $isccLog | Add-Content .ci-diag.txt
             exit 1
           }
           $setup = Get-ChildItem dist\PalmDeck-Setup-*.exe -ErrorAction SilentlyContinue |
@@ -225,10 +229,12 @@ jobs:
           } catch {
             Write-Host "::error::冒烟失败：$($_.Exception.Message)"
             $log = Join-Path $cfgDir "palmdeck.log"
+            "== 冒烟失败：$($_.Exception.Message) ==" | Add-Content .ci-diag.txt
             if (Test-Path $log) {
               $tail = (Get-Content $log -Tail 30) -replace '%','%25'
               $tail = $tail -join '%0A'
               Write-Host "::error::日志尾部：$tail"
+              Get-Content $log -Tail 40 | Add-Content .ci-diag.txt
             }
             throw
           }
@@ -257,3 +263,23 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 把本次构建的**结果 + 诊断**写回 `ci-diag` 分支（绿也写，这样 git 就能判红绿）。
+      # 为什么不用别的渠道：job 日志要 admin（403）；REST API 匿名额度 60/h、
+      # 又和整个 NAT 出口共用，一查就爆。只有 git 是稳的 ——
+      # 本地 `git fetch origin ci-diag && git show origin/ci-diag:.ci-diag.txt` 就能看。
+      - name: 把构建结果与诊断推回 ci-diag 分支
+        if: always()
+        shell: pwsh
+        run: |
+          $status = "${{ job.status }}"
+          $body = if (Test-Path .ci-diag.txt) { Get-Content .ci-diag.txt -Raw }
+                  else { "（没有错误段 —— 本次是绿的）" }
+          "status=$status run=${{ github.run_id }} sha=${{ github.sha }} ref=${{ github.ref }}`n$body" |
+            Out-File -Encoding utf8 .ci-diag.txt
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B ci-diag
+          git add -f .ci-diag.txt
+          git commit -m "ci-diag: $status (${{ github.sha }})" | Out-Null
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-diag
