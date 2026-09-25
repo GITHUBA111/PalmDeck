@@ -104,5 +104,14 @@ python3 -m unittest discover -s tests -t .      # 136 项
 风险大于收益；`swiftc` 足够了，而且能跟着 `python3 -m unittest` 一起跑。
 没有 `swiftc` 的环境自动 skip。
 
+### UI 走查截图（给 agent 的提醒）
+
+本项目的 UI 验证是 Mac Catalyst 跑起来 + `cliclick` 点 + `screencapture -x` 截图肉眼比对。
+**截图必须先过 `~/.pi/agent/skills/shot/shot.sh` 压成小 JPEG 再 `read`**：
+Retina 全屏 PNG 一张 3～5 MB，直接 read 会把几 MB 的 base64 塞进会话，
+攒到几十张后模型网关会回 `413 Failed to buffer the request body`
+（pi 的上下文管理按 token 算，网关按 byte 卡，两边不是一回事）。
+压完约 100 KB，肉眼判断足够。细节见该 skill 的 `SKILL.md`。
+
 ### 待办
 见 `docs/TODO.md`。
