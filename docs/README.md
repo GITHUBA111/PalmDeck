@@ -89,7 +89,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 149 项
+python3 -m unittest discover -s tests -t .      # 151 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

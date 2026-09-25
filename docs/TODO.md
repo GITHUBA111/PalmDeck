@@ -88,6 +88,14 @@
   手柄显示 摇杆X/摇杆Y/视角X/视角Y。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.9，
   `TestStatusStripFollowsTheMode` + `AxisCoreTests::testHudReadout*` 守卫。
+- **横幅/编辑条不再盖在画布上** —— `deckBody` 从 `ZStack + overlay` 改成 `VStack`：
+  横幅 / 编辑工具条各占一行，画布拿剩下的高度。以前浮层底下那点区域既点不动也拖不动，
+  默认布局从 y=0.10 起就是为了躲横幅（这个默认值保持不动，免得新装旧装不一致）。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.10，`TestDeckChromeDoesNotCoverTheCanvas` 守卫。
+- **拖拽/缩放跟不上手指** —— `EditableWidget` 的两个手势原来是默认的 `.local` 坐标空间，
+  而组件自己会被拖走 ⇒ 同一根手指的位移被抵消一半，拖 206pt 只走 81pt。
+  改成 `DragGesture(coordinateSpace: .global)` 后 1:1（实测落点 915 vs 手指 930）。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.11，`TestCanvasEditGesturesUseGlobalSpace` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。

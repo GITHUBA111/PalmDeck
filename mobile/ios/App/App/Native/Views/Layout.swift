@@ -468,7 +468,10 @@ struct EditableWidget: View {
                     .overlay(RoundedRectangle(cornerRadius: 8)
                         .stroke(Theme.cyan, style: StrokeStyle(lineWidth: 2, dash: [5, 3])))
                     .gesture(
-                        DragGesture()
+                        // 必须用 .global：组件自己会跟着手指跑，而在 .local（手势视图自己的坐标空间）
+                        // 里量位移，视图一动、同一根手指的位移就被抵消掉一半 ——
+                        // 表现就是「组件总追不上手指」（跟到一半就不动了）。缩放把手同理。
+                        DragGesture(coordinateSpace: .global)
                             .onChanged { g in
                                 if dragStart == nil { dragStart = r }
                                 guard let st = dragStart else { return }
@@ -486,7 +489,7 @@ struct EditableWidget: View {
                     .frame(width: 24, height: 24)
                     .offset(x: pw / 2 - 12, y: ph / 2 - 12)
                     .gesture(
-                        DragGesture()
+                        DragGesture(coordinateSpace: .global)
                             .onChanged { g in
                                 if dragStart == nil { dragStart = r }
                                 guard let st = dragStart else { return }

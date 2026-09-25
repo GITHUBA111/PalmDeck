@@ -547,5 +547,24 @@ class TestDeckChromeDoesNotCoverTheCanvas(unittest.TestCase):
                          "编辑条用 Spacer 会橑满整个画布（旧写法）——它是画布上面的一行")
 
 
+class TestCanvasEditGesturesUseGlobalSpace(unittest.TestCase):
+    """拖/缩放组件的手势必须在**固定**坐标空间里量位移。
+
+    组件自己会跟着手指跑。在 `.local`（手势视图自己的坐标空间）里量位移，
+    视图一动就把同一根手指的位移抵消掉一半：拖一下只走一半 ——「组件总追不上手指」。
+    """
+
+    def setUp(self):
+        self.edit = _ios("Views", "Layout.swift").split("struct EditableWidget", 1)[1]
+
+    def test_move_and_resize_use_global(self):
+        self.assertEqual(self.edit.count("DragGesture(coordinateSpace: .global)"), 2,
+                         "拖动本体与缩放把手两个手势都要 .global")
+
+    def test_no_local_drag_gesture(self):
+        self.assertEqual(self.edit.count("DragGesture("), 2,
+                         "EditableWidget 里只应有拖动 + 缩放两个手势")
+
+
 if __name__ == "__main__":
     unittest.main()
