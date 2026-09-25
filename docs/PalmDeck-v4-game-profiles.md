@@ -380,8 +380,8 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 | **反转 `invX`** | **视游戏而定** | ETS2 有 Steering Axis 反向开关，两边只能开一个 |
 | **方向盘转角 `wheelMaxDeg`** | **900**（默认 540） | 默认 540 是 `ControllerState.swift:97` 定的；真实卡车/ETS2 的 lock-to-lock 是 900°，触发点不对齐时「打满」感觉会怪 |
 | 回正速度 `wheelReturnSpeed` | 720（默认） | 卡车方向盘不应快速回正，可再调低 |
-| 布局 | **不绑定**（`widgetsJSON = nil`） | E2 起开车默认走 `defaultDrive()` 通用模块（方向盘/视角板/三踏板 + 序号按键）；预设不强行覆盖用户布局 |
-| 按钮标签 | 用户自定（默认「1…8」） | App 不再硬编码「降档」这类语义（见 §3.9 / E2） |
+| 布局 | **不绑定**（`widgetsJSON = nil`） | E2 起开车默认走 `defaultDrive()` 通用模块（方向盘/三踏板/视角，**只有轴**）；预设不强行覆盖用户布局 |
+| 按钮标签 | 用户自定（默认不内置按键） | App 不再硬编码「降档」这类语义（见 §3.9 / E2） |
 
 ETS2 里建议的键位对应（都是 Xbox 手柄侧）：
 
@@ -419,8 +419,8 @@ PalmDeck 的 drive 把**离合踏板送到 LS Y**（§2.7）。
 ETS2 的 H-pattern（H 档）**本方案不支持**——那需要 6 个独立按钮 + 离合搭配，
 而且档杆 UI 的「八位置」会变成谎话。
 
-> **E2 起 App 不再规定「哪个键是降档」**：默认开车布局只有「1…8」序号按键，
-> 你把其中两个在 ETS2 里绑成 Shift Up / Shift Down 就行，想用哪两个键都行。
+> **E2 起 App 不再规定「哪个键是降档」**：默认开车布局只有轴、没有按键，
+> 你在编辑态自己加两个按键、在 ETS2 里绑成 Shift Up / Shift Down 就行，想用哪两个键都行。
 > 这样就避开了「降档键与欧卡2 默认的 LB/RB 看镜头撞车」这个报障（§3.9）。
 > 下表的 b5/b6 → RB/LB 是**旧版固定卡车皮肤**的行为，仅作参考。
 
@@ -578,26 +578,29 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 但同一只虚拟手柄在不同游戏里默认占用完全不同——App 替用户拍板的**每一条语义都可能撞车**，
 而且每换一个游戏就得改一份 App 代码。
 
-**设计修正（E2）**：App **只提供通用模块 + 中性序号**，含义与绑定由用户在游戏里完成。
+**设计修正（E2）**：App **只提供通用模块**，含义与绑定由用户在游戏里完成；
+**飞机与开车默认只给轴控件、不放任何按键**（按键由用户自己添加、`Aa` 命名）。
 
 | 项 | 之前 | 现在 |
 |---|---|---|
-| 按钮标签 | 「降档」「危险灯」 | 「3」「5」（`WidgetBinding.label` → “按钮 N”）；可在编辑态 `Aa` 改名 |
-| 可用模式 | 仅 gamepad | gamepad / drive（`LayoutStore.supportsCustom(mode:)`） |
-| 开车默认 | `DriveDeck` 硬编码 | `defaultDrive()` = 方向盘/视角板/三踏板 + 8 个序号按键 |
-| 固定皮肤 | 唯一可选 | 仍保留，`[布局]` 一键切画布 |
+| 按钮标签 | 「降档」「危险灯」 | 默认不内置按键；用户加的按键默认叫「按钮 N」，可 `Aa` 改名 |
+| 可用模式 | 仅 gamepad | **三个模式都行**（`LayoutStore.supportsCustom(mode:)` 恒 true） |
+| 飞机默认 | `FlightDeckView` 硬编码（含 6 个内部按键） | `defaultHeli()` = 周期杆/总距/脚舵/视角（**只有轴**） |
+| 开车默认 | `DriveDeck` 硬编码 | `defaultDrive()` = 方向盘/三踏板/视角（**只有轴**） |
+| 固定皮肤 | 唯一可选且默认 | 降为 **opt-in**（编辑条里的 `[经典皮肤]` 才切过去） |
 
-核心代码：`LayoutStore.defaultDrive()` / `supportsCustom`、`CockpitView.deckBody` + `moduleBody`、
-`EditableWidget` 重命名、新键 `palmdeck_drive_custom`。详见
+核心代码：`LayoutStore.defaultHeli()` / `defaultDrive()` / `supportsCustom`、
+`CockpitView.deckBody` + `moduleBody`（含 `[经典皮肤]` 开关）、`EditableWidget` 重命名、
+新键 `palmdeck_heli_custom` / `palmdeck_drive_custom`（默认 true）。详见
 `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 **为何不直接把换档换成 X/B 这种“安全键”**：没有任何一组键对**所有**游戏安全
 （欧卡2 的 X/B 是别的功能）。一旦 App 重新拍板，就又把 App 和游戏默认绑死了。
 把选择权交给用户，才是“一套模块适配所有游戏”的唯一自洽做法。
 
-**测试**：`tests/test_deck_bindings.py::TestDefaultDriveLayout`——
-开车默认按钮必须全是序号（`^\d+$`）、不得出现游戏语义词；
-`func_body()` 把 `defaultGamepad()` 与 `defaultDrive()` 的断言隔开。
+**测试**：`tests/test_deck_bindings.py::TestDefaultHeliLayout` /
+`TestDefaultDriveLayout`——默认布局不得出现 `.make(.button,`、不得出现游戏语义词;
+`TestLayoutModuleWiring` 守卫三模式的 `supportsCustom` / `defaults` / 播种接线。
 
 ---
 

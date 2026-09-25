@@ -8,7 +8,8 @@ struct CockpitView: View {
     @StateObject private var layout = LayoutStore()
     @StateObject private var profiles = GameProfileStore()
     @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
-    @AppStorage("palmdeck_drive_custom") private var driveCustom = false
+    @AppStorage("palmdeck_heli_custom") private var heliCustom = true
+    @AppStorage("palmdeck_drive_custom") private var driveCustom = true
     @State private var showLibrary = false
     @State private var showTutorial = false
     @State private var naming = false
@@ -129,11 +130,8 @@ struct CockpitView: View {
                 .frame(width: 40)
                 if LayoutStore.supportsCustom(mode: s.mode) {
                     Button {
-                        if !layout.editing {
-                            // 编辑即切到自定义组件
-                            if s.mode == .gamepad { gamepadCustom = true }
-                            else if s.mode == .drive { driveCustom = true }
-                        }
+                        // 编辑即切到自定义组件（飞机/开车默认已是模块布局）
+                        if !layout.editing { setCustom(true, mode: s.mode) }
                         layout.editing.toggle()
                         Haptics.press()
                     } label: {
@@ -207,16 +205,24 @@ struct CockpitView: View {
         }
     }
 
-    // MARK: 座舱主体（固定皮肤 / 自定义组件）
+    /// 切换某模式的「经典皮肤 / 通用模块」开关。
+    private func setCustom(_ on: Bool, mode: CockpitMode) {
+        switch mode {
+        case .gamepad: gamepadCustom = on
+        case .heli:    heliCustom = on
+        case .drive:   driveCustom = on
+        }
+    }
+
+    // MARK: 座舱主体（经典皮肤 / 通用模块）
     @ViewBuilder
     private func deckBody(W: CGFloat, H: CGFloat) -> some View {
         switch s.mode {
         case .heli:
-            // 飞行模式：真机硬件皮肤（P4）；heli 不做自定义布局
-            FlightDeckView(s: s, ctrl: ctrl)
-                .frame(width: W, height: H)
-                .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-                .overlay(alignment: .top) { notConnectedBanner }
+            moduleBody(mode: .heli, custom: heliCustom, W: W, H: H) {
+                // 经典直升机器皮肤（可选；默认不显，用模块布局）
+                FlightDeckView(s: s, ctrl: ctrl)
+            }
         case .gamepad:
             moduleBody(mode: .gamepad, custom: gamepadCustom, W: W, H: H) {
                 ZStack {
@@ -236,7 +242,7 @@ struct CockpitView: View {
         }
     }
 
-    /// 固定皮肤 ⇄ 自定义模块画布。两种支持自定义布局的模式（gamepad / drive）共用。
+    /// 经典皮肤 ⇄ 通用模块画布。三个模式的 `deckBody` 共用。
     @ViewBuilder
     private func moduleBody<Fixed: View>(mode: CockpitMode, custom: Bool, W: CGFloat, H: CGFloat,
                                          @ViewBuilder fixed: () -> Fixed) -> some View {
@@ -250,7 +256,7 @@ struct CockpitView: View {
             } else {
                 fixed()
             }
-            if layout.editing { editBar }
+            if layout.editing { editBar(mode: mode) }
         }
         .frame(width: W, height: H)
         .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
@@ -272,10 +278,16 @@ struct CockpitView: View {
         }
     }
 
-    /// 编辑态下的顶部工具条（加组件 / 存模板 / 完成）。
-    private var editBar: some View {
+    /// 编辑态下的顶部工具条（切经典皮肤 / 加组件 / 存模板 / 完成）。
+    private func editBar(mode: CockpitMode) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
+                Button("经典皮肤") {
+                    setCustom(false, mode: mode)
+                    layout.editing = false
+                    Haptics.press()
+                }
+                .buttonStyle(CardButton(accent: Theme.textFaint, fillWidth: false, height: 30))
                 Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
                 libraryButton("按键", .button, nil)
                 libraryButton("触摸板", .pad, .look)

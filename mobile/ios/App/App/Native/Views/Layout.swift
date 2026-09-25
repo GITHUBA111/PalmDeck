@@ -54,10 +54,13 @@ final class LayoutStore: ObservableObject {
         // 只在「从未存过该模式」时播种内置默认。
         // 用 == nil（而不是 isEmpty），否则用户主动「清空」的空白布局会在重启后被默认布局覆盖。
         //
-        // 播种 .gamepad 与 .drive：两者都能切到「自定义模块布局」
-        // （`CockpitView.moduleBody`）。heli 仍是固定硬件皮肤，不播种。
+        // 播种 .gamepad / .heli / .drive：三个模式都能切到「自定义模块布局」
+        // （`CockpitView.moduleBody`）。
         if layouts[CockpitMode.gamepad.rawValue] == nil {
             layouts[CockpitMode.gamepad.rawValue] = LayoutStore.defaultGamepad()
+        }
+        if layouts[CockpitMode.heli.rawValue] == nil {
+            layouts[CockpitMode.heli.rawValue] = LayoutStore.defaultHeli()
         }
         if layouts[CockpitMode.drive.rawValue] == nil {
             layouts[CockpitMode.drive.rawValue] = LayoutStore.defaultDrive()
@@ -298,20 +301,20 @@ final class LayoutStore: ObservableObject {
 
     /// 哪些模式支持「自定义模块布局」。
     ///
-    /// gamepad / drive 都能切到组件画布（`CockpitView.moduleBody`）；
-    /// heli 仍是固定硬件皮肤、不做自定义布局（见 `docs/PalmDeck-v4-app-interaction.md` §13）。
+    /// 现在**三个模式都支持**：飞机 / 开车 / 手柄都走组件画布。
+    /// 飞机与开车默认只放轴控件（摇杆/方向盘/油门/离合/脚舵……），
+    /// **不放任何内置按键**————按键全部由用户自己加、自己命名。
     static func supportsCustom(mode: CockpitMode) -> Bool {
         switch mode {
-        case .gamepad, .drive: return true
-        case .heli: return false
+        case .gamepad, .heli, .drive: return true
         }
     }
 
     static func defaults(mode: CockpitMode) -> [DeckWidget] {
         switch mode {
         case .gamepad: return defaultGamepad()
+        case .heli:    return defaultHeli()
         case .drive:   return defaultDrive()
-        case .heli:    return []
         }
     }
 
@@ -336,28 +339,35 @@ final class LayoutStore: ObservableObject {
         ]
     }
 
-    /// 开车默认布局（通用模块）。
+    /// 飞机默认布局（**只有轴，没有任何按键**）。
     ///
-    /// **刻意不写游戏语义**：按钮就叫「1…8」这类序号，具体在游戏里绑成升/降档、
-    /// 转向灯、喇叭……全由用户自己决定。理由是同一只虚拟手柄在不同游戏里
-    /// 默认占用完全不同（如欧卡2 把 LB/RB 默认绑成“向左/右看”），
-    /// App 一旦替用户拍板“LB=降档”，降档就会连带切镜头。
-    /// 按钮的绑定也可随时在「布局」里改（见 `CockpitView` 的「布局」按钮）。
+    /// 按键完全由用户自己添加、命名——“开火/投弹/起落架”这些语义
+    /// 在竞品之间并不通用，硬编码进去只会闦用户。
+    static func defaultHeli() -> [DeckWidget] {
+        [
+            // 周期变距杆：2D，写 roll + pitch
+            .make(.stick,  .roll,     .r(0.06, 0.34, 0.26, 0.44), label: "周期杆"),
+            // 总距杆：单极，写 throttle
+            .make(.slider, .throttle, .r(0.36, 0.16, 0.14, 0.62), label: "总距"),
+            // 脚舵：双极，写 yaw
+            .make(.slider, .yaw,      .r(0.54, 0.34, 0.16, 0.44), label: "脚舵"),
+            // 视角：触摸板，写 lookX/lookY
+            .make(.pad,    .look,     .r(0.78, 0.34, 0.18, 0.44), label: "视角"),
+        ]
+    }
+
+    /// 开车默认布局（**只有轴，没有任何按键**）。
+    ///
+    /// 之前误把「升/降档」等按键固定成 LB/RB，结果和欧卡2 默认的
+    /// “向左/右看”（同样是 LB/RB）撞车——降档会连带切镜头。
+    /// 所以现在开车默认只给方向盘/三踏板/视角，换档键由用户在游戏里自己绑。
     static func defaultDrive() -> [DeckWidget] {
         [
-            .make(.wheel,  .roll,     .r(0.05, 0.06, 0.50, 0.52), label: "方向盘"),
-            .make(.pad,    .look,     .r(0.80, 0.06, 0.16, 0.26), label: "视角"),
-            .make(.slider, .clutch,   .r(0.05, 0.64, 0.16, 0.30), label: "离合"),
-            .make(.slider, .brake,    .r(0.23, 0.64, 0.16, 0.30), label: "刹车"),
-            .make(.slider, .throttle, .r(0.41, 0.64, 0.16, 0.30), label: "油门"),
-            .make(.button, .vjoy1,    .r(0.62, 0.36, 0.11, 0.13), label: "1"),
-            .make(.button, .vjoy2,    .r(0.75, 0.36, 0.11, 0.13), label: "2"),
-            .make(.button, .vjoy3,    .r(0.62, 0.51, 0.11, 0.13), label: "3"),
-            .make(.button, .vjoy4,    .r(0.75, 0.51, 0.11, 0.13), label: "4"),
-            .make(.button, .vjoy5,    .r(0.62, 0.66, 0.11, 0.13), label: "5"),
-            .make(.button, .vjoy6,    .r(0.75, 0.66, 0.11, 0.13), label: "6"),
-            .make(.button, .vjoy7,    .r(0.62, 0.81, 0.11, 0.13), label: "7"),
-            .make(.button, .vjoy8,    .r(0.75, 0.81, 0.11, 0.13), label: "8"),
+            .make(.wheel,  .roll,     .r(0.05, 0.10, 0.48, 0.52), label: "方向盘"),
+            .make(.pad,    .look,     .r(0.82, 0.10, 0.14, 0.24), label: "视角"),
+            .make(.slider, .clutch,   .r(0.06, 0.66, 0.20, 0.30), label: "离合"),
+            .make(.slider, .brake,    .r(0.28, 0.66, 0.20, 0.30), label: "刹车"),
+            .make(.slider, .throttle, .r(0.50, 0.66, 0.20, 0.30), label: "油门"),
         ]
     }
 }

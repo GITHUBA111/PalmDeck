@@ -82,7 +82,7 @@ v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚�
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 112 项
+python3 -m unittest discover -s tests -t .      # 117 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

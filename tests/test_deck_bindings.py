@@ -201,24 +201,27 @@ class TestDefaultGamepadLayout(unittest.TestCase):
 
 
 class TestDefaultDriveLayout(unittest.TestCase):
-    """开车默认布局必须是「无游戏语义」的通用模块。
+    """开车默认布局 = 只保留基本轴输入 + **没有任何内置按键**。
 
-    用户诉求：App 不该替游戏拍板（如 LB=降档），只给滑块/按键 + 中性序号，
-    具体含义由用户在游戏内绑定。
+    用户诉求：轴控件（方向盘/油门/离合…）保留，按键完全由用户自己添加、命名。
+    “升/降档”这类语义一旦硬编码，就会和游戏默认绑键撞车（欧卡2 的 LB/RB = 看镜头）。
     """
 
     def _body(self):
         return func_body(_ios("Views", "Layout.swift"), "defaultDrive")
 
-    def test_buttons_are_generic_numbers(self):
+    def test_has_no_builtin_buttons(self):
+        self.assertNotIn(".make(.button,", self._body(), "开车默认布局不该内置任何按键")
+
+    def test_has_the_basic_axis_modules(self):
         body = self._body()
-        labels = re.findall(
-            r'\.make\(\.button,\s*\.vjoy\d+,\s*\.r\([^)]*\),\s*label:\s*"([^"]+)"',
-            body,
-        )
-        self.assertGreaterEqual(len(labels), 6, "开车默认布局没有按键：%r" % labels)
-        for label in labels:
-            self.assertRegex(label, r"^\d+$", "开车默认按钮应是无语义序号：%r" % label)
+        for kind, binding in ((".wheel", ".roll"),
+                              (".slider", ".clutch"),
+                              (".slider", ".brake"),
+                              (".slider", ".throttle"),
+                              (".pad", ".look")):
+            self.assertRegex(body, r"\.make\(%s,\s*%s," % (re.escape(kind), re.escape(binding)),
+                             "开车默认布局缺 %s/%s" % (kind, binding))
 
     def test_no_hardcoded_game_semantics(self):
         body = self._body()
@@ -226,18 +229,52 @@ class TestDefaultDriveLayout(unittest.TestCase):
                      "大灯", "远光", "换挡", "升档", "降档"):
             self.assertNotIn(word, body, "开车默认布局仍硬编码了游戏语义：%s" % word)
 
-    def test_buttons_stay_within_the_xbox_button_set(self):
-        body = self._body()
-        nums = [int(n) for n in re.findall(r"\.make\(\.button,\s*\.vjoy(\d+)", body)]
-        self.assertTrue(nums)
-        self.assertTrue(max(nums) <= 10, "开车默认布局用了 Xbox 没有的键号：%r" % nums)
 
-    def test_drive_is_wired_into_supports_custom_and_defaults(self):
+class TestDefaultHeliLayout(unittest.TestCase):
+    """飞机默认布局 = 只保留基本轴输入 + **没有任何内置按键**。"""
+
+    def _body(self):
+        return func_body(_ios("Views", "Layout.swift"), "defaultHeli")
+
+    def test_has_no_builtin_buttons(self):
+        self.assertNotIn(".make(.button,", self._body(), "飞机默认布局不该内置任何按键")
+
+    def test_has_the_basic_axis_modules(self):
+        body = self._body()
+        for kind, binding in ((".stick", ".roll"),        # 周期杆（2D → roll+pitch）
+                              (".slider", ".throttle"),   # 总距
+                              (".slider", ".yaw"),        # 脚舵
+                              (".pad", ".look")):         # 视角
+            self.assertRegex(body, r"\.make\(%s,\s*%s," % (re.escape(kind), re.escape(binding)),
+                             "飞机默认布局缺 %s/%s" % (kind, binding))
+
+    def test_no_hardcoded_game_semantics(self):
+        body = self._body()
+        for word in ("开火", "投弹", "起落架", "灯光", "悬停"):
+            self.assertNotIn(word, body, "飞机默认布局仍硬编码了游戏语义：%s" % word)
+
+
+class TestLayoutModuleWiring(unittest.TestCase):
+    """三个模式都走通用模块，且都插了轴类的默认布局。"""
+
+    def test_all_modes_support_custom(self):
         src = _ios("Views", "Layout.swift")
-        self.assertIn("case .gamepad, .drive: return true", src,
-                      "supportsCustom 没有把 drive 算进去")
-        self.assertIn("case .drive:   return defaultDrive()", src,
-                      "defaults(mode:) 没给 drive 走 defaultDrive()")
+        self.assertIn("case .gamepad, .heli, .drive: return true", src,
+                      "supportsCustom 没有覆盖三个模式")
+
+    def test_defaults_map_each_mode(self):
+        src = _ios("Views", "Layout.swift")
+        for want in ("case .heli:    return defaultHeli()",
+                     "case .drive:   return defaultDrive()",
+                     "case .gamepad: return defaultGamepad()"):
+            self.assertIn(want, src)
+
+    def test_init_seeds_all_three_modes(self):
+        src = _ios("Views", "Layout.swift")
+        for want in ("LayoutStore.defaultHeli()",
+                     "LayoutStore.defaultDrive()",
+                     "LayoutStore.defaultGamepad()"):
+            self.assertIn(want, src, "init 没有播种 %s" % want)
 
 
 class TestWidgetLibrary(unittest.TestCase):

@@ -102,7 +102,14 @@ idle ──connect()──► connecting ──open──► live
 > 遗留议题（见 §10）：v3 曾要求“按住 400ms 防误触”。v4 改为单击；
 > 是否恢复长按见 P7 backlog（默认不改，避免影响习惯）。
 
-### 3.2 飞机 heli — `FlightDeckView`（固定硬件）
+### 3.2 飞机 heli — 默认通用模块（轴）+ `FlightDeckView`（经典皮肤，可选）
+
+**默认是通用模块布局（`defaultHeli()`），只放轴控件、不放任何按键**：
+周期杆（`stick` → roll+pitch）· 总距（`slider` → throttle）· 脚舵（`slider` → yaw）· 视角（`pad` → look）。
+按键完全由用户自己添加、命名（见 §12.6）。
+
+下面的 `FlightDeckView` 作为**经典硬件皮肤**保留，但**不是默认**：在编辑态点 `[经典皮肤]` 才切过去。
+
 | 区域 | 控件 | 映射 | 手势/手感 |
 |---|---|---|---|
 | 左 | 总距杆 `CollectiveLever` | `throttle`(→Z/collective) | 拖动把手；IDLE/FLY/MAX 刻度；抓取增量 |
@@ -111,7 +118,17 @@ idle ──connect()──► connecting ──open──► live
 | 右上 | 周期变距杆 `CyclicControl` | `roll`/`pitch` | 抓取增量 2D；**松手 5/s 回中**；0.95 吸附满值 |
 | 右下 | 按键簇 2×3 | vJoy | 开火/投弹/起落架(脉冲 b6)/灯光/悬停/视角 |
 
-### 3.3 开车 drive — `DriveDeck`（固定硬件）
+> 表中的“按键簇”是**经典皮肤自带**的，与“默认不内置按键”的主张相冲——
+> 所以经典皮肤只作为 opt-in，不默认显。
+
+### 3.3 开车 drive — 默认通用模块（轴）+ `DriveDeck`（经典皮肤，可选）
+
+**默认是通用模块布局（`defaultDrive()`），只放轴控件、不放任何按键**：
+方向盘（`wheel` → roll）· 三踏板（`slider` → clutch/brake/throttle）· 视角（`pad` → look）。
+换档/转向灯……由用户自己加按键、在游戏里自己绑。
+
+下面的 `DriveDeck` 作为**经典硬件皮肤**保留，但**不是默认**：在编辑态点 `[经典皮肤]` 才切过去。
+
 | 区域 | 控件 | 映射 | 手感 |
 |---|---|---|---|
 | 左上 | `DashPanel` 转速表+档位 | 只读 | 红区红线、油门/刹车/离合/转向条 |
@@ -122,9 +139,13 @@ idle ──connect()──► connecting ──open──► live
 
 档杆档位 `R N 1 2 3 4 5 6`，默认 N(=index 2)。**P7 起持久化**（`palmdeck_gear`）。
 
-**起开车也能切自定义模块**（见 §12.6）：顶栏 `[布局]` 把 `palmdeck_drive_custom` 置 true，
-皮肤换成 `WidgetCanvas`，默认布局 `defaultDrive()` = 方向盘 / 视角板 / 三踏板 +
-8 个**无游戏语义的序号按键**。固定卡车皮肤仍保留，开关可随时切回。
+> 本表描述的是 **opt-in 的经典皮肤** `DriveDeck`。默认走通用模块（`defaultDrive()`），
+> 只给轴、不给按键。
+
+
+**开车默认就是通用模块**（见 §12.6）：`palmdeck_drive_custom` 默认 true，
+皮肤即 `WidgetCanvas`，默认布局 `defaultDrive()` = **方向盘 / 三踏板 / 视角（只有轴，没有任何按键）**。
+在编辑态点 `[经典皮肤]` 可切回 `DriveDeck` 卡车皮肤（opt-in）。
 
 > 为何不再把「左转/降档」这类字硬编码进按钮：同一只虚拟手柄在不同游戏里默认占用完全不同，
 > App 替用户拍板的每一条语义都可能与游戏默认撞车（如欧卡2 默认 LB=向左看）。
@@ -136,7 +157,8 @@ idle ──connect()──► connecting ──open──► live
   （**不是 LT/RT**：Xbox 的 LT/RT 是模拟轴 `lt`/`rt`，不在按键表里；
   `X360["b9"] = LEFT_THUMB`、`X360["b10"] = RIGHT_THUMB`。）
 - 开关 `palmdeck_gamepad_custom`：切到 `WidgetCanvas` 自定义组件布局（P3 同步）。
-  开车模式同构地用 `palmdeck_drive_custom`（见 §3.3 / §12.6）。
+  飞机 / 开车同构地用 `palmdeck_heli_custom` / `palmdeck_drive_custom`，且**两者默认 true**
+  （默认就是通用模块，经典皮肤需手动切回；见 §3.2 / §3.3 / §12.6）。
 - 服务端在 gamepad 停 `thr/lt/rt`，App 停发轴 → **不抢电脑键鼠**。
 
 ---
@@ -237,13 +259,14 @@ y = 0                                              |x| <  dz
 
 ---
 
-## 7. 布局编辑与模板（gamepad / drive）
+## 7. 布局编辑与模板（全部模式）
 
 ### 7.1 编辑
 
-- 入口：顶栏 `[布局]`（仅 `LayoutStore.supportsCustom(mode:)` 为真的模式出现，即 gamepad / drive）；
-  首次点开自动把该模式的自定义开关置 true（`palmdeck_gamepad_custom` / `palmdeck_drive_custom`），
-  避免“编辑了却看不到”。
+- 入口：顶栏 `[布局]`（`LayoutStore.supportsCustom(mode:)` 对三个模式都为 true）；
+  首次点开自动把该模式的自定义开关置 true（`palmdeck_gamepad_custom` / `palmdeck_heli_custom` /
+  `palmdeck_drive_custom`），避免“编辑了却看不到”。
+- 编辑条最左 `[经典皮肤]`：把该模式切回固定硬件皮肤（opt-in），退出编辑。
 - 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球；
   有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定。
 - 画布操作：拖动移动、右下角手柄缩放、左上 `✕` 删除、右上 `Aa` **重命名**
@@ -317,8 +340,9 @@ y = 0                                              |x| <  dz
 | `palmdeck_tutored` | Bool | false | 是否看过速览 |
 | `palmdeck_host` | String | "" | 上次电脑 IP |
 | `palmdeck_mode` | String | heli | 上次模式 |
-| `palmdeck_gamepad_custom` | Bool | false | 手柄用自定义布局 |
-| `palmdeck_drive_custom` | Bool | false | 开车用自定义模块布局（**§12.6 新增**） |
+| `palmdeck_gamepad_custom` | Bool | false | 手柄用自定义模块布局（经典皮肤 opt-in） |
+| `palmdeck_heli_custom` | Bool | **true** | 飞机用通用模块布局（**§12.6 新增**） |
+| `palmdeck_drive_custom` | Bool | **true** | 开车用通用模块布局（**§12.6 新增**） |
 | `palmdeck_widgets_v10` | Data | defaults | 组件布局 |
 | `palmdeck_layout_templates_v1` | Data | `{}` | 布局模板 `{mode: [LayoutTemplate]}`（不含内置「默认」） |
 | `palmdeck_layout_undo_v1` | Data | `{}` | 撤销槽 `{mode: [DeckWidget]}`，单格/按模式 |
@@ -444,28 +468,31 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
   **剩下的冲突纯粹来自“App 替用户决定了 LB=降档”**。
 
 **设计修正（本版）**：App **只提供通用模块**（滑块 / 按键 / 摇杆 / 方向盘 / 触摸板……），
-按钮**默认就是中性序号**（`WidgetBinding.label` → “按钮 N”，`defaultDrive()` 用 “1…8”），
-**不写任何游戏语义**；要叫“升档/雨刷”由用户在编辑态用 `Aa` 重命名，
+飞机与开车 **默认只有轴控件、不放任何按键**（`defaultHeli()` / `defaultDrive()`）；
+按键由用户在编辑态自己添加（默认名就是中性序号「按钮 N」）、自己 `Aa` 重命名，
 要发哪个键由用户在 `LibrarySheet` 里选。于是“撞键”从“App 的 bug”变成“用户的选择”，
 且任何新游戏都无需改 App。
 
 **落地范围**：
 
-- `LayoutStore.supportsCustom(mode:)`：gamepad / drive 为 true（heli 仍固定皮肤）。
-- `LayoutStore.defaultDrive()`：方向盘 / 视角板 / 三踏板 + 8 个序号按键（无语义）。
+- `LayoutStore.supportsCustom(mode:)`：**三个模式都为 true**。
+- `LayoutStore.defaultHeli()` / `defaultDrive()`：**只有轴、没有任何按键**。
 - `CockpitView`：`gamepadBody` → `deckBody` + 通用 `moduleBody(mode:custom:fixed:)`，
-  固定皮肤与画布共用同一套编辑条 / 存模板 / 未连接横幅；顶栏 `[布局]` 按 `supportsCustom` 显示。
+  经典皮肤与画布共用编辑条 / 存模板 / 未连接横幅；顶栏 `[布局]` 按 `supportsCustom` 显示，
+  编辑条里的 `[经典皮肤]` 可切回硬件皮肤（opt-in）。
 - `EditableWidget`：编辑态新增 `Aa` 重命名（存 `DeckWidget.label`，留空回落默认名）。
-- 新增持久化键 `palmdeck_drive_custom`（§10）。
+- 新增持久化键 `palmdeck_heli_custom`（默认 **true**）、`palmdeck_drive_custom`（默认 **true**）（§10）。
 
-**不改的部分**：`DriveDeck` / `GamepadDeck` 固定皮肤仍在，作为“开箱即用”的默认外观；
-`WidgetBinding` 与发出去的键位不变；电脑侧协议一字未动。
+**不改的部分**：`FlightDeckView` / `DriveDeck` / `GamepadDeck` 经典皮肤仍在，
+作为 **opt-in**（不是默认外观）；`WidgetBinding` 与发出去的键位不变；电脑侧协议一字未动。
 
 **回归守则**（`tests/test_deck_bindings.py`）：
 
-- 新增 `TestDefaultDriveLayout`：开车默认按钮必须全是 `^\d+$`（无游戏语义），
- 且不得出现“左转/右转/危险灯/喇叭/手刹/雨刷/大灯/远光/换挡/升档/降档”等词；
-- `func_body()` 把 `defaultGamepad()` 与 `defaultDrive()` 的断言隔开，避免新默认布局污染旧断言。
+- `TestDefaultHeliLayout` / `TestDefaultDriveLayout`：默认布局不得出现 `.make(.button,`，
+ 且不得出现“开火/投弹/起落架/…”或“左转/右转/危险灯/喇叭/手刹/雨刷/大灯/远光/换挡/升档/降档”等词；
+ 必须包含基本轴模块（heli：stick / slider.throttle / slider.yaw / pad；drive：wheel / slider×3 / pad）。
+- `TestLayoutModuleWiring`：三个模式都支持自定义、`defaults(mode:)` 都对、`init` 都播种。
+- `func_body()` 把 `defaultGamepad()` / `defaultHeli()` / `defaultDrive()` 的断言隔开。
 
 ---
 
@@ -473,7 +500,8 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
 
 - 不恢复 v3 的“整机倾斜体感”“锁定/校准 HUD”（v4 为触控硬件皮肤）。
 - 不做手机端游戏遥测回读（见 `docs/TODO.md`）。
-- **只有 heli 不做自定义布局**：`LayoutStore.supportsCustom(mode:)` 只对 gamepad / drive 为 true，
-  heli 仍是固定硬件皮肤（保证真机手感一致）。**App 不为任何游戏硬编码按钮语义**——
-  只提供通用模块 + 中性序号，含义与绑定由用户在游戏内完成（见 §12.6）。
+- **三个模式都支持自定义模块布局**（`LayoutStore.supportsCustom(mode:)` 恒 true）。
+  飞机 / 开车默认就是通用模块（只有轴、无按键）；`FlightDeckView` / `DriveDeck` / `GamepadDeck`
+  作为经典皮肤 opt-in。**App 不为任何游戏硬编码按钮语义**——只提供通用模块 + 中性序号，
+  含义与绑定由用户在游戏内完成（见 §12.6）。
 - 不引入第三方依赖 / 不改电脑侧协议。
