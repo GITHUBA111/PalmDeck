@@ -80,7 +80,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 
 ### 组件系统（模块化/乐高式）
 - 8 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球/仪表盘；除只读的「仪表盘」外，各绑定一个语义轴或 vJoy 键。
-- 编辑模式：顶栏组件库添加、拖拽移动、右下角缩放手柄、✕ 删除、一键清空/恢复默认；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
+- 编辑模式：顶栏组件库添加、拖拽移动、右下角缩放手柄、✕ 删除、`Aa` 重命名；`⋯` 里清空 / 恢复默认 / 撤销；空画布显示「画布是空的」而不再是一块白板；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
 
 ### 无遥测
 姿态球与飞行仪表板只显示本机发往电脑的**平滑杆位**（`smRoll/smPitch/smYaw`），
@@ -89,7 +89,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 151 项
+python3 -m unittest discover -s tests -t .      # 155 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

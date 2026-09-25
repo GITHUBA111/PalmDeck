@@ -96,6 +96,11 @@
   而组件自己会被拖走 ⇒ 同一根手指的位移被抵消一半，拖 206pt 只走 81pt。
   改成 `DragGesture(coordinateSpace: .global)` 后 1:1（实测落点 915 vs 手指 930）。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.11，`TestCanvasEditGesturesUseGlobalSpace` 守卫。
+- **整表操作搬进编辑条 + 空画布提示** —— 编辑条「存为模板」旁加 `⋯`（恢复默认布局 / 清空画布 /
+  撤销上一次改动，无撤销槽时置灰）；当前模式没组件时画布中间显示「画布是空的」+ 下一步提示
+  （`allowsHitTesting(false)`，不抢手势）。以前这三件事只在设置 → 布局 里，而改布局的人就在编辑态。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.12，`TestEditBarReachesWholeTableActions` +
+  `TestEmptyCanvasHasAHint` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。

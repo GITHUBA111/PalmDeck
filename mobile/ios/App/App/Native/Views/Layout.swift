@@ -432,7 +432,32 @@ struct WidgetCanvas: View {
                     EditableWidget(widget: w, store: store, mode: mode,
                                    canvas: CGSize(width: W, height: H), s: s, ctrl: ctrl)
                 }
+                emptyHint
             }
+        }
+    }
+
+    /// 空画布提示。
+    /// 原来清空 / 拖走最后一个组件后就是一块白板，看不出「本来就空」还是「没加载出来」。
+    /// 不提交互：不抢手势（`allowsHitTesting(false)`）。
+    @ViewBuilder
+    private var emptyHint: some View {
+        if store.widgets(mode: mode).isEmpty {
+            VStack(spacing: 7) {
+                Image(systemName: "square.dashed")
+                    .font(.system(size: 30, weight: .light))
+                Text("画布是空的")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(store.editing
+                     ? "点上方「添加：」放一个组件；拖动移动、拖右下角缩放、✕ 删除"
+                     : "点顶栏「布局」开始添加，或进「⋯」恢复默认布局")
+                    .font(.system(size: 11))
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundColor(Theme.textFaint)
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
         }
     }
 }

@@ -566,5 +566,46 @@ class TestCanvasEditGesturesUseGlobalSpace(unittest.TestCase):
                          "EditableWidget 里只应有拖动 + 缩放两个手势")
 
 
+class TestEditBarReachesWholeTableActions(unittest.TestCase):
+    """清空 / 恢复默认 / 撤销不能只藏在设置里 —— 改布局的人就在座舱里（编辑态）。
+
+    它们都是整表操作，`clear` / `reset` 都会压一道撤销槽，所以不需要二次确认
+    （与设置页一致：只是 `role: .destructive` 红字）。
+    """
+
+    def setUp(self):
+        src = _ios("Views", "CockpitView.swift")
+        self.bar = src.split("private var editBar", 1)[1].split("private var dotColor", 1)[0]
+
+    def test_edit_bar_has_a_menu(self):
+        self.assertIn("Menu {", self.bar, "编辑条要有整表操作的入口")
+
+    def test_menu_wires_reset_clear_undo(self):
+        for call in ("layout.reset(mode: s.mode)",
+                     "layout.clear(mode: s.mode)",
+                     "layout.undoLast(mode: s.mode)"):
+            self.assertIn(call, self.bar)
+        self.assertIn("disabled(!layout.canUndo(mode: s.mode))", self.bar,
+                      "没得撤销时该置灰，而不是点了没反应")
+
+    def test_whole_table_items_are_destructive(self):
+        self.assertEqual(self.bar.count("Button(role: .destructive) {"), 2,
+                         "恢复默认 / 清空都要红字（与设置页一致）")
+
+
+class TestEmptyCanvasHasAHint(unittest.TestCase):
+    """空画布不能就是一块白板（看不出是「本来就空」还是「没加载出来」）。"""
+
+    def setUp(self):
+        src = _ios("Views", "Layout.swift")
+        self.canvas = src.split("struct WidgetCanvas", 1)[1].split("/// 单个可编辑组件", 1)[0]
+
+    def test_hint_when_empty(self):
+        self.assertIn("store.widgets(mode: mode).isEmpty", self.canvas)
+        self.assertIn("画布是空的", self.canvas)
+        self.assertIn("allowsHitTesting(false)", self.canvas,
+                      "提示不能被点/拖（不能抢画布手势）")
+
+
 if __name__ == "__main__":
     unittest.main()

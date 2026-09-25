@@ -261,6 +261,28 @@ struct CockpitView: View {
                 naming = true
             }
             .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
+            // 整表操作放这里：以前「清空 / 恢复默认 / 撤销」只藏在设置 → 布局，
+            // 而它们恰恰是改布局时最想用的三个（清空、恢复默认都会压一道撤销槽，能后悔）。
+            Menu {
+                Button(role: .destructive) {
+                    layout.reset(mode: s.mode)
+                    Haptics.success()
+                } label: { Label("恢复默认布局", systemImage: "arrow.counterclockwise") }
+                Button(role: .destructive) {
+                    layout.clear(mode: s.mode)
+                    Haptics.warning()
+                } label: { Label("清空画布", systemImage: "trash") }
+                Divider()
+                Button {
+                    layout.undoLast(mode: s.mode)
+                    Haptics.select()
+                } label: { Label("撤销上一次改动", systemImage: "arrow.uturn.backward") }
+                    .disabled(!layout.canUndo(mode: s.mode))
+            } label: {
+                Image(systemName: "ellipsis.circle").font(.system(size: 15))
+            }
+            .buttonStyle(CardButton(fillWidth: false, height: 30))
+            .frame(width: 40)
             Button("放弃") {
                 layout.discardEditing(mode: s.mode)
                 layout.editing = false
