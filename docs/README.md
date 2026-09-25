@@ -14,7 +14,7 @@
 | `PalmDeck-v4-accessibility.md` | **动态字号 + 无障碍标签**（走查第 5 条）：`.pdFont` 随系统字号、自绘控件补 VoiceOver | 已落地 |
 | `PalmDeck-v4-connect-banner-stable.md` | **连接提示横幅不掉高**：点按「连接电脑」不再把画布组件“顶”得重排（走查反馈） | 已落地 |
 | `PalmDeck-v4-instant-recenter.md` | **脚舵 / 视角 松手立即回正**：滑条与视角板瞬回 0（走查反馈） | 已落地 |
-| `PalmDeck-v4-connect-cancel.md` | **连接可取消 / 重连有上限**：连不上不再无限重连——「连接中」可取消，尝试 6 次后自动停并给「重试」 | 已落地 |
+| `PalmDeck-v4-connect-cancel.md` | **连接可取消 / 重连有上限**：连不上不再无限重连——「连接中」可取消，重试 3 次（共 4 次尝试）后自动停并给「重试」 | 已落地 |
 | `PalmDeck-v4-monitor-live.md` | **控制台「输入监测」实时化**：监测页激活时 10Hz 轮询，`last_ms` 改写为「上包 X ms 前」（它是包间隔，不是延迟） | 已落地 |
 | `PalmDeck-v4-console-busy.md` | **控制台长动作：超时 + 忙碌态**：`api()` 加 `AbortController` 超时（默认 30s / 下载 180s），检查更新・下载重启・保存配置・保存布局不再无反应可连点 | 已落地 |
 | `PalmDeck-v4-discovery-rescan.md` | **自动发现：手动「重新搜索」**：`Discovery.restart()` + 起飞页常驻按钮，换 Wi-Fi / 电脑后开机不用退出重进 | 已落地 |

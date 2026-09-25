@@ -21,7 +21,10 @@
 ## 3. 方案
 
 - `Discovery.restart()`：`stop()` → 清空 `found` / `services` → `statusText = "搜索中…"`
-  → `start()`（重新起一条 6s 兜底提示）。
+  → `start()`。
+- `start()` 加一个 `searchGen` 计数器，6s 兜底定时器回调里校验
+  `self.searchGen == gen`：不这么做的话，手动重搜后**上一轮**的定时器会立刻
+  把状态改成「没搜到电脑」（刚点完重搜就报失败）。
 - `PreflightView` 右栏在三步卡片下方加一个常驻的「重新搜索」小按钮
   （`arrow.clockwise`，`Theme.cyan`），点它调 `discovery.restart()`。
   发现列表非空时也在。

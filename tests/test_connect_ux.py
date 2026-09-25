@@ -39,11 +39,27 @@ class TestConnectHasAnEscapeHatch(unittest.TestCase):
     # ---- 状态机 ----
 
     def test_reconnect_attempts_are_capped(self):
-        self.assertIn("private let maxAttempts = 6", self.ctrl)
+        self.assertIn("private let maxAttempts =", self.ctrl)
         body = self.ctrl.split("private func scheduleReconnect", 1)[1]
         self.assertIn("guard retry < maxAttempts else", body,
                       "没有上限的重连 = 用户永远卡在转圈里")
         self.assertIn("connectFailed = true", body, "放弃时要给界面一个「重试」信号")
+
+    def test_auto_reconnect_does_not_reset_the_counter(self):
+        """回归：自动重连路径一旦走「公共 connect」，`retry` 会被清零，
+        上限和退避都永远不生效（变成无限重连）。
+        """
+        body = self.ctrl.split("func reconnect()", 1)[1].split("\n    }", 1)[0]
+        self.assertNotIn("retry = 0", body,
+                         "重连内部再清零 retry，上限永远到不了")
+        self.assertNotIn("connect(host:", body,
+                         "重连要走 open()，不能走会把 retry 清零的公共 connect()")
+        self.assertIn("open(host:", body)
+        # 整个控制器里 retry 只应在「用户主动发起」和「握手成功」两处清零
+        resets = [ln.strip() for ln in self.ctrl.splitlines()
+                  if "retry = 0" in ln and "var retry" not in ln]
+        self.assertEqual(len(resets), 2,
+                         "retry 清零点变多了，先确认没把重连路径也算进去：%r" % resets)
 
     def test_both_disconnect_paths_share_the_cap(self):
         close = self.ctrl.split("private func handleClose", 1)[1] \
@@ -103,6 +119,11 @@ class TestMonitorRefreshesFast(unittest.TestCase):
         self.assertIn("setInterval(() => { if (!monitorFast) tick(); }, 1000);", self.html,
                       "快轮询在跑时慢轮询不要再发一份")
 
+    def test_ticks_do_not_pile_up(self):
+        body = self.html.split("let tickBusy", 1)[1].split("async function tick()", 1)[1]
+        self.assertIn("if (tickBusy) return;", body,
+                      "10Hz 下服务端卡住会堆几百个在途请求")
+
     def test_last_ms_is_labeled_as_packet_age(self):
         self.assertIn("上包", self.html,
                       "last_ms 是包间隔 / 挂机时长，写成裸 `ms` 会被当成延迟")
@@ -130,6 +151,8 @@ class TestLongActionsHaveAnEscapeHatch(unittest.TestCase):
         self.assertIn("180000", body, "下载最坏 120s，客户端超时要盖过它")
         self.assertIn('$("applyUp").disabled = !info.can_self_update || !LATEST', body,
                       "退出忙碌后要按「真有新版」重算 disabled，不能无脑点亮")
+        self.assertIn('$("latestVer").innerHTML = prev', body,
+                      "失败/超时要还原版本号，否则永远停在「下载中…」")
 
     def test_check_and_save_are_busy(self):
         for btn, label in (("checkUp", "检查中…"), ("saveCfg", "保存中…"),
@@ -157,6 +180,13 @@ class TestDiscoveryRescan(unittest.TestCase):
         self.assertIn("stop()", body)
         self.assertIn("found = []", body, "重搜要先清掉旧结果，否则永远显示上一次的")
         self.assertIn("start()", body)
+
+    def test_old_six_second_timeout_cannot_overwrite_a_fresh_search(self):
+        """回归：上一轮的 6s 兜底会在重搜后立刻把状态改成「没搜到电脑」。"""
+        self.assertIn("searchGen += 1", self.disc)
+        body = self.disc.split("func start()", 1)[1]
+        self.assertIn("self.searchGen == gen", body,
+                      "兜底定时器要认「这一轮」，否则重搜后马上显示失败")
 
     def test_preflight_has_a_rescan_button(self):
         self.assertIn('Text("重新搜索")', self.pre)

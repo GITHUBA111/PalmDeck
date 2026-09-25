@@ -12,7 +12,9 @@ final class CockpitController: ObservableObject {
     private var lastFrameTime: CFTimeInterval = 0
     private var lastSend = Date.distantPast
     private var retry = 0
-    private let maxAttempts = 6         // 连不上最多试 6 次就停；不再无限重连
+    // 连不上最多重试 3 次（每次 8s 超时，最坏 ~37s）就停，不再无限重连。
+    // 改这个数要连着 tests/test_connect_ux.py 一起改。
+    private let maxAttempts = 3
     private var savedHost: String = ""
     private var autoReconnect = false   // 仅「意外断线」才自动重连；手动断开不重连
     private var wsPort: UInt16 = 8765   // 服务端实际端口（hello 时分商）
@@ -47,7 +49,22 @@ final class CockpitController: ObservableObject {
     // MARK: - 连接
     func connect(host: String) { connect(host: host, ws: wsPort, udp: udpPort) }
 
+    /// 用户主动发起（顶栏 / 起飞页 / 设置页 / 「重试」）：重试计数从头开始。
     func connect(host: String, ws: UInt16, udp: UInt16) {
+        retry = 0
+        connectFailed = false
+        open(host: host, ws: ws, udp: udp)
+    }
+
+    /// 自动重连：沿用已保存的 IP 与已协商的端口。
+    /// **绝不能** 改回 `connect(host:ws:udp:)`——那里会把 `retry` 清零，
+    /// 于是上限永远到不了、退避也永远不涨（= 又变回无限重连）。
+    private func reconnect() {
+        guard !savedHost.isEmpty else { return }
+        open(host: savedHost, ws: wsPort, udp: udpPort)
+    }
+
+    private func open(host: String, ws: UInt16, udp: UInt16) {
         let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !h.isEmpty else { return }
         // 拒绝回环/假地址（如 127.0.0.1），否则会连到手机自己
@@ -67,16 +84,9 @@ final class CockpitController: ObservableObject {
         savedHostForUI = h
         UserDefaults.standard.set(h, forKey: "palmdeck_host")
         autoReconnect = true
-        connectFailed = false
-        retry = 0
         state.link = .connecting
         pfConnState = "正在连接 \(h)…"
         net.connect(host: h, wsPort: ws, udpPort: udp)
-    }
-
-    func reconnect() {
-        guard !savedHost.isEmpty else { return }
-        connect(host: savedHost)
     }
 
     /// 断开连接（保留已保存的 IP；手动断开后不再自动重连）
@@ -162,8 +172,9 @@ final class CockpitController: ObservableObject {
             autoReconnect = false
             connectFailed = true
             state.link = .lost
-            pfConnState = "连不上 \(savedHost)（已试 \(retry) 次），点「重试」"
-            Haptics.warning()
+            // 进这个分支前，handleClose / handleConnectTimeout 已经震过一次了，
+            // 这里别再震（否则放弃的那一刻会连震两下）。
+            pfConnState = "连不上 \(savedHost)（已试 \(retry + 1) 次），点「重试」"
             return
         }
         let delay = min(cap, base + Double(retry) * step)

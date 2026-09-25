@@ -224,6 +224,14 @@ struct CockpitView: View {
         return discovery.found.isEmpty ? "连接" : "一键连接"
     }
 
+    /// 连接中（可以取消）用橙，其余用青——跟胶囊里的 xmark 同色，
+    /// 否则橙叉 + 绿字看着像两个控件。
+    private var connectChipAccent: Color { s.link == .connecting ? Theme.orange : Theme.cyan }
+    private var connectChipText: Color {
+        if s.link == .connecting { return Theme.orange }
+        return discovery.found.isEmpty ? Theme.textFaint : Theme.green
+    }
+
     /// 顶栏连接胶囊：已连显示 IP + Hz + 绿灯；未连显示“连接”按钮
     @ViewBuilder
     private func connectionChip(height: CGFloat) -> some View {
@@ -265,10 +273,10 @@ struct CockpitView: View {
                     }
                     Text(connectChipTitle)
                         .pdFont(11, weight: .medium)
-                        .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
+                        .foregroundColor(connectChipText)
                 }
             }
-            .buttonStyle(CardButton(active: false, accent: Theme.cyan, fillWidth: false, height: height))
+            .buttonStyle(CardButton(active: false, accent: connectChipAccent, fillWidth: false, height: height))
             .frame(width: 96)
         }
     }

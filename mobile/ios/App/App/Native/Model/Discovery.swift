@@ -46,17 +46,22 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
     private var browser: NetServiceBrowser?
     private var services: [NetService] = []
     private var running = false
+    private var searchGen = 0      // 手动「重新搜索」后让上一轮的 6s 兜底失效
 
     func start() {
         guard !running else { return }
         running = true
         statusText = "搜索中…"
+        searchGen += 1
+        let gen = searchGen
         let b = NetServiceBrowser()
         b.delegate = self
         b.searchForServices(ofType: "_palmdeck._udp.", inDomain: "local.")
         browser = b
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            guard let self, self.found.isEmpty else { return }
+            // 只认「这一轮」的兜底：手动重新搜索时旧定时器不能把状态改回去
+            // （否则刚点完重搜就蹦出「没搜到电脑」）
+            guard let self, self.searchGen == gen, self.found.isEmpty else { return }
             self.statusText = "没搜到电脑（需同一 Wi-Fi / 已授权本地网络）"
         }
     }

@@ -425,14 +425,17 @@
       if (on && !monitorFast) monitorFast = setInterval(tick, 100);
       else if (!on && monitorFast) { clearInterval(monitorFast); monitorFast = null; }
     }
+    let tickBusy = false;   // 10Hz 轮询 + 服务端卡住时防请求堆积（在途最多 1 个）
     async function tick() {
+      if (tickBusy) return;
+      tickBusy = true;
       try {
         const s = await api("/api/status");
         renderStatus(s);
       } catch (e) {
         $("pillDevice").className = "pill err";
         $("pillDevice").innerHTML = "<b>设备</b> 服务未响应";
-      }
+      } finally { tickBusy = false; }
     }
 
     document.querySelectorAll(".modes button").forEach((b) => {
@@ -631,12 +634,14 @@
     };
     $("applyUp").onclick = async () => {
       if (!confirm("下载新版本并重启 PalmDeck？")) return;
+      const prev = $("latestVer").innerHTML;   // 失败/超时要还原，否则永远是「下载中…」
       busy($("applyUp"), "下载中…", true);
       $("latestVer").innerHTML = '<span class="ok">下载中…（最长约 2 分钟，完成后自动重启）</span>';
       try {
         const r = await api("/api/update/apply", { method: "POST" }, 180000);
-        toast(r.ok ? "正在重启到 v" + r.version + "…" : (r.error || "失败"));
-      } catch (e) { toast("更新失败：" + e.message); }
+        if (r.ok) toast("正在重启到 v" + r.version + "…");
+        else { $("latestVer").innerHTML = prev; toast(r.error || "更新失败"); }
+      } catch (e) { $("latestVer").innerHTML = prev; toast("更新失败：" + e.message); }
       finally {
         busy($("applyUp"), "", false);
         $("applyUp").disabled = !info.can_self_update || !LATEST;

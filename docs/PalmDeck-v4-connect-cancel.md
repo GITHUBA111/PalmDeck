@@ -32,14 +32,20 @@
 ## 3. 方案
 
 **状态机**（`CockpitController`）：
-- 新增 `private let maxAttempts = 6`、`@Published var connectFailed = false`。
+- 新增 `private let maxAttempts = 3`、`@Published var connectFailed = false`。
+  每次尝试有 8s 连接超时，所以最坏 ~37s 就停（4 次尝试 + 退避）。
 - 新增 `private func scheduleReconnect(base:step:cap:)`，`handleClose` /
   `handleConnectTimeout` 都改走它；`retry >= maxAttempts` 时：
   `autoReconnect = false`、`connectFailed = true`、文案
-  「连不上 <host>（已试 N 次），点「重试」」。
+  「连不上 <host>（已试 N 次），点「重试」」。（进这个分支前调用方已经
+  震过一下，这里不再震，避免连震两下。）
 - 新增 `func cancelConnect()`：`autoReconnect = false` + `net.disconnect()` +
   回 `.idle` + 文案「已取消连接」。
-- `connect()` 重置 `retry = 0` / `connectFailed = false`；`handleOpen()` 清 `connectFailed`。
+- **`retry` 只在两处清零**：用户主动发起的 `connect()`、握手成功的 `handleOpen()`。
+  自动重连走 `private func reconnect()` → `private func open()`，**不得**经过
+  `connect()`——否则每次重连都把 `retry` 清零，上限永远到不了、退避也永远不涨
+  （= 假修复，实际还是无限重连）。`tests/test_connect_ux.py`
+  `test_auto_reconnect_does_not_reset_the_counter` 专门盯这条。
 
 **三个入口**（`连接中` → 取消，`connectFailed` → 重试）：
 - `CockpitView.connectionChip`：连接中改显示 `xmark.circle.fill` + 「取消连接」，
@@ -74,3 +80,14 @@
 ## 7. 工作量
 
 **S**。步骤：①状态机 + `cancelConnect`；②三处入口接线；③守卫。
+
+## 8. 复审修正（自查发现）
+
+初版落地后自己过了一遍 diff，抓到一个**会让整个修复失效**的错：
+新增的 `connect()` 里加了 `retry = 0`，而 `reconnect()` 当时是走
+`connect(host: savedHost)` 的——于是每次自动重连都先把计数清零，
+`retry < maxAttempts` 永远成立、退避也永远停在第一档。
+
+改法：把「真正发起连接」抽成 `open(host:ws:udp:)`，`retry` 清零只留在
+用户主动发起的 `connect()` 里，`reconnect()` 直接调 `open()`。
+同时把 `maxAttempts` 从 6 降到 3（6 次重试 × 8s ≈ 70s，用户等不了那么久）。
