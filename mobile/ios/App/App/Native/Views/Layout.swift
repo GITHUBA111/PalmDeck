@@ -141,10 +141,13 @@ final class LayoutStore: ObservableObject {
     /// 而 `Equatable` 是合成实现、含 `id`——内置默认布局回回重建都是新 id，永远比不等。
     /// 所以只比“形状”：kind / binding / rect / label（顺序敏感）。
     func isCurrent(_ tpl: LayoutTemplate, mode: CockpitMode) -> Bool {
-        let cur = widgets(mode: mode)
-        guard cur.count == tpl.widgets.count else { return false }
-        return zip(cur, tpl.widgets).allSatisfy { a, b in
-            a.kind == b.kind && a.binding == b.binding && a.rect == b.rect && a.label == b.label
+        sameShape(widgets(mode: mode), tpl.widgets)
+    }
+
+    /// 只比“形状”（kind / binding / rect / label，顺序敏感），忽略每次重建都变的 UUID。
+    func sameShape(_ a: [DeckWidget], _ b: [DeckWidget]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy {
+            $0.kind == $1.kind && $0.binding == $1.binding && $0.rect == $1.rect && $0.label == $1.label
         }
     }
 
@@ -221,6 +224,36 @@ final class LayoutStore: ObservableObject {
         if name.count > maxNameLength { return "名称最多 \(maxNameLength) 个字符" }
         if name == builtinName { return "「\(builtinName)」是内置模板，换个名字" }
         return nil
+    }
+
+    // MARK: - 编辑会话（「放弃」的回滚点）
+
+    /// 进入编辑那一刻的布局快照，按模式一份、只存内存。
+    /// 「完成」丢掉它，「放弃」整表回滚到它。
+    private var editBaseline: [String: [DeckWidget]] = [:]
+
+    /// 进入编辑：记下当前布局，作为「放弃」的回滚点。
+    func beginEditing(mode: CockpitMode) {
+        editBaseline[mode.rawValue] = widgets(mode: mode)
+    }
+
+    /// 进编辑后真的改过东西吗？（没改就不该让「放弃」可点）
+    func canDiscardEditing(mode: CockpitMode) -> Bool {
+        guard let base = editBaseline[mode.rawValue] else { return false }
+        return !sameShape(base, widgets(mode: mode))
+    }
+
+    /// 放弃本次编辑：整表回滚到进入编辑前。
+    /// 不进撤销槽——「放弃」本身就是一次回退，再叠一层「撤销放弃」只会绕。
+    func discardEditing(mode: CockpitMode) {
+        guard let base = editBaseline[mode.rawValue] else { return }
+        editBaseline[mode.rawValue] = nil
+        replaceWidgets(base, mode: mode)
+    }
+
+    /// 完成编辑：改动保留，只丢掉回滚点。
+    func commitEditing(mode: CockpitMode) {
+        editBaseline[mode.rawValue] = nil
     }
 
     // MARK: - 撤销（单格 / 按模式）

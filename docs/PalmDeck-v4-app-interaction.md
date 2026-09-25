@@ -246,9 +246,21 @@ y = 0                                              |x| <  dz
   有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定（只读的「仪表盘」跳过绑定选择）。
 - 画布操作：拖动移动、右下角手柄缩放、左上 `✕` 删除、右上 `Aa` **重命名**
   （名称留空回落绑定的默认名，如「按钮 3」；名称只存本机，不改变发出去的键位）。
-- **组件库条右侧**：`存为模板`（快照当前布局，弹命名框）／ `完成`。
+- **组件库条右侧**：`存为模板`（快照当前布局，弹命名框）／ `放弃` ／ `完成`。
+- **编辑会话与「放弃」**：进入编辑（顶栏 `[布局]` 或设置里的「编辑布局」）时把当前布局
+  快照成 `editBaseline[mode]`（只存内存）；编辑是立刻落盘的，所以只靠「撤销槽」反悔不了
+  （它只覆盖 `清空`/`恢复默认`/`应用模板` 这类整表操作）。
+  - `放弃`（红，`Theme.red`）= 整表回滚到进入编辑前 + 退出编辑，**不进撤销槽**
+    （它本身就是一次回退，再叠一层「撤销放弃」只会绕）。
+  - 没动过东西时 `canDiscardEditing` 为 false，按钮变淡（0.35）不可点。
+  - `完成` / 顶栏 `[完成]` / 换模式 = `commitEditing`，只丢掉回滚点，改动保留。
+  - 「有没有改过」用 `sameShape`（比 `kind/binding/rect/label`）——`DeckWidget` 的合成
+    `Equatable` 含 `UUID`，每次重建都变，不能用 `==`。
+- 组件库条左侧的「添加」一行是横向 `ScrollView`：组件越加越多，窄屏（iPhone 竖屏）也不会挤成一团；
+  `存为模板/放弃/完成` 三个动作按钮固定在右侧不参与滚动。
 - 同步：`layouts_get` / `layouts_put`（WS 控制面）；服务端下发 → `LayoutStore.applyServer`。
 - 存储键 `palmdeck_widgets_v10`（`{mode: [DeckWidget]}`）。
+- `CardButton` 读 `@Environment(\.isEnabled)`（不可用时 `opacity 0.35`）——编辑条上的 `放弃` 靠它表达状态。
 
 > ⚠️ 曾在 `WidgetCanvas` 的 `.overlay(.topTrailing)` 里放过「完成 / 清空 / 存为模板」。
 > 那是**死 UI**：`CockpitView` 的组件库条是 ZStack 后绘制的兄弟节点，会把它整个盖住。
@@ -265,7 +277,7 @@ y = 0                                              |x| <  dz
 - 上限：每模式 12 个；名称 ≤16 字符、非空、同模式内唯一（重名覆盖）。
 - 入口：设置 → 布局 → **模板**段（点行即切换；左滑重命名/删除；`✓` = 当前布局）。
 
-**判定形状用 `isCurrent`，不能直接 `==`**：`DeckWidget.make`（`Widgets.swift:76`）每次生成新 `UUID`，
+**判定形状用 `sameShape`（`isCurrent` 与编辑会话共用一份实现），不能直接 `==`**：`DeckWidget.make`（`Widgets.swift:76`）每次生成新 `UUID`，
 而 `Equatable` 是合成实现、包含 `id`——内置默认回回重建都是新 id，用 `==` 永远比不等。
 `isCurrent` 只比 `kind / binding / rect / label`（顺序敏感），因此「默认」和内容相同的自建模板会**同时**打 `✓`，这是对的。
 
@@ -478,6 +490,11 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
   `onButton?(` / `btnMask`（只读）；组件库有入口；`project.pbxproj` 有登记。
 - `TestDefaultHeliLayout::test_keeps_the_readonly_instrument_panel`：飞机默认布局必须含
   `.make(.panel, .roll, ...)`。
+- `TestEditSession`：`LayoutStore` 有 `beginEditing` / `canDiscardEditing` / `discardEditing` / `commitEditing`；
+  `beginEditing` 记 `editBaseline[mode.rawValue]`；`discardEditing` 走 `replaceWidgets` 且**不得**调 `pushUndo`；
+  `commitEditing` 不得 `replaceWidgets`；`canDiscardEditing` 用 `sameShape`；座舱编辑条有 `Button("放弃")`
+  与 `.disabled(!layout.canDiscardEditing(mode: s.mode))`；顶栏与设置两个入口都 `beginEditing`；
+  离开编辑态的路径（完成 / 顶栏 [完成] / 换模式）至少 3 处 `commitEditing`。
 - `TestLayoutModuleWiring`：`defaults(mode:)` 三个模式都对、`init` 都播种。
 - `func_body()` 把 `defaultGamepad()` / `defaultHeli()` / `defaultDrive()` 的断言隔开。
 

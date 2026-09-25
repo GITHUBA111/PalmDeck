@@ -111,7 +111,11 @@ struct CockpitView: View {
             // 居中：模式开关（贴顶）
             HStack(spacing: 6) {
                 ForEach(CockpitMode.allCases, id: \.self) { m in
-                    Button(m.label) { ctrl.setMode(m); Haptics.press() }
+                    Button(m.label) {
+                        // 换模式即结束编辑会话（已改的先当成「完成」留下）
+                        if layout.editing { layout.commitEditing(mode: s.mode); layout.editing = false }
+                        ctrl.setMode(m); Haptics.press()
+                    }
                         .buttonStyle(CardButton(active: s.mode == m, accent: Theme.cyan, height: height))
                         .frame(width: 68)
                 }
@@ -126,6 +130,8 @@ struct CockpitView: View {
                 .buttonStyle(CardButton(fillWidth: false, height: height))
                 .frame(width: 40)
                 Button {
+                    if layout.editing { layout.commitEditing(mode: s.mode) }
+                    else { layout.beginEditing(mode: s.mode) }
                     layout.editing.toggle()
                     Haptics.press()
                 } label: {
@@ -230,27 +236,42 @@ struct CockpitView: View {
         }
     }
 
-    /// 编辑态下的顶部工具条（加组件 / 存模板 / 完成）。
+    /// 编辑态下的顶部工具条（加组件 / 存模板 / 放弃 / 完成）。
+    /// 组件越来越多，左边的「添加」一行改成横向可滚，窄屏（iPhone 竖屏）也不会挤成一团。
     private var editBar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
-                libraryButton("按键", .button, nil)
-                libraryButton("触摸板", .pad, .look)
-                libraryButton("摇杆", .stick, .look)
-                libraryButton("方向盘", .wheel, .roll)
-                libraryButton("滑条", .slider, nil)
-                libraryButton("苦力帽", .hat, .look)
-                libraryButton("姿态球", .attitude, .roll)
-                libraryButton("仪表盘", .panel, .roll)
-                Spacer(minLength: 0)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
+                        libraryButton("按键", .button, nil)
+                        libraryButton("触摸板", .pad, .look)
+                        libraryButton("摇杆", .stick, .look)
+                        libraryButton("方向盘", .wheel, .roll)
+                        libraryButton("滑条", .slider, nil)
+                        libraryButton("苦力帽", .hat, .look)
+                        libraryButton("姿态球", .attitude, .roll)
+                        libraryButton("仪表盘", .panel, .roll)
+                    }
+                }
                 Button("存为模板") {
                     tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
                     naming = true
                 }
                 .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
-                Button("完成") { layout.editing = false; Haptics.press() }
-                    .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
+                Button("放弃") {
+                    layout.discardEditing(mode: s.mode)
+                    layout.editing = false
+                    Haptics.tap()
+                }
+                .disabled(!layout.canDiscardEditing(mode: s.mode))
+                .buttonStyle(CardButton(accent: Theme.red, fillWidth: false, height: 30))
+                Button("完成") {
+                    layout.commitEditing(mode: s.mode)
+                    layout.editing = false
+                    Haptics.press()
+                }
+                .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -305,6 +326,8 @@ struct CardButton: ButtonStyle {
     var fillWidth: Bool = true
     var height: CGFloat = 0   // 0 = 自适应父容器高度
 
+    @Environment(\.isEnabled) private var enabled: Bool
+
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let fill = (active || pressed) ? accent : Theme.panel
@@ -327,9 +350,9 @@ struct CardButton: ButtonStyle {
             .scaleEffect(pressed ? 0.96 : 1)
             .opacity(pressed && !active ? 0.85 : 1)
         if height > 0 {
-            return AnyView(base.frame(height: height))
+            return AnyView(base.frame(height: height).opacity(enabled ? 1 : 0.35))
         } else {
-            return AnyView(base.frame(maxHeight: .infinity))
+            return AnyView(base.frame(maxHeight: .infinity).opacity(enabled ? 1 : 0.35))
         }
     }
 }

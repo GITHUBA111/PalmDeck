@@ -68,6 +68,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 .init(self, "自定义组件布局", "自定义 custom 组件 widget 布局 layout 手柄"),
                 .init(self, "编辑布局", "编辑 edit 拖动 移动 缩放 删除"),
+                .init(self, "放弃本次编辑", "放弃 回滚 撤销 取消 discard cancel revert"),
                 .init(self, "模板", "模板 template 预设 preset 方案 切换 switch 还原 恢复 快照"),
                 .init(self, "将当前布局存为模板", "保存 save 快照 snapshot 模板 template 新增"),
                 .init(self, "撤销上一次改动", "撤销 undo 还原 回退 恢复 revert"),
@@ -598,10 +599,23 @@ struct SettingsView: View {
             Toggle(isOn: $layout.editing) {
                 Label("编辑布局", systemImage: "hand.draw")
             }
+            .onChange(of: layout.editing) { on in
+                // 开 = 记下回滚点（供座舱里的「放弃」用），关 = 当成「完成」
+                if on { layout.beginEditing(mode: s.mode) } else { layout.commitEditing(mode: s.mode) }
+            }
+            if layout.editing {
+                Button(role: .destructive) {
+                    layout.discardEditing(mode: s.mode)
+                    layout.editing = false
+                } label: {
+                    Label("放弃本次编辑", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(!layout.canDiscardEditing(mode: s.mode))
+            }
         } header: {
             SettingsHeader("模式")
         } footer: {
-            Text("三个模式都用同一套通用组件（引擎内不再有固定皮肤）。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。")
+            Text("三个模式都用同一套通用组件（引擎内不再有固定皮肤）。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。座舱编辑条上的「放弃」可一键回滚到本次编辑开始前。")
         }
 
         templateSection

@@ -256,5 +256,68 @@ class TestWidgetLibrary(unittest.TestCase):
         self.assertIn("case .rt: return $s.rt", widgets)
 
 
+class TestEditSession(unittest.TestCase):
+    """编辑布局必须能「放弃」：进编辑记回滚点，放弃 = 整表回滚，完成 = 丢掉回滚点。
+
+    历史问题：拖一下就落盘，编辑条上只有「完成」，反悔只能靠设置里的
+    「恢复默认布局」（会把你之前的所有定制一起清掉）。
+    """
+
+    def setUp(self):
+        self.layout = _ios("Views", "Layout.swift")
+
+    def test_store_has_the_session_api(self):
+        for sig in ("func beginEditing(mode: CockpitMode)",
+                    "func canDiscardEditing(mode: CockpitMode) -> Bool",
+                    "func discardEditing(mode: CockpitMode)",
+                    "func commitEditing(mode: CockpitMode)"):
+            self.assertIn(sig, self.layout, "LayoutStore 缺 %s" % sig)
+
+    def test_begin_records_a_per_mode_baseline(self):
+        body = self.layout.split("func beginEditing(mode: CockpitMode)", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("editBaseline[mode.rawValue] = widgets(mode: mode)", body)
+
+    def test_discard_restores_and_does_not_touch_the_undo_slot(self):
+        body = self.layout.split("func discardEditing(mode: CockpitMode)", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("replaceWidgets(base, mode: mode)", body,
+                      "放弃必须整表回滚（会重建画布）")
+        self.assertNotIn("pushUndo", body,
+                         "放弃本身就是回退，不该再叠一层「撤销放弃」")
+
+    def test_commit_only_drops_the_baseline(self):
+        body = self.layout.split("func commitEditing(mode: CockpitMode)", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("editBaseline[mode.rawValue] = nil", body)
+        self.assertNotIn("replaceWidgets", body, "完成不该动布局")
+
+    def test_discard_is_off_when_nothing_changed(self):
+        body = self.layout.split("func canDiscardEditing(mode: CockpitMode)", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("sameShape", body,
+                      "「有没有改过」要用形状比较（UUID 每次重建都变，不能用 ==）")
+
+    def test_edit_bar_has_a_discard_button(self):
+        cockpit = _ios("Views", "CockpitView.swift")
+        self.assertIn('Button("放弃")', cockpit, "座舱编辑条缺「放弃」")
+        self.assertIn("layout.discardEditing(mode: s.mode)", cockpit)
+        self.assertIn(".disabled(!layout.canDiscardEditing(mode: s.mode))", cockpit)
+
+    def test_settings_also_offers_discard(self):
+        settings = _ios("Views", "SettingsView.swift")
+        self.assertIn('Label("放弃本次编辑", systemImage: "arrow.uturn.backward")', settings,
+                      "设置 → 布局 也应能放弃（座舱编辑条是被动入口）")
+        self.assertIn("layout.discardEditing(mode: s.mode)", settings)
+
+    def test_every_way_into_edit_mode_records_a_baseline(self):
+        cockpit = _ios("Views", "CockpitView.swift")
+        settings = _ios("Views", "SettingsView.swift")
+        self.assertIn("layout.beginEditing(mode: s.mode)", cockpit, "顶栏 [布局] 没记回滚点")
+        self.assertIn("layout.beginEditing(mode: s.mode)", settings, "设置里的「编辑布局」没记回滚点")
+
+    def test_leaving_edit_mode_always_commits(self):
+        cockpit = _ios("Views", "CockpitView.swift")
+        # 完成、顶栏 [完成]、换模式 三条路都得丢掉回滚点，否则下次进来会回滚到旧快照
+        self.assertGreaterEqual(cockpit.count("layout.commitEditing(mode: s.mode)"), 3,
+                                "离开编辑态的路径没有全部 commitEditing")
+
+
 if __name__ == "__main__":
     unittest.main()
