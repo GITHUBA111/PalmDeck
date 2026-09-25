@@ -299,17 +299,6 @@ final class LayoutStore: ObservableObject {
 
     // MARK: 默认布局
 
-    /// 哪些模式支持「自定义模块布局」。
-    ///
-    /// 现在**三个模式都支持**：飞机 / 开车 / 手柄都走组件画布。
-    /// 飞机与开车默认只放轴控件（摇杆/方向盘/油门/离合/脚舵……），
-    /// **不放任何内置按键**————按键全部由用户自己加、自己命名。
-    static func supportsCustom(mode: CockpitMode) -> Bool {
-        switch mode {
-        case .gamepad, .heli, .drive: return true
-        }
-    }
-
     static func defaults(mode: CockpitMode) -> [DeckWidget] {
         switch mode {
         case .gamepad: return defaultGamepad()

@@ -22,9 +22,12 @@ App 侧（`ControllerState.swift` / `Layout.swift` / `SettingsView.swift`）、
 
 | 模式 | 手里是什么 | file:line |
 |---|---|---|
-| `heli` | 总距 + 脚舵 + 周期变距杆 | `Views/FlightDeck.swift` |
-| `drive` | 方向盘 + 三踏板 + 档杆 | `Views/DriveDeck.swift` |
-| `gamepad` | 双摇杆手柄 | `Views/GamepadDeck.swift` |
+| `heli` | 通用模块：周期杆 / 总距 / 脚舵 / 视角 | `Views/Layout.swift` `defaultHeli()` |
+| `drive` | 通用模块：方向盘 / 三踏板 / 视角 | `Views/Layout.swift` `defaultDrive()` |
+| `gamepad` | 通用模块：双摇杆 / ABXY / 扳机轴 | `Views/Layout.swift` `defaultGamepad()` |
+
+> E2 续起引擎里已无固定皮肤（`FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift` 已删），
+> 三个模式共用一块通用组件画布；上表给出的是各模式的默认模块集。
 
 但**同一个模式下的不同游戏，要求完全相反**。举一个真实冲突：
 
@@ -365,7 +368,7 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 | 死区 `dz` | 0.06（默认） | 现有值 |
 | 灵敏度 | 1.0 / 1.0 | 现有值 |
 | 反转 | 全 false | 总距不要开 self-centering（`docs/.../§7`） |
-| 布局 | 现状 `FlightDeck`（固定布局） | |
+| 布局 | 不绑定（`widgetsJSON = nil`） | 走 `defaultHeli()` 通用模块（周期杆/总距/脚舵/视角，**只有轴**）；预设不覆盖用户布局 |
 
 **这个预设的价值不是「改了参数」，而是「它是一个可保存、可还原、不会被下一个游戏的调整污染的快照」。**
 
@@ -584,15 +587,14 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 项 | 之前 | 现在 |
 |---|---|---|
 | 按钮标签 | 「降档」「危险灯」 | 默认不内置按键；用户加的按键默认叫「按钮 N」，可 `Aa` 改名 |
-| 可用模式 | 仅 gamepad | **三个模式都行**（`LayoutStore.supportsCustom(mode:)` 恒 true） |
+| 可用模式 | 仅 gamepad | **三个模式都行**（不再有「模式是否支持自定义」这一说） |
 | 飞机默认 | `FlightDeckView` 硬编码（含 6 个内部按键） | `defaultHeli()` = 周期杆/总距/脚舵/视角（**只有轴**） |
 | 开车默认 | `DriveDeck` 硬编码 | `defaultDrive()` = 方向盘/三踏板/视角（**只有轴**） |
-| 固定皮肤 | 唯一可选且默认 | 降为 **opt-in**（编辑条里的 `[经典皮肤]` 才切过去） |
+| 固定皮肤 | 唯一外观 | **整份删除**（`FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`） |
 
-核心代码：`LayoutStore.defaultHeli()` / `defaultDrive()` / `supportsCustom`、
-`CockpitView.deckBody` + `moduleBody`（含 `[经典皮肤]` 开关）、`EditableWidget` 重命名、
-新键 `palmdeck_heli_custom` / `palmdeck_drive_custom`（默认 true）。详见
-`docs/PalmDeck-v4-app-interaction.md` §12.6。
+核心代码：`LayoutStore.defaultHeli()` / `defaultDrive()`、`CockpitView.deckBody`（直接渲染
+`WidgetCanvas`）、`EditableWidget` 重命名；删除了 `supportsCustom` 与三个
+`palmdeck_*_custom` 开关。详见 `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 **为何不直接把换档换成 X/B 这种“安全键”**：没有任何一组键对**所有**游戏安全
 （欧卡2 的 X/B 是别的功能）。一旦 App 重新拍板，就又把 App 和游戏默认绑死了。
@@ -600,7 +602,8 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 
 **测试**：`tests/test_deck_bindings.py::TestDefaultHeliLayout` /
 `TestDefaultDriveLayout`——默认布局不得出现 `.make(.button,`、不得出现游戏语义词;
-`TestLayoutModuleWiring` 守卫三模式的 `supportsCustom` / `defaults` / 播种接线。
+`TestNoFixedSkins` 守卫三个皮肤文件已删、`CockpitView` 只渲染 `WidgetCanvas`；
+`TestLayoutModuleWiring` 守卫三模式的 `defaults` / 播种接线。
 
 ---
 
@@ -611,9 +614,9 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 协议 PKT（22B `<2sBB8hH`） | **不改**。字段名 roll/pitch/yaw/thr 保持冻结 |
 | 协议 WS 文本 | **暂不改**。原计划 G3 新增 `{"type":"profile"}` + `caps: profile_select`，但§2.7 证明两个目标游戏都不需要，已降级（§7） |
 | 电脑侧 | **G0+G1+G2 不改电脑侧任何文件**。（若将来做 G3：`hotas.py` `remap_vjoy` 改查表、`palmdeck_config.py` 新 `axes_presets`、`bridge.py` WS 分支 + `caps`） |
-| App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告） |
+| App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告）——**注：E1 涉及的两个皮肤文件已在 E2 续中整份删除** |
 | 文档 | 本文件、`docs/PalmDeck-v4-app-interaction.md`（持久化键表 + 预设交互）、`docs/PalmDeck-v4-redesign.md`（P8）、`docs/README.md` |
-| App 侧（E2） | `Layout.swift`（`defaultDrive()` + `supportsCustom` + `EditableWidget` 重命名）、`CockpitView.swift`（`deckBody` / `moduleBody` / 顶栏 `[布局]` 条件）、新键 `palmdeck_drive_custom`；`tests/test_deck_bindings.py`（新增 `TestDefaultDriveLayout`） |
+| App 侧（E2） | `Layout.swift`（`defaultHeli()` / `defaultDrive()` 只留轴 + `EditableWidget` 重命名）、`CockpitView.swift`（`deckBody` 直接渲染 `WidgetCanvas`）、`SettingsView.swift`（布局分类三模式统一）、删除 `FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`、`project.pbxproj` 去登记；`tests/test_deck_bindings.py`（`TestDefaultHeliLayout` / `TestDefaultDriveLayout` / `TestNoFixedSkins`） |
 
 ---
 

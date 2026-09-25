@@ -3,7 +3,7 @@
 | 文件 | 主题 | 状态 |
 |---|---|---|
 | `PalmDeck-v4-redesign.md` | **v4 总纲**：只保留 Windows 常驻服务（自带网页控制台）+ iOS App；手机 Web 座舱作废 | **P1–P6 已落地** |
-| `PalmDeck-v4-app-interaction.md` | **App 端功能与交互规格**：信息架构 / 连接 / 三皮肤 / 触摸手感 / 触觉 / 设置 / 持久化；P7 加固 | **P7 已落地** |
+| `PalmDeck-v4-app-interaction.md` | **App 端功能与交互规格**：信息架构 / 连接 / 通用组件画布 / 触摸手感 / 触觉 / 设置 / 持久化；P7 加固 | **P7 已落地** |
 | `PalmDeck-v3-feature-design.md` | **电脑侧**：HID / vJoy+Xbox / PD v1 协议 / Hub 锁 / allowlist / failsafe / 轴预设 | 已落地（代码 + 测试对齐） |
 | `PalmDeck-v3-cockpit-design.md` | **手机座舱**：横屏完整飞行杆的产品/像素级布局/体感管道/滑条手感/状态机/三种模式皮肤 | PR1–PR5 已实现（见下） |
 | `PalmDeck-v3-cockpit-design.summary.md` | 座舱设计总结（关键决策 + PR 施工顺序摘要） | 配套 |
@@ -18,7 +18,7 @@
 - **`PalmDeck-v4-redesign.md` 为当前总纲**：产品只剩 Windows 常驻服务 + iOS App，
   手机 Web 座舱（`web/index.html`）已删除；服务端 `/` 一律指向控制台 `web/host.html`。
   下文关于 `web/index.html` 的座舱描述仅作历史参考。
-- **`PalmDeck-v4-app-interaction.md` 为 App 交互权威规格**：屏幕/状态机、三皮肤交互、
+- **`PalmDeck-v4-app-interaction.md` 为 App 交互权威规格**：屏幕/状态机、通用组件画布交互、
   触摸手感模型、触觉词汇、设置与持久化键、P7 差距清单。
 - `PalmDeck-v3-feature-design.md` 冻结**电脑侧协议**，座舱设计**不得重开** HID / PD v1 / `awaitModeAck` / failsafe / 轴预设。
 - `PalmDeck-v3-cockpit-design.md` 冻结**手机座舱**，其实现必须遵守 v3 电脑侧合同；若 UX 不需要新字段，禁止改包。
@@ -64,12 +64,18 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   也会拦住无后缀的全局手感键（G1 起手感参数按模式分键）。
 - `Views/`：`Theme`（统一暗色主题 + 模拟器 HUD 组件：`CockpitBackdrop` 深色渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
-v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚舵+周期变距杆+仪表板）、`DriveDeck`（开车：方向盘+三踏板+档杆+转速表+十字键视角）、`GamepadDeck`（手柄：双摇杆+十字键+ABXY+LB/RB+L3/R3）。
+v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `GamepadDeck` 已整份删除，
+三个模式共用一块通用组件画布 `WidgetCanvas`；各模式的默认布局 = 一组基本轴模块
+（飞机：周期杆/总距/脚舵/视角；开车：方向盘/三踏板/视角；手柄：双摇杆/ABXY/扳机轴）。
 
-### 三种模式（v4 硬件皮肤）
-- **飞机 heli**：`FlightDeckView` —— 总距杆（IDLE/FLY/MAX 止动）+ 脚舵 + 周期变距杆 + 仪表板（COLL/TRQ 弧形 + 姿态球 PFD + ROL/PIT/YAW 条）+ 硬件按键（开火/投弹/起落架/灯光/悬停/视角）。
-- **开车 drive**：`DriveDeck` —— 方向盘（多圈+回正）+ 离合/刹车/油门三踏板 + 序列式档杆 + 转速表与中控仪表盘 + 视角板 + 按键簇。
-- **游戏手柄 gamepad**：默认 `GamepadDeck` 硬件手柄；可在设置里切「自定义组件布局」（`palmdeck_gamepad_custom`）回到 `WidgetCanvas`，并由 `/api/layouts` 同步。此时轴停发，不抢电脑键鼠。
+### 三种模式（共用通用组件画布）
+- **飞机 heli**：默认 `defaultHeli()` —— 周期杆（`stick`→roll/pitch）+ 总距（`slider`→throttle）+ 脚舵（`slider`→yaw）+ 视角（`pad`），**只有轴、无按键**。
+- **开车 drive**：默认 `defaultDrive()` —— 方向盘（多圈+回正）+ 离合/刹车/油门三滑条 + 视角，**只有轴、无按键**。
+- **游戏手柄 gamepad**：默认 `defaultGamepad()` —— 双摇杆 + LT/RT 滑条 + ABXY + LB/RB + 视图/菜单 + L3/R3 + 十字键，均可改。此时轴停发，不抢电脑键鼠。
+
+> **App 不为任何游戏硬编码按钮语义**：按键默认只有中性序号（「按钮 N」），
+> 名字与绑定由用户在编辑态自己定（`Aa` 重命名 + `LibrarySheet` 选绑定）。详见
+> `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 ### 组件系统（模块化/乐高式）
 - 7 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球，各绑定一个语义轴或 vJoy 键。
@@ -82,7 +88,7 @@ v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚�
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 117 项
+python3 -m unittest discover -s tests -t .      # 113 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

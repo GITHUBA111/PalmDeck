@@ -152,7 +152,6 @@ struct SettingsView: View {
     @ObservedObject var s: ControllerState
     @ObservedObject var layout: LayoutStore
     @ObservedObject var profiles: GameProfileStore
-    @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
     @AppStorage("palmdeck_haptics") private var haptics = true
     var discovery: Discovery? = nil
     var onExit: () -> Void = {}
@@ -598,58 +597,42 @@ struct SettingsView: View {
 
     // ---- 布局 ----
     @ViewBuilder private var layoutSections: some View {
-        if s.mode == .gamepad {
-            Section {
-                Toggle(isOn: $gamepadCustom) {
-                    Label("使用自定义组件布局", systemImage: "square.grid.2x2")
-                }
-                Toggle(isOn: $layout.editing) {
-                    Label("编辑布局", systemImage: "hand.draw")
-                }
-            } header: {
-                SettingsHeader("模式")
-            } footer: {
-                Text("关闭自定义时使用固定 Xbox 手柄皮肤。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除。")
+        Section {
+            Toggle(isOn: $layout.editing) {
+                Label("编辑布局", systemImage: "hand.draw")
             }
+        } header: {
+            SettingsHeader("模式")
+        } footer: {
+            Text("三个模式都用同一套通用组件（引擎内不再有固定皮肤）。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。")
+        }
 
-            templateSection
+        templateSection
 
-            Section {
-                Button(role: .destructive) { layout.reset(mode: s.mode) } label: {
-                    Label("恢复默认布局", systemImage: "arrow.counterclockwise")
-                }
-                Button(role: .destructive) { layout.clear(mode: s.mode) } label: {
-                    Label("清空当前模式", systemImage: "trash")
-                }
+        Section {
+            Button(role: .destructive) { layout.reset(mode: s.mode) } label: {
+                Label("恢复默认布局", systemImage: "arrow.counterclockwise")
             }
+            Button(role: .destructive) { layout.clear(mode: s.mode) } label: {
+                Label("清空当前模式", systemImage: "trash")
+            }
+        }
 
-            Section {
-                Button { ctrl.requestLayouts() } label: {
-                    Label("从电脑拉取布局", systemImage: "arrow.down.circle")
-                }
-                Button { layout.upload(mode: s.mode, via: ctrl) } label: {
-                    Label("上传当前模式到电脑", systemImage: "arrow.up.circle")
-                }
-                .disabled(s.link != .live)
-                if !layout.syncMessage.isEmpty {
-                    Text(layout.syncMessage).font(.footnote).foregroundColor(.secondary)
-                }
-            } header: {
-                SettingsHeader("与电脑同步")
-            } footer: {
-                Text("上传需要在座舱内已连接电脑；布局保存在电脑的 layouts.json。")
+        Section {
+            Button { ctrl.requestLayouts() } label: {
+                Label("从电脑拉取布局", systemImage: "arrow.down.circle")
             }
-        } else {
-            // heli/drive 用固定硬件皮肤，没有渲染路径：
-            // 不提供自定义/同步，否则会让人以为改了却看不到效果。
-            Section {
-                Label("\(s.mode.label)模式使用固定硬件皮肤，不支持自定义布局。",
-                      systemImage: "lock.fill")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            } header: {
-                SettingsHeader("模式")
+            Button { layout.upload(mode: s.mode, via: ctrl) } label: {
+                Label("上传当前模式到电脑", systemImage: "arrow.up.circle")
             }
+            .disabled(s.link != .live)
+            if !layout.syncMessage.isEmpty {
+                Text(layout.syncMessage).font(.footnote).foregroundColor(.secondary)
+            }
+        } header: {
+            SettingsHeader("与电脑同步")
+        } footer: {
+            Text("上传需要在座舱内已连接电脑；布局保存在电脑的 layouts.json。")
         }
     }
 

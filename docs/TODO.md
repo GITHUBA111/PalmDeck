@@ -47,9 +47,9 @@
   **G3 之前 App 不改电脑轴表**：只读显示电脑实际 `axis_profile`，不一致时给黄标。
 - **通用模块化（E2）** —— App 不再替游戏硬编码按钮语义：飞机 / 开车**默认只有轴控件、
   不放任何按键**（`defaultHeli()` / `defaultDrive()`）；按键由用户自己添加（默认叫「按钮 N」）、
-  编辑态 `Aa` 重命名。三个模式都支持自定义模块（`LayoutStore.supportsCustom` 恒 true），
-  经典皮肤 `FlightDeckView` / `DriveDeck` / `GamepadDeck` 降为 opt-in（编辑条 `[经典皮肤]`）。
-  新增持久化键 `palmdeck_heli_custom` / `palmdeck_drive_custom`（**默认 true**）。
+  编辑态 `Aa` 重命名。三个模式共用一块通用组件画布；**固定皮肤已整份删除**
+  （`FlightDeck.swift` / `DriveDeck.swift` / `GamepadDeck.swift`，含 `supportsCustom`
+  与三个 `palmdeck_*_custom` 开关）。
   修「欧卡2 降档撞默认 LB/RB 看镜头」的报障：以后「哪个键是降档」由用户自己绑，App 不再拍板。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.6、`docs/PalmDeck-v4-game-profiles.md` §3.9。
 
