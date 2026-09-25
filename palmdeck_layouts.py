@@ -20,12 +20,20 @@ from palmdeck_config import config_dir
 SCHEMA = 1
 MODES = ("heli", "drive", "gamepad")
 
-KINDS = ("wheel", "slider", "pad", "button", "stick", "hat", "attitude")
+KINDS = ("wheel", "slider", "pad", "button", "stick", "collective", "hat", "attitude", "panel")
 BINDINGS = (
-    "roll", "pitch", "yaw", "throttle", "brake", "clutch", "look",
+    "roll", "pitch", "yaw", "throttle", "brake", "clutch", "rt", "look",
     *(f"vjoy{i}" for i in range(1, 17)),
     "gearUp", "gearDown", "fire",
 )
+
+# ⚠️ 上面两份清单必须与 iOS 侧 `Views/Widgets.swift` 的 `WidgetKind` / `WidgetBinding`
+# **一一对应**（顺序也对齐，便于对账）。不在清单里的组件会被 `_coerce_widget` 丢掉：
+# 而 `bridge.py` 的 `layouts_put` 又把校验后的列表**回传**给 App，
+# `LayoutStore.applyServer` 会**整表替换**本地布局 —— 于是漏一个 kind/binding
+# = 「点一下「上传到电脑」就把这个组件删了」，而且一声不响。
+# 历史上 `panel`（飞机默认里的仪表盘）、`rt`、`collective` 都被这样吞过。
+# `tests/test_layouts.py::KindAndBindingListsMatchTheApp` 是防漂移的对账测试。
 
 MAX_WIDGETS = 64
 _MAX_FILE_BYTES = 1_000_000
@@ -75,6 +83,7 @@ def _coerce_widget(raw) -> Optional[dict]:
 
 
 def _coerce_layout(raw) -> list:
+    """逐项校验；不合法的丢掉（丢了几件由调用方对账，见 `bridge.py` 的 `layouts_put`）。"""
     if not isinstance(raw, list):
         return []
     out, seen = [], set()

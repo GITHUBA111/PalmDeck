@@ -74,8 +74,9 @@
     .qr canvas, .qr img { width:200px; height:200px; }
     .url { font-size:12px; color:var(--cyan); word-break:break-all; text-align:center; }
     /* monitor */
-    .axis { display:grid; grid-template-columns:70px 1fr 64px; align-items:center; gap:10px; padding:5px 0; }
-    .axis .name { color:var(--muted); font-size:13px; }
+    .axis { display:grid; grid-template-columns:88px 1fr 64px; align-items:center; gap:10px; padding:5px 0; }
+    /* 「左扳机/刹车」这类 6 字标签在 70px 列里会折成两行、把整行顶高；给够宽度并禁止换行。 */
+    .axis .name { color:var(--muted); font-size:13px; white-space:nowrap; }
     .track { position:relative; height:12px; background:var(--track); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
     .track .mid { position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--track-mid); }
     .fill { position:absolute; top:0; bottom:0; background:linear-gradient(90deg,#0d6f9c,#2fa8d8); }
@@ -175,7 +176,7 @@
           <div class="modes">
             <button class="action" data-mode="heli">飞机</button>
             <button class="action" data-mode="drive">开车</button>
-            <button class="action" data-mode="gamepad">游戏手柄</button>
+            <button class="action" data-mode="gamepad">手柄</button>
           </div>
         </div>
       </div>
@@ -324,6 +325,8 @@
     });
 
     // ---------- status ----------
+    // 顶栏胶囊原本直接显示 heli/drive/gamepad，而概览页按钮是中文 —— 同一屏两个名字。
+    const MODE_LABELS = { heli: "飞机", drive: "开车", gamepad: "手柄" };
     const AXES = [
       ["roll", "横滚/转向", true], ["pitch", "俯仰/离合", true], ["yaw", "方向舵", true],
       ["throttle", "油门", false], ["lt", "左扳机/刹车", false], ["rt", "右扳机", false],
@@ -361,7 +364,7 @@
       const dev = $("pillDevice"), backendOk = s.backend && s.backend !== "none";
       dev.className = "pill " + (backendOk ? "ok" : "bad");
       dev.innerHTML = "<b>设备</b> " + (s.device || "—");
-      $("pillMode").innerHTML = "<b>模式</b> " + (s.cockpit_mode || "—");
+      $("pillMode").innerHTML = "<b>模式</b> " + (MODE_LABELS[s.cockpit_mode] || s.cockpit_mode || "—");
       const hz = s.hz || 0;
       $("pillHz").className = "pill " + (hz >= 55 ? "ok" : hz >= 20 ? "bad" : (s.last_ms == null ? "" : "err"));
       $("pillHz").innerHTML = "<b>Hz</b> " + hz;

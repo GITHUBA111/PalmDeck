@@ -148,6 +148,19 @@ def log(msg: str) -> None:
     _LOG_RING.append(line)
 
 
+def log_layout_drops(mode: str, sent, kept) -> None:
+    """白名单丢件必须说出来。
+
+    `palmdeck_layouts._coerce_widget` 对不在 `KINDS`/`BINDINGS` 里的组件返回 None，
+    `_coerce_layout` 就把它跳过。而 App 收到回传列表后会**整表替换**本地布局
+    （`LayoutStore.applyServer`），所以静默丢件 = 「点一下保存就把组件删了」。
+    历史上 `panel` / `rt` / `collective` 都被这样吞过，谁都没发现。
+    """
+    if isinstance(sent, list) and len(sent) != len(kept or []):
+        log(f"警告：{mode} 布局有 {len(sent) - len(kept or [])} 个组件被丢弃"
+            "（kind/binding 不在白名单，见 palmdeck_layouts.KINDS/BINDINGS）")
+
+
 def _usable_lan(ip: str) -> bool:
     if not ip or ip.startswith("127.") or ip.startswith("169.254."):
         return False
@@ -799,8 +812,10 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
             elif kind == "layouts_put":
                 mode = str(msg.get("mode") or "")
                 if mode in layouts.MODES:
-                    layouts.save_layout(mode, msg.get("layout"))
+                    sent = msg.get("layout")
+                    kept = layouts.save_layout(mode, sent) or []
                     log(f"layout from app: {mode}")
+                    log_layout_drops(mode, sent, kept)
                     client.send({
                         "type": "layouts",
                         "schema": layouts.SCHEMA,
@@ -809,6 +824,9 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
                     })
             elif kind == "ping":
                 client.send({"type": "pong", "t": msg.get("t")})
+                # 顺带推一次状态：否则 App 顶栏的「链路 Hz / 通道」只在连接 / 换模式时更新，
+                # 之后一直冻在那一刻的快照上（App 靠 status 刷新，见 tests/test_console_api.py）。
+                client.send({"type": "status", **HUB.snapshot_status()})
     except Exception as exc:
         log(f"ws error: {exc}")
     finally:
@@ -1085,14 +1103,19 @@ class CockpitHandler(SimpleHTTPRequestHandler):
             })
         if path == "/api/layouts":
             if isinstance(body.get("layouts"), dict):
-                saved = layouts.save_layouts(body["layouts"])
+                sent_map = body["layouts"]
+                saved = layouts.save_layouts(sent_map)
+                for mode, kept in saved.items():
+                    log_layout_drops(mode, sent_map.get(mode), kept)
                 log(f"layouts updated: {sorted(saved.keys())}")
                 return _send_json(self, {"ok": True, "layouts": saved})
             mode = str(body.get("mode") or "")
             if mode not in layouts.MODES:
                 return _send_json(self, {"ok": False, "error": "bad mode"}, 400)
-            saved = layouts.save_layout(mode, body.get("layout"))
-            log(f"layout updated: {mode} ({len(saved or [])} widgets)")
+            sent = body.get("layout")
+            saved = layouts.save_layout(mode, sent) or []
+            log(f"layout updated: {mode} ({len(saved)} widgets)")
+            log_layout_drops(mode, sent, saved)
             return _send_json(self, {"ok": True, "mode": mode, "layout": saved})
         if path == "/api/mode":
             raw = str(body.get("name") or "")

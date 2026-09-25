@@ -1,6 +1,7 @@
 """网页控制台 REST API（bridge.CockpitHandler）冒烟测试。"""
 
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -114,6 +115,27 @@ class ConsoleApiTests(unittest.TestCase):
             self._post("/api/layouts", {"mode": "banana", "layout": []})
         self.assertEqual(ctx.exception.code, 400)
 
+    def test_layout_drops_are_logged_not_silent(self) -> None:
+        """白名单丢件必须留痕。
+
+        `palmdeck_layouts._coerce_layout` 会静静地跳过非法组件，而 App 收到回传的列表后
+        是**整表替换**本地布局 —— 于是「静默丢」= 「保存一下就把组件删了」。
+        所以丢件数非零时必须在 `/api/logs` 里看得到。
+        """
+        good = {"id": "g", "kind": "panel", "binding": "roll",
+                "rect": {"x": 0.1, "y": 0.1, "w": 0.4, "h": 0.3}, "label": "仪表盘"}
+        bad = {"id": "b", "kind": "nope", "binding": "roll",
+               "rect": {"x": 0.1, "y": 0.1, "w": 0.1, "h": 0.1}}
+        res = self._post("/api/layouts", {"mode": "heli", "layout": [good, bad]})
+        self.assertEqual([w["id"] for w in res["layout"]], ["g"],
+                         "合法组件不能跟着非法的一起丢")
+        self.assertTrue(any("被丢弃" in ln and "heli" in ln for ln in self._get("/api/logs")["lines"]),
+                        "丢件没写日志，用户永远不知道组件没了")
+
+        # 批量保存这条路径也要留痕
+        self._post("/api/layouts", {"layouts": {"drive": [good, bad]}})
+        self.assertTrue(any("被丢弃" in ln and "drive" in ln for ln in self._get("/api/logs")["lines"]))
+
     def test_config_export_import_roundtrip(self) -> None:
         # 先造出与默认不同的状态：配置 + 一个布局
         self._post("/api/config", {"http": 9311, "axis_profile": "fbw", "park_ms": 1500})
@@ -159,6 +181,33 @@ class ConsoleApiTests(unittest.TestCase):
         res = self._get("/api/update/check")
         self.assertIn("current", res)
         self.assertIn("can_self_update", res)
+
+
+class LinkStatusStaysLiveTests(unittest.TestCase):
+    """App 顶栏「链路 Hz / 通道」靠 WS status 刷新。
+
+    只在 hello / 切模式 / 掉线时推一次 status，会让 App 一直停在连接那一刻的快照上
+    （实测：电脑端 60Hz，App 还显示切模式时的 42Hz）。
+    """
+
+    def _src(self, rel: str) -> str:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, rel), encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_ping_response_also_pushes_status(self):
+        src = self._src("bridge.py")
+        i = src.index('elif kind == "ping":')
+        block = src[i:i + 400]
+        self.assertIn('"pong"', block)
+        self.assertIn('"type": "status"', block,
+                      "ping 应答要顺带推一次 status，否则 App 的 Hz/通道会冻在快照上")
+
+    def test_app_consumes_status(self):
+        src = self._src(os.path.join(
+            "mobile", "ios", "App", "App", "Native", "Model", "CockpitController.swift"))
+        self.assertIn('case "status":', src)
+        self.assertIn('obj["hz"]', src)
 
 
 if __name__ == "__main__":
