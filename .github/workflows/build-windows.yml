@@ -122,6 +122,8 @@ jobs:
           $dir  = Join-Path $env:LOCALAPPDATA "Programs\PalmDeck"
           $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
           $cfgDir = Join-Path $env:APPDATA "PalmDeck"
+          function Step($m) { Write-Host $m; Write-Host "::notice::$m" }
+          try {
 
           Write-Host "== 静默安装（带 autostart 任务，好顺带验注册表那条）=="
           Start-Process -FilePath $setup -Wait -ArgumentList `
@@ -166,6 +168,16 @@ jobs:
           if ($run) { throw "卸载后 HKCU Run 里还留着 PalmDeck —— 开机就会报错（uninsdeletevalue 没生效）" }
           if (-not (Test-Path $cfgDir)) { throw "%APPDATA%\PalmDeck 被卸载删了 —— 布局/配置应该保留" }
           Write-Host "冒烟全绿：装得上、起得来、接口有响应、卸得干净且不丢配置"
+          } catch {
+            Write-Host "::error::冒烟失败：$($_.Exception.Message)"
+            $log = Join-Path $cfgDir "palmdeck.log"
+            if (Test-Path $log) {
+              $tail = (Get-Content $log -Tail 30) -replace '%','%25'
+              $tail = $tail -join '%0A'
+              Write-Host "::error::日志尾部：$tail"
+            }
+            throw
+          }
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
