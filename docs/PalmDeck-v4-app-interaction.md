@@ -28,7 +28,7 @@ PalmDeckApp (@main)
     ├─ 顶栏：模式段(3) · 连接胶囊 · 设置齿轮 · [布局]
     ├─ 皮肤：三个模式**共用一块通用组件画布** `WidgetCanvas`（引擎内无任何固定皮肤）
     ├─ 底栏 statusStrip：ROL/PIT/YAW · THR · LINK(hz) · MODE · SRC
-    ├─ ⌘ 设置 → SettingsView（双栏：连接 / 布局 / 操纵与手感 / 触觉 / 方向盘 / 帮助）
+    ├─ ⌘ 设置 → SettingsView（双栏：连接 / 布局 / 操纵与手感 / 触觉 / 方向盘 / 外观 / 帮助）
     ├─ ⌘ 布局 → LibrarySheet（类型 + 绑定）
     ├─ 首次 → CockpitTutorialView（一次性，可重开）
     └─ 未连接 → notConnectedBanner（顶部胶囊，点击即连）
@@ -230,7 +230,8 @@ y = 0                                              |x| <  dz
 | 操纵与手感 | 轴反向 / 摇杆 / 灵敏度与死区 / 响应曲线 | 横滚 / 俯仰 / 方向舵 / 总距；松手回中；灵敏度 X / Y、死区（点值精确输入）；双轴响应曲线预览 | ✅ `invX/invY/invYaw/invColl`、`stickReturn`、`sensX/sensY/dz` |
 | 触觉 | 反馈 | 触觉反馈总开关 + 「试一下振动」 | ✅ `palmdeck_haptics` |
 | 方向盘 | 参数 | 满舵角度 / 回正速度（点值精确输入） | ✅ `wheelMaxDeg/wheelReturnSpeed` |
-| 帮助 | 教程 / 关于 | 查看使用教程；App 版本、当前皮肤 | `palmdeck_tutored` |
+| 外观 | 主题 | 外观模式（跟随系统 / 浅色 / 深色） | ✅ `palmdeck_appearance`（默认浅色） |
+| 帮助 | 教程 / 关于 | 查看使用教程；App 版本、当前模式 | `palmdeck_tutored` |
 
 > 历史问题（已修）：轴反向/摇杆/方向盘这些参数此前是**普通 `var`，既不 `@Published` 也不落盘**，
 > 重启即丢、开关可能不刷新。P7 统一改为持久化（见 §11）。
@@ -496,7 +497,55 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
   与 `.disabled(!layout.canDiscardEditing(mode: s.mode))`；顶栏与设置两个入口都 `beginEditing`；
   离开编辑态的路径（完成 / 顶栏 [完成] / 换模式）至少 3 处 `commitEditing`。
 - `TestLayoutModuleWiring`：`defaults(mode:)` 三个模式都对、`init` 都播种。
+- `TestThemeAppearance`：`Theme` 必须有 `Color.pd(浅,深)` 动态色助手且 18 个主题色都给了两套值；
+  视图层不得出现 `preferredColorScheme(.dark)` / `(.light)`；`AppAppearance` + `palmAppearance()`
+  必须同时落在根视图与三个 presentation（sheet/cover 不一定继承窗口 override）；
+  外观分类要进 `SettingsCategory` 与搜索索引；仪表固定色（`instr*`/`hud*`）不得用 `Color.pd(`。
 - `func_body()` 把 `defaultGamepad()` / `defaultHeli()` / `defaultDrive()` 的断言隔开。
+
+---
+
+## 12.7 浅色 / 深色双主题（默认浅色）
+
+**背景**：整套界面原来只有一套写死的暗色调色板，再加 4 处 `.preferredColorScheme(.dark)`，
+在亮环境（户外、白天开车）下反光严重。改为**双主题 + 可切换**。
+
+**做法**：把「主题」做成一次查表，而不是往 120 个引用点里插 `@Environment(\.colorScheme)`。
+
+```swift
+enum Theme {
+    static let panel = Color.pd(Color(red: 1, green: 1, blue: 1),        // 浅色：白卡片
+                                Color(red: 0.11, green: 0.15, blue: 0.21)) // 深色：原值
+}
+```
+
+`Color.pd(_:_:)` 走 `UIColor(dynamicProvider:)`（`#if canImport(UIKit)` 守，iOS + Mac Catalyst 都适用），
+系统按 `traitCollection.userInterfaceStyle` 自动解析——**视图层一行都不用改**，主题切换也不需要
+任何全局可变状态。浅色侧的强调色整体压深一档（否则白底对比度不够）：
+
+| 语义 | 浅色 | 深色 |
+|---|---|---|
+| cyan（主强调） | `#007AB0` | `#33D1FF` |
+| green（连接/确认） | `#0E8B4A` | `#4DDB80` |
+| orange（编辑/注意） | `#CD6F00` | `#FF9E33` |
+| red（危险） | `#CD2928` | `#FF5C5C` |
+| panel / panelHi / border | `#FFFFFF` / `#F2F6FA` / `#BDC9D7` | 原值 |
+| text / textDim / textFaint | `#0E1724` / `#47556B` / `#738192` | 原值 |
+
+**外观开关**：`AppAppearance`（`system` / `light` / `dark`，键 `palmdeck_appearance`，
+**默认 `.light`**），设置新增分类「外观」（靖蓝图标，排在「方向盘」后）→ 内联 `Picker`；
+搜索词「外观 / appearance / 主题 / theme / 深色 / 浅色 / 夜间」都能命中。
+
+**落到哪里**：`.palmAppearance()` 是个读 `@AppStorage` 的 `ViewModifier`，只抛 `preferredColorScheme`。
+它必须挂在**根视图**（`PalmDeckApp` 的 `WindowGroup` 内容包一层 `Group`）**以及**
+`CockpitView` / `PreflightView` / `SettingsView` 三处——sheet / `fullScreenCover` 不保证
+继承窗口的 override，漏一处就会出现“外面浅色、弹窗黑底”。
+
+**仪表是例外（故意不跟随）**：姿态球是真仪表，白底上放一块黑表盘反而更像真机也更清楚，
+所以它用一组**固定色**（`Theme.instrBg` 天/地渐变、`instrLine`、`hudAmber`、`hudOrange`）。
+`ArcGauge` / `BarGauge` 不在此列——它们只读 `Theme.border` / `panelHi` / 强调色，跟着主题走反而更好看。
+
+**未动**：`Model/` 一层与电脑侧协议完全没碰（`swiftc` 单测也只编 `Model/`，所以主题改动不影响纯逻辑层）。
 
 ---
 

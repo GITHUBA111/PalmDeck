@@ -30,16 +30,16 @@ struct AttitudeBall: View {
                         let big = D * 3
                         // 天
                         c.fill(Path(CGRect(x: -big/2, y: -big/2, width: big, height: big/2)),
-                               with: .linearGradient(Gradient(colors: [Color(red: 0.25, green: 0.48, blue: 0.69), Color(red: 0.06, green: 0.14, blue: 0.22)]),
+                               with: .linearGradient(Gradient(colors: [Theme.instrSkyHi, Theme.instrSkyLo]),
                                                      startPoint: .init(x: 0, y: -big/2), endPoint: .init(x: 0, y: 0)))
                         // 地
                         c.fill(Path(CGRect(x: -big/2, y: 0, width: big, height: big/2)),
-                               with: .linearGradient(Gradient(colors: [Color(red: 0.42, green: 0.28, blue: 0.14), Color(red: 0.14, green: 0.09, blue: 0.05)]),
+                               with: .linearGradient(Gradient(colors: [Theme.instrGroundHi, Theme.instrGroundLo]),
                                                      startPoint: .init(x: 0, y: 0), endPoint: .init(x: 0, y: big/2)))
                         // 地平线
                         c.stroke(Path { p in
                             p.move(to: CGPoint(x: -big/2, y: 0)); p.addLine(to: CGPoint(x: big/2, y: 0))
-                        }, with: .color(.white.opacity(0.9)), lineWidth: 2)
+                        }, with: .color(Theme.instrLine.opacity(0.9)), lineWidth: 2)
                         // 俯仰刻度
                         let K = (D * 0.30) / 38
                         for deg in [-20, -10, 10, 20] {
@@ -47,7 +47,7 @@ struct AttitudeBall: View {
                             let half = abs(deg) == 10 ? D*0.10 : D*0.07
                             c.stroke(Path { p in
                                 p.move(to: CGPoint(x: -half, y: y)); p.addLine(to: CGPoint(x: half, y: y))
-                            }, with: .color(.white.opacity(0.65)), lineWidth: 1.5)
+                            }, with: .color(Theme.instrLine.opacity(0.65)), lineWidth: 1.5)
                         }
                     }
 
@@ -57,7 +57,7 @@ struct AttitudeBall: View {
                         var p = Path()
                         p.addArc(center: CGPoint(x: cx, y: cy), radius: arcR,
                                  startAngle: .degrees(-115), endAngle: .degrees(-65), clockwise: false)
-                        ctx.stroke(p, with: .color(.white.opacity(0.5)), lineWidth: 1.5)
+                        ctx.stroke(p, with: .color(Theme.instrLine.opacity(0.5)), lineWidth: 1.5)
                         for deg in [-60, -45, -30, -15, 0, 15, 30, 45, 60] {
                             let a = Double(deg) * .pi / 180
                             let outer = arcR
@@ -67,7 +67,7 @@ struct AttitudeBall: View {
                             let x2 = cx + CGFloat(cos(a - .pi/2)) * inner
                             let y2 = cy + CGFloat(sin(a - .pi/2)) * inner
                             var q = Path(); q.move(to: CGPoint(x: x1, y: y1)); q.addLine(to: CGPoint(x: x2, y: y2))
-                            ctx.stroke(q, with: .color(.white.opacity(0.6)), lineWidth: 1.5)
+                            ctx.stroke(q, with: .color(Theme.instrLine.opacity(0.6)), lineWidth: 1.5)
                         }
                         // 中央指示三角
                         var t = Path()
@@ -75,7 +75,7 @@ struct AttitudeBall: View {
                         t.addLine(to: CGPoint(x: cx - 5, y: cy - arcR - 8))
                         t.addLine(to: CGPoint(x: cx + 5, y: cy - arcR - 8))
                         t.closeSubpath()
-                        ctx.fill(t, with: .color(Theme.orange))
+                        ctx.fill(t, with: .color(Theme.hudOrange))
                     }
 
                     // 飞机符号（固定中心）
@@ -86,7 +86,7 @@ struct AttitudeBall: View {
                     ac.addLine(to: CGPoint(x: cx + 26, y: cy))
                     ac.move(to: CGPoint(x: cx, y: cy - 6))
                     ac.addLine(to: CGPoint(x: cx, y: cy + 6))
-                    ctx.stroke(ac, with: .color(Theme.amber), lineWidth: 2.5)
+                    ctx.stroke(ac, with: .color(Theme.hudAmber), lineWidth: 2.5)
 
                     // 顶部航向带（随 yaw 滑动，±40° 窗口）
                     let tapeY = D * 0.16
@@ -101,13 +101,13 @@ struct AttitudeBall: View {
                         var tick = Path()
                         tick.move(to: CGPoint(x: x, y: tapeY))
                         tick.addLine(to: CGPoint(x: x, y: tapeY + (major ? 11 : 6)))
-                        ctx.stroke(tick, with: .color(.white.opacity(major ? 0.85 : 0.45)), lineWidth: 1)
+                        ctx.stroke(tick, with: .color(Theme.instrLine.opacity(major ? 0.85 : 0.45)), lineWidth: 1)
                         if major {
                             var deg = Int(d.rounded()) % 360
                             if deg < 0 { deg += 360 }
                             let label = deg == 0 ? "N" : deg == 90 ? "E" : deg == 180 ? "S" : deg == 270 ? "W" : "\(deg)"
                             ctx.draw(Text(label).font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.white.opacity(0.85)),
+                                        .foregroundColor(Theme.instrLine.opacity(0.85)),
                                      at: CGPoint(x: x, y: tapeY + 20))
                         }
                     }
@@ -117,9 +117,9 @@ struct AttitudeBall: View {
                     lp.addLine(to: CGPoint(x: cx - 4, y: tapeY - 9))
                     lp.addLine(to: CGPoint(x: cx + 4, y: tapeY - 9))
                     lp.closeSubpath()
-                    ctx.fill(lp, with: .color(Theme.orange))
+                    ctx.fill(lp, with: .color(Theme.hudOrange))
                 }
-                .background(Color(red: 0.04, green: 0.07, blue: 0.12))
+                .background(Theme.instrBg)
                 .clipShape(Circle())
 
                 // 外圈

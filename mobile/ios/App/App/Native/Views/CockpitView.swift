@@ -32,7 +32,7 @@ struct CockpitView: View {
             .frame(width: W, height: H, alignment: .top)
         }
         .background(CockpitBackdrop())
-        .preferredColorScheme(.dark)
+        .palmAppearance()
         .sheet(isPresented: $showLibrary) { LibrarySheet(store: layout, mode: s.mode) }
         .fullScreenCover(isPresented: $showTutorial) {
             CockpitTutorialView()
@@ -285,10 +285,10 @@ struct CockpitView: View {
 
     private var dotColor: Color {
         switch s.link {
-        case .live: return .green
-        case .connecting: return .orange
-        case .lost: return .red
-        case .idle: return .gray
+        case .live: return Theme.green
+        case .connecting: return Theme.orange
+        case .lost: return Theme.red
+        case .idle: return Theme.textFaint
         }
     }
 
@@ -310,7 +310,7 @@ struct CockpitView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(Theme.orange.opacity(0.9)))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.onAccent)
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -333,7 +333,7 @@ struct CardButton: ButtonStyle {
         let fill = (active || pressed) ? accent : Theme.panel
         let base = configuration.label
             .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(active ? .white : (pressed ? accent : Theme.textDim))
+            .foregroundColor(active ? Theme.onAccent : (pressed ? accent : Theme.textDim))
             .lineLimit(2)
             .minimumScaleFactor(0.5)
             .padding(.horizontal, 6)
@@ -418,8 +418,8 @@ struct CockpitTutorialView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.12, green: 0.16, blue: 0.22),
-                                    Color(red: 0.06, green: 0.09, blue: 0.14)],
+            LinearGradient(colors: [Theme.bgTop,
+                                    Theme.bgBottom],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
@@ -456,20 +456,20 @@ struct CockpitTutorialView: View {
                 .padding(24)
             }
         }
-        .preferredColorScheme(.dark)
+        .palmAppearance()
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 24)).foregroundColor(.cyan)
+                    .font(.system(size: 24)).foregroundColor(Theme.cyan)
                     .rotationEffect(.degrees(-45))
                 Text("PalmDeck 座舱速览")
-                    .font(.system(size: 24, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 24, weight: .heavy)).foregroundColor(Theme.text)
             }
             Text("60 秒看懂每个区域，第一次上手不抓瞎")
-                .font(.system(size: 13)).foregroundColor(.gray)
+                .font(.system(size: 13)).foregroundColor(Theme.textDim)
         }
         .padding(.bottom, 4)
     }
@@ -477,12 +477,12 @@ struct CockpitTutorialView: View {
     private func section(icon: String, title: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 16)).foregroundColor(.cyan)
+                .font(.system(size: 16)).foregroundColor(Theme.cyan)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.cyan.opacity(0.15)))
+                .background(Circle().fill(Theme.cyan.opacity(0.15)))
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                Text(text).font(.system(size: 12)).foregroundColor(.gray)
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
+                Text(text).font(.system(size: 12)).foregroundColor(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

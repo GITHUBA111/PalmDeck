@@ -465,7 +465,7 @@ struct EditableWidget: View {
                     )
                 // 缩放
                 Circle().fill(Theme.cyan)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .overlay(Circle().stroke(Theme.onAccent, lineWidth: 2))
                     .frame(width: 24, height: 24)
                     .offset(x: pw / 2 - 12, y: ph / 2 - 12)
                     .gesture(
@@ -487,7 +487,7 @@ struct EditableWidget: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.onAccent)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Theme.red))
                 }
@@ -499,7 +499,7 @@ struct EditableWidget: View {
                 } label: {
                     Image(systemName: "character")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.onAccent)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Theme.orange))
                 }

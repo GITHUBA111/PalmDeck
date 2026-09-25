@@ -222,6 +222,75 @@ class TestInstrumentPanel(unittest.TestCase):
                       "FlightPanel.swift 没登记进 Xcode 工程，真机会漏编")
 
 
+class TestThemeAppearance(unittest.TestCase):
+    """浅/深双主题：色值必须动态解析，且没有任何地方再把界面锁死成单一主题。
+
+    历史上从 `Theme` 到 4 处 `.preferredColorScheme(.dark)` 全是写死的暗色，
+    白底上直接看不见字。现在只允许在 `AppAppearance` 里出现 `.light` / `.dark`。
+    """
+
+    VIEWS = ("CockpitView.swift", "PreflightView.swift", "SettingsView.swift",
+             "Theme.swift", "Widgets.swift", "Layout.swift", "Controls.swift",
+             "AttitudeBall.swift", "SteeringWheel.swift", "FlightPanel.swift")
+
+    def test_theme_colors_are_dynamic(self):
+        theme = _ios("Views", "Theme.swift")
+        self.assertIn("static func pd(", theme, "缺 Color.pd 动态色助手")
+        self.assertIn("UIColor { traits in", theme, "动态色没有走 UIColor(dynamicProvider:)")
+        # 两套色值都得到位
+        for token in ("bgTop", "bgBottom", "panel", "panelHi", "border",
+                      "text", "textDim", "textFaint", "onAccent",
+                      "cyan", "green", "orange", "red", "amber",
+                      "glass", "glassBorder", "gridStroke", "glowTop", "glowBottom"):
+            self.assertIn("static let %s" % token, theme, "Theme 缺 %s" % token)
+        self.assertEqual(theme.count("= Color.pd("), 18,
+                         "每个主题色都必须给出浅/深两套值")
+
+    def test_no_view_locks_the_color_scheme(self):
+        for name in self.VIEWS:
+            src = _ios("Views", name)
+            self.assertNotIn("preferredColorScheme(.dark)", src,
+                             "%s 还在把界面写死成暗色" % name)
+            self.assertNotIn("preferredColorScheme(.light)", src, name)
+        app = _ios("PalmDeckApp.swift")
+        self.assertNotIn("preferredColorScheme", app,
+                         "根视图应该用 .palmAppearance() 而不是写死")
+
+    def test_appearance_modifier_is_applied_at_every_presentation(self):
+        theme = _ios("Views", "Theme.swift")
+        for want in ("enum AppAppearance", "static let key = \"palmdeck_appearance\"",
+                     "static let fallback: AppAppearance = .light",
+                     "struct AppearanceModifier", "func palmAppearance()"):
+            self.assertIn(want, theme, "Theme.swift 缺 %s" % want)
+        # 根 + 三个 presentation（sheet/cover 不一定继承窗口 override）
+        for name in ("PalmDeckApp.swift", "Views/CockpitView.swift",
+                     "Views/PreflightView.swift", "Views/SettingsView.swift"):
+            self.assertIn(".palmAppearance()", _ios(*name.split("/")),
+                          "%s 没带 .palmAppearance()" % name)
+
+    def test_appearance_setting_is_reachable_from_search(self):
+        s = _ios("Views", "SettingsView.swift")
+        self.assertIn("case connection, profiles, layout, controls, haptics, wheel, appearance, help", s)
+        self.assertIn('case .appearance: return "外观"', s)
+        self.assertIn("case .appearance: appearanceSections", s)
+        self.assertIn(".init(self, \"外观模式\",", s, "外观没进搜索索引")
+        self.assertIn("@AppStorage(AppAppearance.key)", s)
+
+    def test_instruments_stay_dark_on_purpose(self):
+        """姿态球是真仪表：白底上放黑表盘，所以它的色值不跟着主题走。"""
+        theme = _ios("Views", "Theme.swift")
+        for token in ("instrBg", "instrSkyHi", "instrSkyLo",
+                      "instrGroundHi", "instrGroundLo", "instrLine", "hudAmber", "hudOrange"):
+            self.assertIn("static let %s" % token, theme, "Theme 缺固定仪表色 %s" % token)
+        # 它们必须是固定色，不能是 Color.pd(
+        block = theme.split("// ---- 仪表专用", 1)[1].split("}", 1)[0]
+        self.assertNotIn("Color.pd(", block, "仪表色不该随主题变")
+        ball = _ios("Views", "AttitudeBall.swift")
+        self.assertIn("Theme.instrBg", ball)
+        self.assertNotIn("Theme.amber", ball, "姿态球该用固定 hudAmber")
+        self.assertNotIn("Theme.orange", ball, "姿态球该用固定 hudOrange")
+
+
 class TestLayoutModuleWiring(unittest.TestCase):
     """三个模式都走通用模块，且都插了默认布局。"""
 

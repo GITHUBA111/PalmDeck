@@ -74,7 +74,7 @@ struct SteeringWheel: View {
             .overlay(
                 Text(String(format: "%.0f°", angleDeg))
                     .font(.system(size: r*0.18, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.text)
             )
             // 顶部回中参考（固定三角，不随轮转；橙色标记对齐即回正）
             .overlay(

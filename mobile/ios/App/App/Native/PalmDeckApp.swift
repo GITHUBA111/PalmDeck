@@ -8,18 +8,21 @@ struct PalmDeckApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if entered {
-                CockpitView(ctrl: ctrl, s: ctrl.state, onExit: {
-                    entered = false
-                    UserDefaults.standard.set(false, forKey: "palmdeck_entered")
-                })
-            } else {
-                PreflightView(ctrl: ctrl) {
-                    Haptics.prepare(); Haptics.success()
-                    entered = true
-                    UserDefaults.standard.set(true, forKey: "palmdeck_entered")
+            Group {
+                if entered {
+                    CockpitView(ctrl: ctrl, s: ctrl.state, onExit: {
+                        entered = false
+                        UserDefaults.standard.set(false, forKey: "palmdeck_entered")
+                    })
+                } else {
+                    PreflightView(ctrl: ctrl) {
+                        Haptics.prepare(); Haptics.success()
+                        entered = true
+                        UserDefaults.standard.set(true, forKey: "palmdeck_entered")
+                    }
                 }
             }
+            .palmAppearance()
         }
     }
 }
