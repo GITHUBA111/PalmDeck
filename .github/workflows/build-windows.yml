@@ -1,9 +1,14 @@
 name: build-windows-exe
 
+# main 推送也跑一遍完整打包 + 冒烟：Windows 侧的东西（装得上吗 / 包里带没带
+# pywebview）在 macOS 开发机上验不了，等到打 tag 才发现问题就晚了。
+# 「发布 Release」那步只在 tag 上触发（if: startsWith(github.ref, 'refs/tags/')），
+# 所以 main 跑不会误发版本。
 on:
   workflow_dispatch:
   pull_request:
   push:
+    branches: [main]
     tags:
       - "v*"
 
