@@ -2,7 +2,7 @@ import Foundation
 
 /// 座舱模式。**纯类型，不依赖任何框架** —— 这样测试目标可以直接编译它，
 /// 不需要宿主 App（见 `AxisCoreTests`）。
-enum CockpitMode: String, CaseIterable {
+enum CockpitMode: String, CaseIterable, Codable {
     case heli = "heli"
     case drive = "drive"
     case gamepad = "gamepad"

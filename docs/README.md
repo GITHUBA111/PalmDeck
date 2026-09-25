@@ -8,7 +8,7 @@
 | `PalmDeck-v3-cockpit-design.md` | **手机座舱**：横屏完整飞行杆的产品/像素级布局/体感管道/滑条手感/状态机/三种模式皮肤 | PR1–PR5 已实现（见下） |
 | `PalmDeck-v3-cockpit-design.summary.md` | 座舱设计总结（关键决策 + PR 施工顺序摘要） | 配套 |
 | `PalmDeck-v3-cockpit-design.review.md` | 座舱设计的审查报告（13 条 open issue） | 配套 — 待逐条修订 |
-| `PalmDeck-v4-game-profiles.md` | **方案（待评审）**：游戏预设 —— 电脑侧轴映射表 + App 侧手感 + 布局，一键切游戏 | 待评审 |
+| `PalmDeck-v4-game-profiles.md` | **方案（待评审）**：游戏预设 —— 电脑侧轴映射表 + App 侧手感 + 布局，一键切游戏 | G0–G2 已落地；G3 降级；G4 待真机验收 |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
@@ -57,6 +57,7 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   | `CockpitMode.swift` | 模式枚举 + `infantry → gamepad` 旧值兼容 |
   | `ShapingKeys.swift` | 手感参数的键名（`palmdeck_dz` → `palmdeck_dz.<mode>`）+ 旧键一次性迁移 |
   | `Packet.swift` | 只做「`ControllerState` → 纯数据」的适配，调上面两个 |
+  | `GameProfile.swift` | **G2** 游戏预设：`GameProfile`（模式+手感+轴表名+布局）、内置 WARDOGS / 欧洲卡车模拟、`GameProfileStore`、`GameProfileApplier`（应用顺序）。纯类型，可脱离 App 单测 |
 
   注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
   `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现，
@@ -81,7 +82,7 @@ v4 硬件皮肤（均为固定布局）：`FlightDeck`（飞机：总距杆+脚�
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 106 项
+python3 -m unittest discover -s tests -t .      # 107 项
 ```
 
 其中两个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：
@@ -90,6 +91,7 @@ python3 -m unittest discover -s tests -t .      # 106 项
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
+| `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 
 不引入 Xcode unit-test target —— 被测对象全是**纯函数 / 纯状态**，
 手写 target 要同时改 `project.pbxproj` 的 target/scheme/构建设置，

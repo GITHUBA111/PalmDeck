@@ -39,14 +39,24 @@
   内置「默认」即还原点；`清空`/`恢复默认`/`应用模板` 前压撤销槽。
   存储 `palmdeck_layout_templates_v1` / `palmdeck_layout_undo_v1`。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §7.2，方案留存于 `docs/PalmDeck-proposal-template.md` §2。
+- **游戏预设（G2）** —— 设置新增「游戏预设」分类：一键把「模式 + 手感 + 轴表名 + 布局」
+  一起切到位，不重建虚拟设备、不打断游戏。内置 **WARDOGS**（heli / hotas / dz 0.06，现状固化）
+  与 **欧洲卡车模拟**（drive / **dz 0** / 线性 / **900° 满舵** / 720°/s）；用户可自建（上限 12）。
+  存储 `palmdeck_game_profiles_v1` / `palmdeck_active_game_profile`。
+  类型与应用顺序见 `Model/GameProfile.swift`，规格见 `docs/PalmDeck-v4-app-interaction.md` §12.5。
+  **G3 之前 App 不改电脑轴表**：只读显示电脑实际 `axis_profile`，不一致时给黄标。
 
 ## 已存档（方案已保存，未实施）
 - 无。
 
 ## 其它
 - **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）→ ~~**G1**~~（已施工）
-  → **G2**（`GameProfile` + 预设 UI）→ **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
+  → ~~**G2**~~（已施工）→ **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
   取证与理由见 `docs/PalmDeck-v4-game-profiles.md`。
+- **G2 起预设 = 模式 + 手感 + 轴表名 + 布局**：`GameProfileStore`（`palmdeck_game_profiles_v1`），
+  内置 WARDOGS / 欧洲卡车模拟。G4 的「两个预设」其实是**把 §3.6 的定义坐实**——
+  当前 `GameProfileBuiltin` 已按规格填好，剩下的 G4 是**真机验收**（对照游戏内绑定/参数），
+  以及把 ETS2 的两条“必须游戏内确认”（LS Y 归属、序列式变速箱）在实机对一遍。
 - **G1 起手感参数带模式后缀**：`palmdeck_dz` → `palmdeck_dz.<mode>` 等七个键；
   旧键启动时一次性迁移（`Model/ShapingKeys.swift`）。
   新增持久化键时注意：未带后缀的写法会被 `tests/test_ios_axis.py` 拦住。

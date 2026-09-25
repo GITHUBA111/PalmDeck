@@ -152,6 +152,8 @@ final class CockpitController: ObservableObject {
                 if let u = obj["udp"] as? Int, u > 0, u <= 65535 { self.udpPort = UInt16(u) }
                 // 记下电脑端版本，设置 → 关于里显示；主版本不一致时告警
                 self.state.pcVersion = obj["version"] as? String ?? ""
+                // 游戏预设用：记住电脑实际生效的轴表名（G3 之前只读显示）
+                self.state.axisProfile = obj["axis_profile"] as? String ?? ""
             }
         case "status":
             DispatchQueue.main.async {

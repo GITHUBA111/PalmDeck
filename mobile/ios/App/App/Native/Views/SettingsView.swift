@@ -4,13 +4,14 @@ import SwiftUI
 
 /// 设置分类（左栏）。顺序即显示顺序。
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case connection, layout, controls, haptics, wheel, help
+    case connection, profiles, layout, controls, haptics, wheel, help
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .connection: return "连接"
+        case .profiles: return "游戏预设"
         case .layout: return "布局"
         case .controls: return "操纵与手感"
         case .haptics: return "触觉"
@@ -23,6 +24,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .connection: return "wifi"
+        case .profiles: return "gamecontroller.fill"
         case .layout: return "square.grid.2x2.fill"
         case .controls: return "slider.horizontal.3"
         case .haptics: return "hand.tap.fill"
@@ -34,6 +36,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .connection: return Color(red: 0.04, green: 0.52, blue: 1.00)   // 蓝
+        case .profiles: return Color(red: 0.10, green: 0.64, blue: 0.60)     // 青绿
         case .layout: return Color(red: 0.69, green: 0.32, blue: 0.87)       // 紫
         case .controls: return Color(red: 0.20, green: 0.78, blue: 0.35)     // 绿
         case .haptics: return Color(red: 1.00, green: 0.18, blue: 0.33)      // 粉红
@@ -52,6 +55,14 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
                 .init(self, "断开连接", "断开 disconnect 离线 offline"),
                 .init(self, "可用电脑", "发现 discovery 搜索 scan 扫描 bonjour"),
                 .init(self, "返回启动页", "退出 exit 启动页 引导 引导流程 换 ip 重连"),
+            ]
+        case .profiles:
+            return [
+                .init(self, "切换游戏预设", "预设 profile 游戏 game 切换 switch 一键"),
+                .init(self, "WARDOGS", "wardogs 飞机 heli 直升机 预设"),
+                .init(self, "欧洲卡车模拟", "ets2 ets 欧洲卡车 卡车 truck 开车 drive 预设"),
+                .init(self, "将当前状态存为预设", "保存 save 预设 profile 新增 快照"),
+                .init(self, "电脑轴映射表", "轴 mapping 映射 axis 轴表 hotas fbw 电脑"),
             ]
         case .layout:
             return [
@@ -127,11 +138,20 @@ private struct TplPrompt: Identifiable {
     var text: String
 }
 
+/// 游戏预设命名/重命名弹窗状态。`original == nil` 表示新建（从当前状态快照）。
+private struct ProfPrompt: Identifiable {
+    let id = UUID()
+    var original: String?
+    var text: String
+    var template: GameProfile?   // 新建时：以哪个预设为模板（模式/轴表/手感）
+}
+
 /// 设置页：Apple「设置」风格。横屏双栏——左分类、右详情（inset-grouped）。
 struct SettingsView: View {
     @ObservedObject var ctrl: CockpitController
     @ObservedObject var s: ControllerState
     @ObservedObject var layout: LayoutStore
+    @ObservedObject var profiles: GameProfileStore
     @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
     @AppStorage("palmdeck_haptics") private var haptics = true
     var discovery: Discovery? = nil
@@ -143,6 +163,8 @@ struct SettingsView: View {
     @State private var query = ""
     @State private var tplPrompt: TplPrompt? = nil
     @State private var tplNote = ""
+    @State private var profPrompt: ProfPrompt? = nil
+    @State private var profNote = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -317,6 +339,8 @@ struct SettingsView: View {
         switch c {
         case .connection:
             return ctrl.savedHostForUI.isEmpty ? nil : ctrl.savedHostForUI
+        case .profiles:
+            return profiles.activeName
         case .haptics:
             return haptics ? "开" : "关"
         default:
@@ -338,6 +362,7 @@ struct SettingsView: View {
             List {
                 switch sel {
                 case .connection: connectionSections
+                case .profiles:   profilesSections
                 case .layout:     layoutSections
                 case .controls:   controlsSections
                 case .haptics:    hapticsSections
@@ -362,6 +387,22 @@ struct SettingsView: View {
             } message: {
                 Text("名称最多 \(LayoutStore.maxNameLength) 个字符；重名则覆盖。")
             }
+            .alert(profPrompt?.original == nil ? "存为游戏预设" : "重命名预设",
+                   isPresented: Binding(get: { profPrompt != nil },
+                                        set: { if !$0 { profPrompt = nil } })) {
+                TextField("预设名称", text: Binding(
+                    get: { profPrompt?.text ?? "" },
+                    set: { profPrompt?.text = $0 }))
+                    .onChange(of: profPrompt?.text ?? "") { v in
+                        if v.count > GameProfileStore.maxNameLength {
+                            profPrompt?.text = String(v.prefix(GameProfileStore.maxNameLength))
+                        }
+                    }
+                Button("取消", role: .cancel) { profPrompt = nil }
+                Button("确定") { commitProfilePrompt() }
+            } message: {
+                Text("名称最多 \(GameProfileStore.maxNameLength) 个字符；重名则覆盖。")
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -374,6 +415,124 @@ struct SettingsView: View {
             tplNote = layout.saveTemplate(name: p.text, mode: s.mode) ?? ""
         }
         tplPrompt = nil
+    }
+
+    private func commitProfilePrompt() {
+        guard let p = profPrompt else { return }
+        if let old = p.original {
+            profNote = profiles.rename(old, to: p.text) ?? ""
+        } else {
+            // 新建 = 快照当前状态（模式 / 手感 / 布局），轴表名沿用模板或当前电脑值
+            var np = p.template ?? GameProfile(
+                name: p.text, mode: s.mode,
+                axesPreset: s.axisProfile.isEmpty ? "hotas" : s.axisProfile,
+                sensX: s.sensX, sensY: s.sensY, dz: s.dz,
+                invX: s.invX, invY: s.invY, invYaw: s.invYaw, invColl: s.invColl,
+                wheelMaxDeg: s.wheelMaxDeg, wheelReturnSpeed: s.wheelReturnSpeed)
+            np.name = p.text
+            np.widgetsJSON = layout.snapshotWidgetsJSON(mode: s.mode)
+            profNote = profiles.save(np) ?? ""
+        }
+        profPrompt = nil
+    }
+
+    // ---- 游戏预设 ----
+
+    @ViewBuilder private var profilesSections: some View {
+        Section {
+            InfoRow(label: "电脑当前轴表",
+                    value: pcAxisProfile,
+                    mono: true)
+        } header: {
+            SettingsHeader("电脑侧")
+        } footer: {
+            Text("轴表由电脑端决定（App 暂不能远程改）。预设里的「轴表」只是记录你为该游戏选的那个，用来对照是否一致。不一致时到电脑控制台切换。")
+        }
+
+        Section {
+            ForEach(profiles.all) { p in
+                Button {
+                    applyProfile(p)
+                } label: {
+                    profileRow(p)
+                }
+                .buttonStyle(.plain)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if !profiles.isBuiltin(p) {
+                        Button(role: .destructive) {
+                            profiles.delete(p.name)
+                            profNote = "已删除「\(p.name)」"
+                        } label: { Label("删除", systemImage: "trash") }
+                        Button {
+                            profPrompt = ProfPrompt(original: p.name, text: p.name, template: p)
+                        } label: { Label("重命名", systemImage: "pencil") }
+                            .tint(.orange)
+                    }
+                }
+            }
+
+            Button {
+                profPrompt = ProfPrompt(original: nil, text: "", template: nil)
+            } label: {
+                Label("将当前状态存为预设", systemImage: "plus.circle")
+            }
+        } header: {
+            SettingsHeader("预设")
+        } footer: {
+            if profNote.isEmpty {
+                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机；内置预设不可删改。")
+            } else {
+                Text(profNote).foregroundColor(Theme.orange)
+            }
+        }
+    }
+
+    private func profileRow(_ p: GameProfile) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(p.name).foregroundColor(.primary)
+                    if profiles.isBuiltin(p) {
+                        Text("内置")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
+                    }
+                }
+                Text("\(p.mode.label) · 轴表 \(p.axesPreset) · 死区 \(String(format: "%.2f", p.dz))")
+                    .font(.system(size: 12)).foregroundColor(.secondary)
+            }
+            Spacer(minLength: 8)
+            if profiles.activeName == p.name {
+                Text("当前")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.cyan)
+            }
+            if !s.axisProfile.isEmpty && s.axisProfile != p.axesPreset {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.orange)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// 电脑实际轴表名；未连接时给出提示文案。
+    private var pcAxisProfile: String {
+        if !s.axisProfile.isEmpty { return s.axisProfile }
+        return s.link == .live ? "旧版（未上报）" : "未连接"
+    }
+
+    private func applyProfile(_ p: GameProfile) {
+        GameProfileApplier.apply(p, to: s,
+                                 setMode: { ctrl.setMode($0) },
+                                 replaceLayout: { data, mode in
+                                     layout.applyProfile(widgetsJSON: data, mode: mode)
+                                 })
+        profiles.markActive(p.name)
+        Haptics.press()
+        profNote = "已切换到「\(p.name)」"
     }
 
     // ---- 连接 ----

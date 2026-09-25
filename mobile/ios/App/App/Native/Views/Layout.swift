@@ -188,6 +188,28 @@ final class LayoutStore: ObservableObject {
         replaceWidgets(tpl.widgets, mode: mode)
     }
 
+    // MARK: - 游戏预设（G2）
+
+    /// 预设自带布局整表替换：落盘 + `revision++`（同 `applyTemplate` 的语义）。
+    ///
+    /// 接收**编码后的 JSON** 而不是 `[DeckWidget]`，因为 `GameProfile` 是纯类型
+    /// （见 `Model/GameProfile.swift`）；解码在这一层做，坏数据退化成空布局。
+    /// 也压撤销槽 —— 切预设是一次整表替换，用户可能想退回上一套布局。
+    func applyProfile(widgetsJSON: Data?, mode: CockpitMode) {
+        pushUndo(mode: mode)
+        let list: [DeckWidget] = widgetsJSON.flatMap {
+            try? JSONDecoder().decode([DeckWidget].self, from: $0)
+        } ?? []
+        replaceWidgets(list, mode: mode)
+    }
+
+    /// 把当前模式的布局编成 JSON，塞进新建的预设里（「快照当前状态」用）。
+    func snapshotWidgetsJSON(mode: CockpitMode) -> Data? {
+        let list = widgets(mode: mode)
+        guard !list.isEmpty else { return nil }
+        return try? JSONEncoder().encode(list)
+    }
+
     private static func validate(name: String) -> String? {
         if name.isEmpty { return "名称不能为空" }
         if name.count > maxNameLength { return "名称最多 \(maxNameLength) 个字符" }

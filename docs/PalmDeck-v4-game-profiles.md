@@ -1,6 +1,6 @@
 # 方案：游戏预设（不同游戏的适配）
 
-**状态**：📝 待评审
+**状态**：✅ G0–G2 已落地；G3 降级为暂不做；G4 待真机验收
 **影响范围**：电脑侧（`hotas.py` / `palmdeck_config.py` / `bridge.py`）、
 App 侧（`ControllerState.swift` / `Layout.swift` / `SettingsView.swift`）、
 协议（**G3 阶段**加一条 WS 文本消息，热路径 22B 包不动）、文档
@@ -291,30 +291,46 @@ palmdeck_inv_x/_y/_yaw/_coll →  palmdeck_inv_*.<mode>
 > 所以它排在 G1，可以独立验收。
 > 完整说明见 `docs/PalmDeck-v4-app-interaction.md` §12。
 
-### 3.4 App 侧：预设 = 布局 + 手感 + 轴表名（G2）
+### 3.4 App 侧：预设 = 布局 + 手感 + 轴表名（G2，已落地）
 
 复用已落地的布局模板机制，把它扩成预设：
 
 ```swift
-struct GameProfile: Codable, Equatable {
-    var name: String                    // 预设名，如「DCS 直升机」
+struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型）
+    var name: String                    // 预设名，如「WARDOGS」
     var mode: CockpitMode               // 用哪套机身皮肤
     var axesPreset: String              // 电脑侧轴表名，如 "hotas"
     var sensX, sensY, dz: Double
     var invX, invY, invYaw, invColl: Bool
-    var widgets: [DeckWidget]           // 布局 + 每个按钮的 label
+    var wheelMaxDeg: Double?            // nil = 不改（ETS2 才需要 900）
+    var wheelReturnSpeed: Double?       // nil = 不改
+    var widgetsJSON: Data?              // 布局（编码后的 [DeckWidget]）
 }
 ```
 
-- 存储：`palmdeck_game_profiles_v1`（本地，**不进 `layouts.json`、不进配置导出包**）。
-- 切换动作 = 一次性写入：`layouts[mode] = widgets` → 手感参数 → 模式。
-- 切换后 **`layout.revision += 1`**（沿用 `applyTemplate` 的语义，
-  因为这是整表替换，`WidgetCanvas` 靠 `.id(revision)` 强制重绘）。
-- 上限沿用模板的 12 个；内置「默认」不可删不可改名（同模板的规则）。
+> **实现与原设计的差异（有意）**：布局存 **编码后的 `Data`** 而不是 `[DeckWidget]`。
+> `DeckWidget` 定义在 `Widgets.swift`（import SwiftUI），直接放数组会把整个视图层
+> 拖进 `swiftc` 纯逻辑测试的编译单元；`GameProfile` 保持只 import Foundation。
+> 存取走 `widgets()` / `setWidgets(_:)`，布局解码在 `LayoutStore.applyProfile` 里做。
+> 又：`GameProfileApplier` 不直接吃 `ControllerState`，而是吃一个 `ShapingTarget` 协议
+> （`ControllerState` 在 `ControllerState.swift` 里 conformity）—— 同样是为了测试可注入替身。
 
-**UI 位置**：设置页新增 Section「游戏预设」（放在「布局」上方），
-一行一个预设，显示 `名字 · 模式 · 轴表名 · 电脑当前是否匹配`。
-最顶部一行是「当前」——显示**电脑实际**的 `axis_profile`（来自 `hello`/`status`，`bridge.py:744`）。
+- 存储：`palmdeck_game_profiles_v1`（本地，**不进 `layouts.json`、不进配置导出包**）；
+  生效名另存 `palmdeck_active_game_profile`（仅 UI 标记）。
+- 切换动作 = 一次性写入，**顺序固定**（`GameProfileApplier.apply`）：
+  先切模式（`setMode` → `applyMode` 读本模式手感）→ 再写手感参数（键跟着新模式走）
+  → 最后布局整表替换。写反的症状是“切了预设但手感没变”。
+- 切换后 **`layout.revision += 1`**（`applyProfile` 沿用 `applyTemplate` 的语义，
+  因为这是整表替换，`WidgetCanvas` 靠 `.id(revision)` 强制重绘）；同时压撤销槽。
+- 上限 12（同模板）；内置不可删不可改名（同模板的规则）。
+
+**UI 位置**：设置页新增分类「游戏预设」（放在「布局」上方），
+一行一个预设，显示 `名字 · 模式 · 轴表名 · 死区`，选中行标「当前」。
+顶部只读显示**电脑实际**的 `axis_profile`（来自 `hello`，`bridge.py:744`）；
+选中预设的 `axesPreset` 与它不一致时给黄标提示。
+
+**测试**：`tests/ios/GameProfileTests.swift` + `tests/test_ios_profiles.py`
+（内置定义 / 编解码往返 / 缺字段回落 / 存储增删改与上限 / **应用顺序** / pbxproj 登记守卫）。
 
 ### 3.5 协议：一条 WS 文本消息（G3）
 
@@ -566,7 +582,13 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
   `tests/test_game_profiles.py`：已知名/未知名/`caps`；`tests/test_config.py`：`axes_presets` 往返。
 
 **App 侧（`swiftc` + `python3 -m unittest`，沿用 `tests/test_ios_axis.py` 的路子）**
-- `GameProfile` 编解码往返；旧格式缺字段时的回落。（G2）
+- **G2 回归（已实现）**：`tests/ios/GameProfileTests.swift` + `tests/test_ios_profiles.py` ——
+  `GameProfile` 编解码往返、旧格式缺字段时的回落（缺 `axesPreset` 回落 `hotas`、
+  `infantry` 兼容成 `gamepad`）、内置两个预设的值与 §3.6 一致、
+  存储增删改/内置保护/上限 12、**应用顺序**（先切模式→写手感→换布局）、
+  布局 `nil` 时不碰 `wheel*`；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj`。
+- 预设应用后 `layouts[mode]` 等于预设里的 `widgets`、`revision` 自增（`applyProfile` 里保证；
+  布局解码在 `LayoutStore`，单测覆盖编解码层）。
 - **G1 回归（已实现，两层）**：
   - **算法层** `tests/ios/AxisCoreTests.swift`：键名拼接用 `rawValue` 不用 `label`；
     七个旧键**逐个**都被搬家（每个键给不同值，防「只搬了一个也能过」）；
@@ -633,8 +655,8 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | **G0b** | 摘掉 CocoaPods（含构建命令 `-workspace` → `-project`） | **S** | G0a | ✅ 干净克隆能直接构建 |
 | **E1** | 修 §3.7 的 **5 条** App 侧缺陷（b5 撞车 / b11–16 死键 / LB·RB 标签反 / b9·b10 假 LT·RT / RT 滑条绑空轴） | **S** | 无 | ✅ 新增 `tests/test_deck_bindings.py`（13 条）+ hat 链路 2 条 |
 | **G1** | 手感参数按模式分离 + 迁移（修「飞机 0.06 死区污染赛车」） | **S** | 无 | ✅ 算法 58 + 接线 33 条断言 + 4 条守卫；模拟器迁移实测 |
-| **G2** | `GameProfile` + 预设 UI | **M** | G1 | ✅ 两个预设一键来回切 |
-| **G4** | 两个预设的**具体值**（§3.6） | **XS** | G2 | ✅ 打开即有「WARDOGS」「欧洲卡车模拟」 |
+| **G2** | `GameProfile` + 预设 UI | **M** | G1 | ✅ 已落地：两个预设一键来回切 |
+| **G4** | 两个预设的**具体值**（§3.6） | **XS** | G2 | ✅ 值已填入 `GameProfileBuiltin`；**剩下真机验收**（游戏内绑定/参数对账） |
 | ~~G3~~ | ~~电脑侧声明式轴表 + WS `profile`~~ | ~~M~~ | — | **暂不做**（§2.7 证明用不上） |
 
 建议顺序 **G0a → G0b → E1 → G1 → G2 → G4**，每个阶段一个 commit。
@@ -642,7 +664,8 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 - E1 是 bug 修复，和预设功能**没有因果关系**，必须能单独回滚。
 - G1 也是「当前就是错的」（飞机/赛车共用一个死区），不是新功能。
 - G2 是唯一一个真正的功能 commit。
-- G4 只是把两个预设的默认值填进去，几乎不写逻辑。
+- G4 的代码部分已随 G2 完成（内置两个预设就写在 `GameProfileBuiltin` 里）；
+  剩下的只是**真机验收**：拿 WARDOGS/ETS2 对一遍游戏内绑定与参数，有出入才改值。
 
 ---
 

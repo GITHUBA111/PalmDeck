@@ -6,6 +6,7 @@ struct CockpitView: View {
     @StateObject private var discovery = Discovery()
     @State private var showSettings = false
     @StateObject private var layout = LayoutStore()
+    @StateObject private var profiles = GameProfileStore()
     @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
     @State private var showLibrary = false
     @State private var showTutorial = false
@@ -166,7 +167,7 @@ struct CockpitView: View {
                 .frame(height: 1.5)
                 .padding(.horizontal, 2)
         }
-        .sheet(isPresented: $showSettings) { SettingsView(ctrl: ctrl, s: s, layout: layout, discovery: discovery, onExit: onExit, onShowTutorial: {
+        .sheet(isPresented: $showSettings) { SettingsView(ctrl: ctrl, s: s, layout: layout, profiles: profiles, discovery: discovery, onExit: onExit, onShowTutorial: {
             showSettings = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTutorial = true }
         }) }

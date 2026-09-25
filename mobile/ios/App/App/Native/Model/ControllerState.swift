@@ -46,6 +46,9 @@ final class ControllerState: ObservableObject {
     @Published var deviceName: String = ""
     /// 电脑端上报的协议版本（hello 帧的 `version`，如 "4.0"）。空 = 尚未拿到。
     @Published var pcVersion: String = ""
+    /// 电脑端**实际生效**的轴表名（hello/status 的 `axis_profile`，如 "hotas"）。
+    /// G3 之前 App 不能改它，只能显示它，用来提示「选中的预设与电脑是否对得上」。
+    @Published var axisProfile: String = ""
     @Published var hz: Double = 0
     @Published var transport: String = "idle" // udp / ws / idle
     @Published var lastError: String = ""
@@ -164,3 +167,8 @@ final class ControllerState: ObservableObject {
     /// 总距（应用反转后）
     var collective: Double { invColl ? (1 - throttle) : throttle }
 }
+
+/// G2：`GameProfileApplier` 把预设的手感参数写回本对象。
+/// 这些存储属性满足 `ShapingTarget` 的 get/set；conformance 在这里声明，
+/// 让 `GameProfile.swift` 不必 import Combine。
+extension ControllerState: ShapingTarget {}

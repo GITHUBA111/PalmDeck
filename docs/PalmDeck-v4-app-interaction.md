@@ -317,6 +317,8 @@ y = 0                                              |x| <  dz
 | `palmdeck_stick_return` | Bool | true | 摇杆回中（P7 新增） |
 | `palmdeck_wheel_max_deg` | Double | 540 | 满舵角（P7 新增） |
 | `palmdeck_wheel_return` | Double | 720 | 回正速度（P7 新增） |
+| `palmdeck_game_profiles_v1` | Data | `[]` | 用户自建游戏预设 `[GameProfile]`（**G2 新增**；内置两个不入库） |
+| `palmdeck_active_game_profile` | String | 无 | 当前生效的预设名（**G2 新增**；仅 UI 标记） |
 
 > **G1：手感参数按模式分键。** 上表里带 *(G1)* 标记的键实际存为
 > `palmdeck_dz.heli` / `palmdeck_dz.drive` / `palmdeck_dz.gamepad`（其余同理），
@@ -373,6 +375,49 @@ y = 0                                              |x| <  dz
 | 算法 | `tests/ios/AxisCoreTests.swift` | 键名拼接、每个旧键都搬家、不覆盖已有值、幂等、不碰无关键 |
 | 接线 | `tests/ios/ControllerStateKeysTests.swift` | 真的 `ControllerState`：真跑了迁移、`applyMode` 真的换一套、写入只落当前模式的键 |
 | 守卫 | `tests/test_ios_axis.py` | 全仓库不得再出现无后缀的全局手感键；`setMode` 不得绕过 `applyMode` |
+
+---
+
+## 12.5 G2 实施：游戏预设
+
+**要解决的问题**：`CockpitMode` 只回答“手里拿的是什么”，不回答“在玩哪个游戏”。
+同一个 `heli` 模式下，WARDOGS 要 `Z=油门`，而别的竞品要 `Z=偏航`；
+ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 死区正好相反。
+换游戏原本是一套手工流程（改电脑轴表 → 回手机改反转 → 改死区 → 摆布局），漏一步就是故障。
+
+**预设 = 电脑侧轴表名 + App 侧手感 + 布局（含按钮标签）**，用**同一个名字**把两侧对齐
+（三层为何分居两侧见 `docs/PalmDeck-v4-game-profiles.md` §3.1）。
+
+**类型与存储**（`Model/GameProfile.swift`，纯类型，只 import Foundation）：
+
+- `GameProfile`：`name / mode / axesPreset / sensX,Y / dz / invX,Y,Yaw,Coll /
+  wheelMaxDeg? / wheelReturnSpeed? / widgetsJSON?`。
+  `wheel*` 为 nil 表示“不改”（WARDOGS 不动方向盘；ETS2 改成 900°）。
+- 布局以**编码后的 JSON** 存在 `widgetsJSON` 里，而不是 `[DeckWidget]`：
+  后者会把 `Widgets.swift`（import SwiftUI）拖进 `swiftc` 测试编译单元。
+  存取走 `widgets()` / `setWidgets(_:)`。坏数据退化成空布局（不抛错）。
+- `GameProfileStore`：`palmdeck_game_profiles_v1`，上限 12，内置不可删改，重名覆盖用户自建。
+- 内置（`GameProfileBuiltin`）：**WARDOGS**（heli / hotas / dz 0.06，即现状固化）、
+  **欧洲卡车模拟**（drive / hotas / **dz 0** / 线性 / **900°** / 720°/s）。
+
+**应用顺序**（`GameProfileApplier.apply`，**这是本功能唯一容易写错的地方**）：
+
+1. **先切模式**（`setMode` → `state.applyMode`，把该模式那一份手感读进来）；
+2. 再写手感参数（`didSet` 的保存键跟着**新的** `mode` 走，落对键）；
+3. 最后布局整表替换（`revision++` 强制画布重建，同 `applyTemplate`）。
+
+> 写反（先手感后模式）的症状是“切了预设但手感没变”——`applyMode` 会把刚写的值覆盖回去。
+> 所以顺序有专门的断言（`tests/ios/GameProfileTests.swift`）。
+
+**UI**：设置新增分类「游戏预设」（放在「布局」上方）。顶部一行只读显示**电脑实际轴表**
+（取自 `hello.axis_profile`）；下面是预设列表，点行即切换，左滑重命名/删除，
+底部「将当前状态存为预设」（快照模式+手感+布局）。
+**G3 之前 App 不改电脑轴表**：选中预设的 `axesPreset` 与电脑实际值不一致时给黄标提示，
+文案指向“请到电脑控制台切换”——这正是降级路径，不能省。
+
+**测试**：`tests/ios/GameProfileTests.swift`（内置定义、编解码往返、缺字段回落、
+存储增删改/内置保护/上限、**应用顺序**）+ `tests/test_ios_profiles.py`（跑它，
+并守卫 `GameProfile.swift` 已登记进 `project.pbxproj`）。
 
 ---
 
