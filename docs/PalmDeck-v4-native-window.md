@@ -116,5 +116,6 @@
 
 - 真机（G4 补条目）：① 任务栏是 PalmDeck 图标；② × 只隐藏，托盘还在；③ 重开位置/大小不变；
   ④ 托盘「打开控制台」唤出、`#doctor` 直达；⑤ 托盘「退出」真退；⑥ 关掉窗口后手机仍连、游戏里手柄仍动。
-- CI：`test` job 新守卫全绿；`build` job 断言 webview 在包内 + 冒烟（无界面）仍绿。
+- CI（已验，run 36165113841 / `ci-diag` 分支 `status=success`）：`test` job 新守卫全绿；
+  `build` job 断言 webview 在包内 + 冒烟（无界面）仍绿。
 - 退回：把 WebView2 检测打桩为「缺失」时，日志出现退回原因、O3-lite 打开成功。

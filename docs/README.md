@@ -17,7 +17,7 @@
 | `PalmDeck-v4-windows-product.md` | **Windows 端产品化**：新增 `palmdeck_doctor.py` 唯一自检真相源（驱动/防火墙/端口/依赖），控制台「自检」页 + 一键修复，删孤儿 `open_firewall.bat` | 已落地 |
 | `windows-acceptance-checklist.md` | **Windows 真机验收清单（G4）**：vJoy/ViGEmBus → 自检全绿 → 虚拟设备 → 真 iPhone 配对 → 游戏内绑定（WARDOGS/ETS2）→ failsafe → 打包运维，逐条留证据 | **待执行** |
 | `PalmDeck-v4-windows-installer.md` | **方案**：Windows 端「软件化」—— Inno Setup 安装包（中文向导/开始菜单/卸载/可选自启）+ exe 图标与版本资源 + 控制台独立窗口；**同时保留 portable exe 与原地自替换** | **已落地**（S0–S5 + 托盘图标统一 + O3-full 真窗口）；真机部分待 G4 |
-| `PalmDeck-v4-native-window.md` | **O3-full 真窗口**：控制台从「浏览器假装成窗口」变成 PalmDeck 自己的窗口（pywebview / WebView2）；关闭=最小化回托盘、记忆窗口几何、托盘联动；任何一层不可用自动退回浏览器应用窗口（O3-lite） | 已落地（行为待 Windows CI + G4 真机） |
+| `PalmDeck-v4-native-window.md` | **O3-full 真窗口**：控制台从「浏览器假装成窗口」变成 PalmDeck 自己的窗口（pywebview / WebView2）；关闭=最小化回托盘、记忆窗口几何、托盘联动；任何一层不可用自动退回浏览器应用窗口（O3-lite） | 已落地（CI 打包/安装/冒烟已验；窗口真机行为待 G4） |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
