@@ -520,5 +520,32 @@ class TestStatusStripFollowsTheMode(unittest.TestCase):
         self.assertIn("var wireAxes: AxisOutputs", state)
 
 
+class TestDeckChromeDoesNotCoverTheCanvas(unittest.TestCase):
+    """盖在画布上的浮层 = 摸不到的组件（点不动、拖不动，而且看不出来）。
+
+    历史坑：`deckBody` 原来是 `ZStack { 画布; 编辑条 }` + `.overlay(.top) { 未连接横幅 }`，
+    默认布局从 y=0.10 起就是为了躲那条横幅。
+    """
+
+    def setUp(self):
+        self.src = _ios("Views", "CockpitView.swift")
+        self.body = self.src.split("private func deckBody(", 1)[1].split("private var editBar", 1)[0]
+        self.bar = self.src.split("private var editBar", 1)[1].split("private var dotColor", 1)[0]
+
+    def test_no_top_overlay_on_the_deck(self):
+        self.assertNotIn("overlay(alignment: .top) { if !layout.editing", self.body,
+                         "未连接横幅不能压在画布上（被盖的组件点不动）")
+
+    def test_deck_body_stacks_chrome_above_the_canvas(self):
+        self.assertIn("VStack(spacing: 0)", self.body)
+        self.assertNotIn("ZStack", self.body, "横幅/编辑条要与画布上下排，不能叠在画布上")
+        self.assertIn("if layout.editing { editBar }", self.body)
+        self.assertIn("WidgetCanvas(store: layout", self.body)
+
+    def test_edit_bar_does_not_stretch_over_the_canvas(self):
+        self.assertNotIn("Spacer(minLength: 0)", self.bar,
+                         "编辑条用 Spacer 会橑满整个画布（旧写法）——它是画布上面的一行")
+
+
 if __name__ == "__main__":
     unittest.main()

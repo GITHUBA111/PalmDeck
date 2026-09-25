@@ -204,18 +204,23 @@ struct CockpitView: View {
     // MARK: 座舱主体（通用模块画布）
     /// 三个模式共用同一块画布：没有内置皮肤、没有游戏语义，
     /// 所有积木（含按键）由用户自己添加 / 命名 / 绑定。
+    ///
+    /// 提示横幅 / 编辑工具条一律**占位**（VStack 的一行），不用 overlay：
+    /// 以前它们浮在画布上，被盖住的组件既点不动也拖不动（画布还在它们下面接着手势），
+    /// 默认布局为了躲横幅只好从 y=0.10 开始。占位后画布自己变矮，没有“看不到却存在”的区域。
     @ViewBuilder
     private func deckBody(W: CGFloat, H: CGFloat) -> some View {
-        ZStack {
+        VStack(spacing: 0) {
+            if layout.editing { editBar }
+            else { notConnectedBanner }
             // 应用模板 / 撤销 / 恢复默认是整表替换，用 revision 强制重建画布，
             // 否则 EditableWidget 的 @State dragStart 会残留到新布局上。
             WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
                 .id(layout.revision)
-            if layout.editing { editBar }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: W, height: H)
         .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-        .overlay(alignment: .top) { if !layout.editing { notConnectedBanner } }
         .alert("存为模板", isPresented: $naming) {
             TextField("模板名称", text: $tplName)
                 .onChange(of: tplName) { v in
@@ -235,49 +240,47 @@ struct CockpitView: View {
 
     /// 编辑态下的顶部工具条（加组件 / 存模板 / 放弃 / 完成）。
     /// 组件越来越多，左边的「添加」一行改成横向可滚，窄屏（iPhone 竖屏）也不会挤成一团。
+    /// 它是画布**上面的一行**（不是浮层）——占位后画布顶部的组件照样拖得动。
     private var editBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
-                        libraryButton("按键", .button, nil)
-                        libraryButton("触摸板", .pad, .look)
-                        libraryButton("摇杆", .stick, .look)
-                        libraryButton("方向盘", .wheel, .roll)
-                        libraryButton("滑条", .slider, nil)
-                        libraryButton("苦力帽", .hat, .look)
-                        libraryButton("姿态球", .attitude, .roll)
-                        libraryButton("仪表盘", .panel, .roll)
-                    }
+        HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
+                    libraryButton("按键", .button, nil)
+                    libraryButton("触摸板", .pad, .look)
+                    libraryButton("摇杆", .stick, .look)
+                    libraryButton("方向盘", .wheel, .roll)
+                    libraryButton("滑条", .slider, nil)
+                    libraryButton("苦力帽", .hat, .look)
+                    libraryButton("姿态球", .attitude, .roll)
+                    libraryButton("仪表盘", .panel, .roll)
                 }
-                Button("存为模板") {
-                    tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
-                    naming = true
-                }
-                .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
-                Button("放弃") {
-                    layout.discardEditing(mode: s.mode)
-                    layout.editing = false
-                    Haptics.tap()
-                }
-                .disabled(!layout.canDiscardEditing(mode: s.mode))
-                .buttonStyle(CardButton(accent: Theme.red, fillWidth: false, height: 30))
-                Button("完成") {
-                    layout.commitEditing(mode: s.mode)
-                    layout.editing = false
-                    Haptics.press()
-                }
-                .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel.opacity(0.97)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.orange.opacity(0.7), lineWidth: 1))
-            .padding(.horizontal, 6)
-            .padding(.top, 2)
-            Spacer(minLength: 0)
+            Button("存为模板") {
+                tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
+                naming = true
+            }
+            .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
+            Button("放弃") {
+                layout.discardEditing(mode: s.mode)
+                layout.editing = false
+                Haptics.tap()
+            }
+            .disabled(!layout.canDiscardEditing(mode: s.mode))
+            .buttonStyle(CardButton(accent: Theme.red, fillWidth: false, height: 30))
+            Button("完成") {
+                layout.commitEditing(mode: s.mode)
+                layout.editing = false
+                Haptics.press()
+            }
+            .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel.opacity(0.97)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.orange.opacity(0.7), lineWidth: 1))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
     }
 
     private var dotColor: Color {
@@ -289,7 +292,7 @@ struct CockpitView: View {
         }
     }
 
-    /// 未连接提示横幅（不遮挡控件，顶部居中、半透明、点击可连）
+    /// 未连接提示横幅（占画布上方一行，不遮挡任何组件；点击即连）
     @ViewBuilder
     private var notConnectedBanner: some View {
         if s.link != .live && s.link != .connecting {
@@ -305,12 +308,12 @@ struct CockpitView: View {
                         .font(.system(size: 12, weight: .medium))
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .padding(.vertical, 4)
                 .background(Capsule().fill(Theme.orange.opacity(0.9)))
                 .foregroundColor(Theme.onAccent)
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
+            .padding(.vertical, 4)
         }
     }
 

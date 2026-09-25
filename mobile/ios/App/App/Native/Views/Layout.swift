@@ -386,7 +386,8 @@ final class LayoutStore: ObservableObject {
     static func defaultHeli() -> [DeckWidget] {
         [
             // 仪表盘：COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 条（只读）
-            // y 从 0.10 起：给顶部「未连接」横幅让位（横幅是 overlay）
+            // y 从 0.10 起：顶部留白（原来是为了躲未连接横幅，横幅改成占位后不再是必需，
+            // 但保留此值 —— 老用户本地存的就是它，新装跟着一致）
             .make(.panel,  .roll,     .r(0.37, 0.10, 0.49, 0.38), label: "仪表盘"),
             // 总距杆：单极，写 throttle
             .make(.slider, .throttle, .r(0.02, 0.10, 0.10, 0.78), label: "总距"),
