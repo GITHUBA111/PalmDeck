@@ -54,9 +54,12 @@ final class ControllerState: ObservableObject {
     @Published var lastError: String = ""
 
     // ---- 平滑后的发送值（EMA）----
-    private(set) var smRoll: Double = 0
-    private(set) var smPitch: Double = 0
-    private(set) var smYaw: Double = 0
+    // 这三个是界面（姿态球 / 仪表盘 / 状态条）唯一的数据来源，所以必须 @Published；
+    // 但赋值由 `tickSmoothing()` 做了等值去重 —— 手没碰、电脑没连时一次都不发布，
+    // 整棵视图树就不会被 60Hz 的空转吵醒（详见 applySm 的注释）。
+    @Published private(set) var smRoll: Double = 0
+    @Published private(set) var smPitch: Double = 0
+    @Published private(set) var smYaw: Double = 0
 
     /// 按键/帽变化回调（b1..b10, hat）
     var onButton: ((Int, Bool) -> Void)?
@@ -156,10 +159,30 @@ final class ControllerState: ObservableObject {
         let r = AxisCurve.clampUnit((invX ? -roll : roll) * sensX)
         let p = AxisCurve.clampUnit((invY ? -pitch : pitch) * sensY)
         let y = invYaw ? -yaw : yaw
-        smRoll += (AxisCurve.shape(r, dz: dz) - smRoll) * kXY
-        smPitch += (AxisCurve.shape(p, dz: dz) - smPitch) * kXY
-        smYaw += (AxisCurve.shape(y, dz: ControllerState.yawDeadzone) - smYaw) * kYaw
+        applySm(tr: AxisCurve.shape(r, dz: dz),
+                tp: AxisCurve.shape(p, dz: dz),
+                ty: AxisCurve.shape(y, dz: ControllerState.yawDeadzone),
+                kXY: kXY, kYaw: kYaw)
     }
+
+    /// 写给 `@Published` 的 sm*：**只在真的变了才赋值**。
+    ///
+    /// `@Published` 不做等值去重，赋一次值就让所有观察者重建一次视图。
+    /// 这个函数在 60~75Hz 的 CADisplayLink 上跑，如果无脑赋值，
+    /// 空闲待机（没连电脑、手也没碰）也会每秒重绘整棵树 60 次 ——
+    /// 实测 Mac Catalyst 上白烧 12~15% CPU，手机上就是发热和掉电。
+    /// 收敛尾巴小于 1e-4 满量程（视觉上是 0）就不再重绘。
+    private func applySm(tr: Double, tp: Double, ty: Double, kXY: Double, kYaw: Double) {
+        let nr = smRoll + (tr - smRoll) * kXY
+        let np = smPitch + (tp - smPitch) * kXY
+        let ny = smYaw + (ty - smYaw) * kYaw
+        if abs(nr - smRoll) > ControllerState.smEpsilon { smRoll = nr }
+        if abs(np - smPitch) > ControllerState.smEpsilon { smPitch = np }
+        if abs(ny - smYaw) > ControllerState.smEpsilon { smYaw = ny }
+    }
+
+    /// 到位判定阈值（满量程比）。1e-4 在姿态球上是 0.036°，肉眼不可见。
+    static let smEpsilon = 1e-4
 
     /// 方向舵固定死区（不跟随「摇杆死区」滑条：偏航是自回中轴，太大死区会转不动尾桨）。
     static let yawDeadzone = 0.08

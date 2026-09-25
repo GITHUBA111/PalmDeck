@@ -72,6 +72,14 @@
   现在 nil / 空数组 / 坏 JSON 一律 = “不带布局”→ 不碰用户画布；
   唯一例外是该模式当前就是空表，那就铺回该模式默认模块。
   `TestProfileDoesNotBlankTheCanvas` 守卫。
+- **待机不烧 CPU（重绘只跟「有没有在动」成正比）** —— `@Published` 不做等值去重，
+  而热路径（`CADisplayLink` 60~75Hz）上原来每 6 帧写一次 `readout` 字符串（全工程没人读，
+  v3 遗留的死字段）当刷新心跳 ⇒ 空闲待机也稳定重绘 10 次/秒。
+  现在删掉 `readout`/`pfMotionState`，改由 `smRoll/smPitch/smYaw`（姿态唯一数据源、
+  本身就是 `@Published`）带领刷新，并且**只经 `applySm()` 且变化 > `smEpsilon` 才赋值**。
+  实测 Mac Catalyst：启动页 12~13% → 1.2%，座舱 13~15% → 1.3~1.7%，
+  按住方向盘保持角度 1.3~1.4%（顺带姿态刷新从 10Hz 提到满帧，更顺了）。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.8，`TestNoIdleRepaint` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。

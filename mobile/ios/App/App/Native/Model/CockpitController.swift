@@ -19,8 +19,10 @@ final class CockpitController: ObservableObject {
     private var lastPing = Date.distantPast
 
     @Published var pfConnState: String = ""
-    @Published var pfMotionState: String = ""
-    @Published var readout: String = "R +0.00  P +0.00  Y +0.00  T 35%"
+
+    /// 界面靠 `ControllerState.smRoll/smPitch/smYaw` 刷新（那三个是 @Published，
+    /// 且在 tickSmoothing 里做了等值去重）。这里**不要**再放一个每帧赋值的
+    /// @Published 字段当“心跳”：@Published 不去重，闲置时会把整棵树重绘 60 次/秒。
 
     /// 界面绑定的电脑 IP（持久化到 UserDefaults）
     @Published var savedHostForUI: String = {
@@ -209,24 +211,16 @@ final class CockpitController: ObservableObject {
         tick()
     }
 
-    private var frameCount = 0
     private var atLimit = false
     private func tick() {
-        // 平滑值始终本地更新（驱动姿态球），不依赖是否连上电脑
+        // 平滑值始终本地更新（驱动姿态球），不依赖是否连上电脑；
+        // 界面刷新由 sm* 的 @Published 带动（没变就不发布，见 applySm）
         state.tickSmoothing()
         // 轴到限位：进入满轴时轻震（只在已连接时，避免本地空振）
         let mag = max(abs(state.smRoll), abs(state.smPitch))
         let hit = mag > 0.97
         if hit && !atLimit && state.link == .live { Haptics.bump() }
         atLimit = hit
-        // 读数降到 ~10Hz 更新（避免每帧触发 SwiftUI 重绘）
-        frameCount += 1
-        if frameCount % 6 == 0 {
-            // 读数与姿态球同源（平滑后的杆位）
-            readout = String(format: "R %+.2f  P %+.2f  Y %+.2f  T %d%%",
-                             state.smRoll, state.smPitch, state.smYaw,
-                             Int((state.throttle * 100).rounded()))
-        }
         // 仅在连接时把杆位发往电脑
         guard state.link == .live else { return }
         // 5s 心跳：保活 WS / NAT

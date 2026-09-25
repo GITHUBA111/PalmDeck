@@ -438,5 +438,43 @@ class TestEditSession(unittest.TestCase):
                                 "离开编辑态的路径没有全部 commitEditing")
 
 
+class TestNoIdleRepaint(unittest.TestCase):
+    """待机不该烧 CPU：`@Published` 不做等值去重，热路径上写一次 = 整棵视图树重绘一次。
+
+    历史坑：`CockpitController` 里有个每 6 帧写一次的 `readout` 字符串（全工程没人读它），
+    它实际充当了「刷新心跳」—— 空闲待机（没连电脑、手也没碰）也稳定重绘 10 次/秒。
+    实测 Mac Catalyst 上白烧 12~15% CPU；手机上就是发热、掉电。
+    现在改成：只由 `sm*`（姿态唯一来源）发布，而且**变了才发布**。
+    """
+
+    def setUp(self):
+        self.state = _ios("Model", "ControllerState.swift")
+        self.ctrl = _ios("Model", "CockpitController.swift")
+
+    def test_smoothed_pose_is_published(self):
+        for name in ("smRoll", "smPitch", "smYaw"):
+            self.assertIn("@Published private(set) var %s" % name, self.state,
+                          "%s 是姿态球/仪表盘/状态条的唯一数据源，不 @Published 界面就不会动" % name)
+
+    def test_pose_is_written_through_a_change_check(self):
+        body = self.state.split("private func applySm(", 1)[1].split("\n    }", 1)[0]
+        for name in ("smRoll", "smPitch", "smYaw"):
+            self.assertRegex(body, r"if abs\(n\w - %s\) > ControllerState\.smEpsilon \{ %s = n\w \}" % (name, name),
+                             "%s 的赋值要带上 smEpsilon 判定（否则每帧都发布）" % name)
+        self.assertNotIn("smRoll +=", self.state, "不能再无条件累加赋值（每帧都会发布）")
+
+    def test_smoothing_goes_through_applySm(self):
+        body = self.state.split("func tickSmoothing()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("applySm(", body, "tickSmoothing 的写回要集中在 applySm 里")
+
+    def test_no_publisher_is_written_every_frame(self):
+        tick = self.ctrl.split("private func tick()", 1)[1].split("\n    }", 1)[0]
+        self.assertNotIn("readout", self.ctrl, "没人读的 readout 心跳要删掉，别用 @Published 当闹钟")
+        self.assertNotIn("pfMotionState", self.ctrl)
+        self.assertNotIn("frameCount", tick, "去掉 %6 降频的假心跳；刷新交给 sm* 的变化")
+        # tick 里除 Haptics 外不应写任何 @Published 字段（状态条/画布靠 sm* 自己带动）
+        self.assertNotRegex(tick, r"\bself\.[a-zA-Z]+ =|\bstate\.(link|hz|transport|lastError) =[^=]")
+
+
 if __name__ == "__main__":
     unittest.main()
