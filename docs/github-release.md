@@ -38,7 +38,8 @@ git push -u origin main
 > **`PalmDeck.exe` 这个资产名不能改**：Windows 端的自动更新直链写死了它
 > （`updater.py` 的 `GITHUB_EXE`）；安装包是**额外**给首次安装用的，不参与自动更新。
 >
-> 工作流里 `test` job 先跑（ubuntu-latest，不需要 Windows），**测试红了不会出包**。
+> 工作流里 `test` job 先跑（macos-latest：iOS 纯逻辑要 `swiftc`、启动页亮度要 `sips`，
+> 只有 macOS 两样齐全），**测试红了不会出包**。
 
 ## 三、使用（目标电脑）
 

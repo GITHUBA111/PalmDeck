@@ -12,8 +12,11 @@ permissions:
 
 jobs:
   # 先跑测试再打包：测试红了就不出 exe（`build` 里 needs: test）。
+  # 跑在 **macOS** 上而不是 ubuntu：iOS 纯逻辑测试要 `swiftc`（Linux 镜像其实也带
+  # swiftc，但它编不了 `import Combine` 的源码），启动页亮度要 `sips` —— 只有 macOS
+  # 两样齐全，全套 368 条才真跑得起来。公共仓库的 macOS runner 不要钱。
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +25,7 @@ jobs:
           python-version: "3.12"
 
       # 测试零第三方依赖：pyvjoy / vgamepad / evdev / pystray / PIL / qrcode / zeroconf
-      # 全是函数内惰性 import，import 阶段碰不到。需要 swiftc（iOS 纯逻辑）或
-      # sips（亮度）的用例会自动 SkipTest —— 所以这里不装任何包。
+      # 全是函数内惰性 import，import 阶段碰不到，所以这里不装任何包。
       - name: 跑测试
         run: python -m unittest discover -s tests -q
 

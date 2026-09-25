@@ -182,7 +182,8 @@ Windows 专属项（`sc query` / `Get-NetFirewallRule` / 提权）**本机无法
 - **不做托盘里的设置窗口**。设置仍然只在控制台（浏览器）里做，避免两套 UI 分家。
 - **不在 Windows CI 里跑完整测试**（当初的顾虑成立：有几个测试要 Swift 编译器、
   `sips`、`ast` 读 Swift 源码，windows-latest 上跑不了）。现在的做法是两条：
-  ① `test` job 在 **ubuntu-latest** 上跑全套（`needs: test` 卡住发版）；
+  ① `test` job 在 **macos-latest** 上跑全套（`needs: test` 卡住发版；iOS 纯逻辑要
+  `swiftc`、启动页亮度要 `sips`，ubuntu 镜像的 swiftc 编不了 `import Combine` 的源码）；
   ② `build` job 在 **windows-latest** 上只跑**能在那台上真跑的那部分** ——
   打包 → 断言 exe 的版本资源 → 编译安装包 → 静默装 → `PALMDECK_NO_TRAY=1` 起进程 →
   轮询 `/api/status` → 卸载 → 断言自启项没了、配置还在（见 `tests/test_ci.py`）。
