@@ -530,7 +530,7 @@ enum Theme {
 | orange（编辑/注意） | `#CD6F00` | `#FF9E33` |
 | red（危险） | `#CD2928` | `#FF5C5C` |
 | panel / panelHi / border | `#FFFFFF` / `#F2F6FA` / `#BDC9D7` | 原值 |
-| text / textDim / textFaint | `#0E1724` / `#47556B` / `#738192` | 原值 |
+| text / textDim / textFaint | `#0E1724` / `#47556B` / `#5F6D80` | 原值 |
 
 **外观开关**：`AppAppearance`（`system` / `light` / `dark`，键 `palmdeck_appearance`，
 **默认 `.light`**），设置新增分类「外观」（靖蓝图标，排在「方向盘」后）→ 内联 `Picker`；
