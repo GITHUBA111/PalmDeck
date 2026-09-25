@@ -81,6 +81,24 @@ class TestReleaseWorkflowRunsTests(unittest.TestCase):
         """PR 也该跑——不然只有打 tag 才发现红。"""
         self.assertIn("pull_request", self.wf)
 
+    def test_artifact_is_the_setup_only(self):
+        """Artifacts 只传安装包（单个文件 ⇒ Actions 页直接给单文件下载）。
+
+        传两个文件 GitHub 会把上传物打成 zip（下载多一步解压）；而 PalmDeck.exe
+        那份在 Release 里本就有裸的 —— 它真正的用途是自动更新的直链，
+        不在 Artifacts。
+        """
+        block = self.wf.split("upload-artifact", 1)[1].split("if-no-files-found", 1)[0]
+        self.assertIn("PalmDeck-Setup-*.exe", block)
+        self.assertNotIn("dist/PalmDeck.exe", block,
+                         "Artifacts 里别放第二个文件，否则下载又变成 zip")
+
+    def test_release_still_ships_both_assets(self):
+        """Release 仍必须两份：exe 是自动更新直链（名字写死），安装包给首次安装。"""
+        block = self.wf.split("发布 Release", 1)[1]
+        self.assertIn("dist/PalmDeck.exe", block)
+        self.assertIn("dist/PalmDeck-Setup-*.exe", block)
+
     def test_outcome_and_diagnostics_go_to_a_branch(self):
         """结果与诊断写回 `ci-diag` 分支（绿也写，好让 git 能判红绿）。
 

@@ -25,12 +25,16 @@ git push -u origin main
 1. 打开仓库 → **Actions** 标签
 2. 左侧选 **build-windows-exe** → 右侧 **Run workflow**（`workflow_dispatch` 已开启，直接点绿按钮）
 3. 等十几分钟（要跑完整测试、打 exe、编译安装包，还会真装一遍再卸掉），
-   运行完成 → 页面底部 **Artifacts** 下载 `PalmDeck-Windows`（里面有**两个**文件）
-4. 解压得到：
-   - **`PalmDeck-Setup-<版本>.exe`** —— 给玩家用的安装包（中文向导、开始菜单、卸载项、可选开机自启）
-   - **`PalmDeck.exe`** —— 免安装单文件版（两者都能用；exe 已内置 Python + 全部依赖）
+   运行完成 → 页面底部 **Artifacts** 下载 `PalmDeck-Windows`
+4. 得到 **`PalmDeck-Setup-<版本>.exe`** —— 给玩家用的安装包（中文向导、开始菜单、
+   卸载项、可选开机自启、WebView2 兜底）
 
-> 打 tag（如 `v1.0`）推送也会自动触发同样打包，并自动创建 Release（两个文件都会附上）。
+> Artifacts **只传安装包这一个文件**：传两个 GitHub 会把上传物打成 zip（下载多一步解压），
+> 而免安装单文件版 `PalmDeck.exe` 在 Release 里本就有裸的 —— 它真正的用途是
+> 自动更新的直链（`updater.GITHUB_EXE`），不在 Artifacts。
+
+> 打 tag（如 `v1.0`）推送也会自动触发同样打包，并自动创建 Release
+> （**两个**裸文件都附上：`PalmDeck.exe` + `PalmDeck-Setup-<版本>.exe`）。
 > **tag 必须等于 `updater.APP_VERSION`**（例如 APP_VERSION = `4.0.0` 就必须打 `v4.0.0`）。
 > 自更新比的是「Release 的 tag」和「exe 里的 APP_VERSION」：tag 打成 `v0.3.3` 却装着
 > 自报 `4.0.0` 的 exe，所有用户都会被判成「已是最新」——**静默地永远收不到更新**。

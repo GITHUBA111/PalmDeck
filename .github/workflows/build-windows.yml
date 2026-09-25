@@ -242,10 +242,11 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
+          # 只传安装包：Artifacts 是给人手动下载的，传两个文件 GitHub 会把它们
+          # 打成 zip（多一步解压），而 PalmDeck.exe 那份在 Release 里本就有裸的。
+          # 自动更新直链指向 Release 的 PalmDeck.exe（updater.GITHUB_EXE），不受影响。
           name: PalmDeck-Windows
-          path: |
-            dist/PalmDeck.exe
-            dist/PalmDeck-Setup-*.exe
+          path: dist/PalmDeck-Setup-*.exe
           if-no-files-found: error
 
       # 仅在打 tag（发版）时创建 GitHub Release。
