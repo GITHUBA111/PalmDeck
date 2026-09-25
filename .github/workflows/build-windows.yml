@@ -151,7 +151,11 @@ jobs:
             Get-Content (Join-Path $cfgDir "palmdeck.log") -Tail 40 -ErrorAction SilentlyContinue
             throw "30 秒内 http://127.0.0.1:8080/api/status 没响应"
           }
-          Stop-Process -Id $proc.Id -Force
+          # onefile 打包的 PyInstaller exe = 父 bootloader + 子进程，两个进程跑的是同一个
+          # {app}\PalmDeck.exe。只杀 $proc.Id（父）会留下子进程继续锁着这个 exe，
+          # 卸载时就删不掉它。按名字把同名进程全杀了（父 + 子）。
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          Get-Process -Name PalmDeck -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
 
           Write-Host "== 静默卸载 =="
