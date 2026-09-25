@@ -27,15 +27,15 @@ struct PreflightView: View {
                     Spacer()
                     HStack(spacing: 12) {
                         Image(systemName: "paperplane.fill")
-                            .font(.system(size: 30))
+                            .pdFont(30)
                             .foregroundColor(Theme.cyan)
                             .rotationEffect(.degrees(-45))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("PalmDeck").font(.system(size: 28, weight: .heavy)).foregroundColor(Theme.text)
-                            Text("手机就是摇杆 / 方向盘").font(.system(size: 13)).foregroundColor(Theme.cyan.opacity(0.85))
+                            Text("PalmDeck").pdFont(28, weight: .heavy).foregroundColor(Theme.text)
+                            Text("手机就是摇杆 / 方向盘").pdFont(13).foregroundColor(Theme.cyan.opacity(0.85))
                         }
                     }
-                    Text("零硬件 · 可自定义 · 随身携带").font(.system(size: 11)).foregroundColor(Theme.textDim)
+                    Text("零硬件 · 可自定义 · 随身携带").pdFont(11).foregroundColor(Theme.textDim)
                         .padding(.top, 6)
 
                     Spacer()
@@ -47,8 +47,8 @@ struct PreflightView: View {
                         onEnter()
                     } label: {
                         HStack(spacing: 8) {
-                            Text("进入座舱").font(.system(size: 19, weight: .bold))
-                            Image(systemName: "arrow.right").font(.system(size: 15, weight: .bold))
+                            Text("进入座舱").pdFont(19, weight: .bold)
+                            Image(systemName: "arrow.right").pdFont(15, weight: .bold)
                         }
                         .frame(maxWidth: .infinity, minHeight: 52)
                     }
@@ -56,7 +56,7 @@ struct PreflightView: View {
                     .padding(.top, 12)
 
                     Text("不连电脑也能先进 → 连上后自动生效")
-                        .font(.system(size: 11)).foregroundColor(Theme.textFaint)
+                        .pdFont(11).foregroundColor(Theme.textFaint)
                         .padding(.top, 6)
                         .frame(maxWidth: .infinity)
                     Spacer()
@@ -71,7 +71,7 @@ struct PreflightView: View {
                 // ── 右：三步卡片
                 VStack(alignment: .leading, spacing: 12) {
                     Spacer(minLength: 0)
-                    Text("三步开始").font(.system(size: 15, weight: .bold)).foregroundColor(Theme.text)
+                    Text("三步开始").pdFont(15, weight: .bold).foregroundColor(Theme.text)
                     stepCard(1, "desktopcomputer", "电脑装好 PalmDeck",
                              "Windows 双击 start.bat · Mac 运行 python3 bridge.py")
                     stepCard(2, "wifi", "手机连同一 Wi-Fi",
@@ -134,10 +134,10 @@ struct PreflightView: View {
             Circle().fill(statusDotColor).frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 1) {
                 Text(statusTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pdFont(13, weight: .semibold)
                     .foregroundColor(statusTitleColor)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Text(statusSub).font(.system(size: 10)).foregroundColor(Theme.textDim)
+                Text(statusSub).pdFont(10).foregroundColor(Theme.textDim)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             Spacer(minLength: 6)
@@ -175,17 +175,17 @@ struct PreflightView: View {
             ZStack {
                 Circle().fill(Theme.cyan.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: icon)
-                    .font(.system(size: 17)).foregroundColor(Theme.cyan)
+                    .pdFont(17).foregroundColor(Theme.cyan)
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text("\(n)").font(.system(size: 11, weight: .bold))
+                    Text("\(n)").pdFont(11, weight: .bold)
                         .foregroundColor(Theme.cyan)
                         .frame(width: 15, height: 15)
                         .background(Circle().fill(Theme.cyan.opacity(0.2)))
-                    Text(title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
+                    Text(title).pdFont(14, weight: .semibold).foregroundColor(Theme.text)
                 }
-                Text(sub).font(.system(size: 11)).foregroundColor(Theme.textDim)
+                Text(sub).pdFont(11).foregroundColor(Theme.textDim)
             }
             Spacer(minLength: 0)
         }
@@ -204,8 +204,8 @@ struct PreflightView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 11))
-                    Text("设置").font(.system(size: 12))
+                        .pdFont(11)
+                    Text("设置").pdFont(12)
                 }
                 .foregroundColor(Theme.textDim)
             }
@@ -215,7 +215,7 @@ struct PreflightView: View {
                 HStack(spacing: 8) {
                     TextField("电脑 IP", text: $host)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
+                        .pdFont(13, design: .monospaced)
                         .padding(.horizontal, 10)
                         .frame(height: 34)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panelHi))
@@ -231,7 +231,7 @@ struct PreflightView: View {
                 // 手动连接反馈：成功/失败/无效地址一目了然
                 if !ctrl.pfConnState.isEmpty && s.link != .live {
                     Text(ctrl.pfConnState)
-                        .font(.system(size: 11, weight: .medium))
+                        .pdFont(11, weight: .medium)
                         .foregroundColor(ctrl.pfConnState.contains("无效") || ctrl.pfConnState.contains("断开") ? Theme.red : Theme.orange)
                         .lineLimit(2)
                 }
@@ -239,7 +239,7 @@ struct PreflightView: View {
                 // 自己改的是全局，实际改的是「现在这个模式」的那一份。
                 HStack(spacing: 6) {
                     Text("轴反向 · \(s.mode.label)")
-                        .font(.system(size: 11))
+                        .pdFont(11)
                         .foregroundColor(Theme.textDim)
                     Spacer(minLength: 0)
                 }
@@ -264,7 +264,7 @@ struct PreflightView: View {
     /// 扫描到的所有电脑（点一下连接）
     private var discoveredList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("可用电脑（点一下连接）").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.textDim)
+            Text("可用电脑（点一下连接）").pdFont(12, weight: .semibold).foregroundColor(Theme.textDim)
             ForEach(discovery.found, id: \.ip) { d in
                 let isCurrent = s.link == .live && ctrl.savedHostForUI == d.ip
                 Button {
@@ -272,11 +272,11 @@ struct PreflightView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Circle().fill(isCurrent ? Theme.green : Theme.cyan).frame(width: 7, height: 7)
-                        Image(systemName: "desktopcomputer").font(.system(size: 12)).foregroundColor(Theme.cyan)
-                        Text(d.ip).font(.system(size: 13, design: .monospaced)).foregroundColor(Theme.text)
+                        Image(systemName: "desktopcomputer").pdFont(12).foregroundColor(Theme.cyan)
+                        Text(d.ip).pdFont(13, design: .monospaced).foregroundColor(Theme.text)
                         Spacer()
                         Text(isCurrent ? "已连 ✓" : "连接")
-                            .font(.system(size: 11, weight: .semibold))
+                            .pdFont(11, weight: .semibold)
                             .foregroundColor(isCurrent ? Theme.green : Theme.cyan)
                     }
                     .padding(.horizontal, 10)

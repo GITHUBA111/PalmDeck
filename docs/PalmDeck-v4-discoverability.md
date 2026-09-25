@@ -145,10 +145,9 @@ if s.link == .live && m != s.mode → 弹确认；否则直接切
 
 ## 6. 边界与不做
 
-- **不做 Dynamic Type**（走查里的第 5 条）：全 App 是固定 `pt` 字号 + 自绘控件，
-  要真做就得把 ~120 处字号换成 `@ScaledMetric`、并给每个自绘控件补
-  `accessibilityLabel`，同时重测一遍所有固定宽度的横排（顶栏、状态条、编辑条）
-  —— **这是一轮独立改造（L），塞进本轮的收益远小于风险**。记进 `docs/TODO.md`。
+- **Dynamic Type 与无障碍标签**（走查里的第 5 条）：本轮不做，另起一轮落地，
+  见 `docs/PalmDeck-v4-accessibility.md`（视图层 `.pdFont` + 自绘控件补
+  `accessibilityLabel` / `accessibilityValue`，座舱 chrome 收口）。
 - **不改模式胶囊的样式**（它是「当前模式」，不是入口）。
 - **不给内置预设加菜单**（内置不可删改，菜单只会引导用户点进去发现点不动）。
 - **不动 `swipeActions`**（老路径保留）。
@@ -189,7 +188,8 @@ if s.link == .live && m != s.mode → 弹确认；否则直接切
 
 ### 8.3 未做 / 风险
 
-- **Dynamic Type 与无障碍标签**（走查第 5 条）：见 §6，记进 `docs/TODO.md`（独立一轮 L）。
+- **Dynamic Type 与无障碍标签**（走查第 5 条）：见 §6；已由
+  `docs/PalmDeck-v4-accessibility.md` 落地。
 - **内置预设的 `⋯` 菜单**：故意不给（不可删改，给了菜单只会引导用户点进去发现点不动）。
 - **未连接时切模式不提醒**：这是刻意的（本机切模式没有代价）。代价是：**正好没连上**时
   用户也收不到任何提示，若他以为连上了，就会觉得「切了没反应」。

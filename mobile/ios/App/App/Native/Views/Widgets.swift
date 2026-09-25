@@ -160,13 +160,13 @@ struct WidgetView: View {
             switch widget.binding {
             case .throttle, .brake, .clutch, .rt:
                 VStack(spacing: 2) {
-                    Text(widget.title).font(.system(size: 10)).foregroundColor(Theme.textFaint)
-                    UniSlider(value: bindAxis(widget.binding), accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
+                    Text(widget.title).pdFont(10).foregroundColor(Theme.textFaint)
+                    UniSlider(value: bindAxis(widget.binding), label: widget.title, accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
                 }
             default:
                 VStack(spacing: 2) {
-                    Text(widget.title).font(.system(size: 10)).foregroundColor(Theme.textFaint)
-                    BipolarSlider(value: bindAxis(widget.binding), accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
+                    Text(widget.title).pdFont(10).foregroundColor(Theme.textFaint)
+                    BipolarSlider(value: bindAxis(widget.binding), label: widget.title, accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
                 }
             }
         case .pad:
@@ -174,6 +174,7 @@ struct WidgetView: View {
         case .button:
             Button(widget.title) { tapButton(widget.binding) }
                 .buttonStyle(CardButton(active: isButtonActive(widget.binding)))
+                .accessibilityValue(isButtonActive(widget.binding) ? "按下" : "松开")
         case .stick:
             StickControl(x: $s.roll, y: $s.pitch, returnToCenter: s.stickReturn,
                          onTouch: { ctrl.setTouchActive($0) })

@@ -144,6 +144,63 @@ extension View {
     func palmAppearance() -> some View { modifier(AppearanceModifier()) }
 }
 
+// MARK: - 动态字号（Dynamic Type）
+//
+// 全 App 原来都是固定 `pt`（`.font(.system(size: N))`），系统字号调多大都不变。
+// 这里给两件工具：Canvas 用 `Font.pd`，视图层一律用 `.pdFont`（真·响应式）。
+// 默认字号下 `scaledValue == base`，**外观与改造前完全一致**。
+
+extension Font {
+    /// **非响应式**缩放字号：给 Canvas / `Text.font()` 这类拿不到 `@ScaledMetric` 的地方用。
+    /// 视图请优先用 `.pdFont(...)`。
+    static func pd(_ size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        #if canImport(UIKit)
+        let s = UIFontMetrics.default.scaledValue(for: size)
+        return .system(size: s, weight: weight, design: design)
+        #else
+        return .system(size: size, weight: weight, design: design)
+        #endif
+    }
+}
+
+/// 把固定 `pt` 字号换成随系统字号缩放的版本。内部是 `@ScaledMetric`，字号一变整棵视图重排。
+private struct ScaledFontModifier: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+    private let design: Font.Design
+
+    init(size: CGFloat, relativeTo style: Font.TextStyle, weight: Font.Weight, design: Font.Design) {
+        _size = ScaledMetric(wrappedValue: size, relativeTo: style)
+        self.weight = weight
+        self.design = design
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, weight: weight, design: design))
+    }
+}
+
+extension View {
+    /// 固定 `pt` 字号 → 随系统字号缩放。`relativeTo` 选最接近的语义档，决定缩放曲线。
+    func pdFont(_ size: CGFloat,
+                relativeTo style: Font.TextStyle = .body,
+                weight: Font.Weight = .regular,
+                design: Font.Design = .default) -> some View {
+        modifier(ScaledFontModifier(size: size, relativeTo: style, weight: weight, design: design))
+    }
+
+    /// 文字为主的界面（设置 / 首启 / 速览 / 弹窗，可滚动）放开到无障碍档。
+    func palmDynamicType() -> some View {
+        dynamicTypeSize(.xSmall ... .accessibility2)
+    }
+
+    /// 座舱 chrome（顶栏 / 状态条 / 编辑条）：固定横排 HUD，放开到无障碍档必挤裂，
+    /// 收到 `.xxLarge`（系统默认往上约两档），`minimumScaleFactor` 兜底。
+    func palmCockpitType() -> some View {
+        dynamicTypeSize(.xSmall ... .xxLarge)
+    }
+}
+
 /// 座舱背景：渐变 + 顶部/底部微光晕 + 细网格（HUD 感）。浅色/深色各一套。
 struct CockpitBackdrop: View {
     var body: some View {
@@ -231,10 +288,10 @@ struct HudCell: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .pdFont(8, weight: .bold, design: .monospaced)
                 .foregroundColor(Theme.textFaint)
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .pdFont(11, weight: .semibold, design: .monospaced)
                 .foregroundColor(accent)
         }
         .lineLimit(1)

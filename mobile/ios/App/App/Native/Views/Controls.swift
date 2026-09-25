@@ -106,6 +106,10 @@ struct StickControl: View {
             )
         }
         .aspectRatio(1, contentMode: .fit)
+        // VoiceOver：自绘摇杆本身没有文字，读不出「现在推到哪了」。
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("摇杆")
+        .accessibilityValue(String(format: "横滚 %+.0f%%，俯仰 %+.0f%%", x * 100, y * 100))
         .onDisappear { stopReturn() }
     }
 }
@@ -173,12 +177,16 @@ struct BipolarSlider: View {
             )
         }
         .frame(height: 36)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label.isEmpty ? "滑条" : label)
+        .accessibilityValue(String(format: "%+.0f%%", value * 100))
     }
 }
 
 /// 单极水平滑条（油门 [0,1]）
 struct UniSlider: View {
     @Binding var value: Double
+    var label: String = "油门"
     var accent: Color = Theme.cyan
     var onTouch: ((Bool) -> Void)? = nil
 
@@ -227,6 +235,9 @@ struct UniSlider: View {
             )
         }
         .frame(height: 36)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(String(format: "%.0f%%", value * 100))
     }
 }
 
@@ -289,6 +300,9 @@ struct HatPad: View {
             )
         }
         .aspectRatio(1, contentMode: .fit)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("苦力帽")
+        .accessibilityValue(hat == 255 ? "中立" : ["上", "右", "下", "左"][Int(min(hat, 3))])
     }
 }
 
@@ -325,7 +339,7 @@ struct LookPad: View {
                     .frame(width: 16, height: 16)
                     .offset(x: lookX * w * 0.42, y: -lookY * h * 0.42)
                     .shadow(color: accent.opacity(0.6), radius: 6)
-                Text("视角").font(.system(size: 11)).foregroundColor(Theme.textFaint)
+                Text("视角").pdFont(11).foregroundColor(Theme.textFaint)
                     .position(x: w/2, y: h - 12)
             }
             .contentShape(RoundedRectangle(cornerRadius: 14))
@@ -351,6 +365,9 @@ struct LookPad: View {
             )
         }
         .aspectRatio(1.3, contentMode: .fit)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("视角触摸板")
+        .accessibilityValue(String(format: "左右 %+.0f%%，上下 %+.0f%%", lookX * 100, lookY * 100))
     }
 
     private func startReturn() {

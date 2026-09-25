@@ -910,8 +910,7 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 **为什么切模式要问**：换后端会重建虚拟手柄，这是电脑侧的**事实**（不是 App 的 bug），
 说清代价比事后解释便宜。**未连接时不问**：本机切模式没有代价，多一层弹窗只会变慢。
 
-**不做**：Dynamic Type / 无障碍标签（全 App 固定 `pt` + 自绘控件，要改 ~120 处字号、
-给每个自绘控件补 `accessibilityLabel`，还要重测所有固定宽度横排 —— 独立一轮 L，见 `docs/TODO.md`）；
+**不做**：Dynamic Type / 无障碍标签（已另起一轮落地，见 `docs/PalmDeck-v4-accessibility.md`）；
 不改模式胶囊样式；不给内置预设加菜单；不动 `UDP` / `WS` 的字面值。
 
 **机器验证**：`tests/test_deck_bindings.py::TestDiscoverability`（11 条源码守卫）。
@@ -942,6 +941,26 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 **机器验证**：`tests/test_deck_bindings.py::TestBindingOptions`（9 条，交叉核对
 `axes`↔`bindAxis`、`buttons`↔`tapButton`，以及上述接线）。
 
+## 12.18 动态字号 + 无障碍标签（走查第 5 条）
+
+**问题**：全 App 固定 `pt` 字号（约 130 处 `.font(.system(size: N))`），系统字号调多大都不变；
+方向盘 / 摇杆 / 苦力帽 / 滑条 / 视角板 / 姿态球 / 仪表盘全是自绘，VoiceOver 读不出值；
+编辑态 ✕ / `Aa` 只报 SF Symbol 名。
+
+**做法**（只动 View 层，零新增存储键）：
+
+| 位置 | 之前 | 之后 |
+|---|---|---|
+| 字号 | `.font(.system(size: N))` 固定 | `.pdFont(N)` / `Font.pd(N)`（`@ScaledMetric`，默认字号下外观不变；几何比例字号不动） |
+| 根视图 | 无 | `.palmDynamicType()` → 放到 `.accessibility2` |
+| 座舱 chrome | 跟随根 | 收口 `.xxLarge`：固定横排 HUD，放开到无障碍档必挤裂；`minimumScaleFactor` 兜底 |
+| 设置 / 首启 / 速览 | 跟随根 | `.palmDynamicType()`（文字为主、可滚动，放开） |
+| 自绘控件 | 无标签 | `.accessibilityElement(children: .ignore)` + `label` + `value` |
+
+**边界**：画布上的拖拽 / 缩放不给 VoiceOver 替代手势（像素级拖动是另一套「无障碍编辑布局」）。
+**方案 / 实测**：`docs/PalmDeck-v4-accessibility.md`。
+**机器验证**：`tests/test_deck_bindings.py::TestAccessibility`（8 条）。
+
 ---
 
 ## 13. 不做 / 明确边界
@@ -950,4 +969,7 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 - 不做手机端游戏遥测回读（见 `docs/TODO.md`）。
 - **引擎里不再有任何固定皮肤**：三个模式共用一块通用组件画布，默认都是「轴 + 用户自加按键」。
   **App 不为任何游戏硬编码按钮语义**；含义与绑定由用户在游戏内完成（见 §12.6）。
+- **动态字号 / 无障碍（§12.18）**：视图层 `.pdFont` 随系统字号缩放；座舱 chrome 收口
+  到 `.xxLarge`，设置 / 首启 / 速览放开到 `.accessibility2`；自绘控件补
+  `accessibilityLabel` / `accessibilityValue`。见 `docs/PalmDeck-v4-accessibility.md`。
 - 不引入第三方依赖 / 不改电脑侧协议。

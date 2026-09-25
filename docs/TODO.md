@@ -139,16 +139,16 @@
   「固定发…」说明（它们的 `binding` 渲染时被忽略）；组件库入口用
   `.sheet(item:)` 记住点的是哪个类型。方案与实测：`docs/PalmDeck-v4-binding-filter.md`；
   守卫：`tests/test_deck_bindings.py::TestBindingOptions`（9 条）。
+- **动态字号 + 无障碍标签**（走查第 5 条）—— 视图层固定 `.font(.system(size:))` → `.pdFont`
+  （`@ScaledMetric`，默认字号外观不变）；座舱 chrome 收口 `.xxLarge`、设置/首启/速览放开
+  `.accessibility2`；方向盘 / 摇杆 / 苦力帽 / 滑条 / 视角板 / 姿态球 / 弧表杆位条 / 编辑态 ✕·`Aa`
+  全补 `accessibilityLabel` + `accessibilityValue`。方案与实测：`docs/PalmDeck-v4-accessibility.md`；
+  守卫：`tests/test_deck_bindings.py::TestAccessibility`（8 条）。
 
 ## 已存档（方案已保存，未实施）
 - 无。
 
 ## 其它
-- **Dynamic Type / 无障碍标签（走查第 5 条，独立一轮 L，未施工）** —— 全 App 是固定 `pt` 字号 + 自绘控件：
-  要真做就得把 ~120 处字号换成 `@ScaledMetric`（或语义字号），并给每个自绘控件
-  （方向盘 / 摇杆 / 苦力帽 / 滑条 / 仪表盘 / 状态条）补 `accessibilityLabel`、`accessibilityValue`，
-  还要重测所有**固定宽度横排**（顶栏三个入口、状态条、编辑条、预设行尾章）在最大字号下会不会挤裂。
-  与 `AppAppearance`（浅/深色）是两件事，不要混在一轮里做。
 - **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）→ ~~**G1**~~（已施工）
   → ~~**G2**~~（已施工）→ ~~**E2**~~（已施工）→ ~~**P1.5**~~（已施工）→ ~~**P2**~~（已施工）
   → **G4**（WARDOGS / 欧洲卡车模拟两个预设）。

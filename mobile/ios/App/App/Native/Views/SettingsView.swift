@@ -173,6 +173,8 @@ struct SettingsView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .palmAppearance()
+        // 设置是文字为主、可滚动：放开到无障碍档（覆盖座舱 chrome 的收紧）。
+        .palmDynamicType()
         .tint(Theme.cyan)
     }
 
@@ -180,11 +182,11 @@ struct SettingsView: View {
     private var header: some View {
         ZStack {
             Text("设置")
-                .font(.system(size: 17, weight: .semibold))
+                .pdFont(17, weight: .semibold)
             HStack {
                 Spacer()
                 Button("完成") { dismiss() }
-                    .font(.system(size: 17, weight: .semibold))
+                    .pdFont(17, weight: .semibold)
             }
         }
         .padding(.horizontal, 16)
@@ -210,11 +212,11 @@ struct SettingsView: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
+                .pdFont(14, weight: .semibold)
                 .foregroundColor(.secondary)
             TextField("搜索", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16))
+                .pdFont(16)
                 .disableAutocorrection(true)
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
@@ -223,7 +225,7 @@ struct SettingsView: View {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .pdFont(16)
                         .foregroundColor(Color(uiColor: .tertiaryLabel))
                 }
                 .buttonStyle(.plain)
@@ -259,10 +261,10 @@ struct SettingsView: View {
         if matchedGroups.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 30, weight: .light))
+                    .pdFont(30, weight: .light)
                     .foregroundColor(Color(uiColor: .tertiaryLabel))
-                Text("没有匹配的设置项").font(.system(size: 14)).foregroundColor(.secondary)
-                Text("试试「死区」「轴表」「预设」").font(.system(size: 12)).foregroundColor(Color(uiColor: .tertiaryLabel))
+                Text("没有匹配的设置项").pdFont(14).foregroundColor(.secondary)
+                Text("试试「死区」「轴表」「预设」").pdFont(12).foregroundColor(Color(uiColor: .tertiaryLabel))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -280,7 +282,7 @@ struct SettingsView: View {
                                     Text(e.title).foregroundColor(.primary)
                                     Spacer(minLength: 8)
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .pdFont(13, weight: .semibold)
                                         .foregroundColor(Color(uiColor: .tertiaryLabel))
                                 }
                                 .contentShape(Rectangle())
@@ -311,18 +313,18 @@ struct SettingsView: View {
         HStack(spacing: 12) {
             SettingsIcon(symbol: c.symbol, color: c.color)
             Text(c.title)
-                .font(.system(size: 16, weight: sel == c ? .semibold : .regular))
+                .pdFont(16, weight: sel == c ? .semibold : .regular)
                 .foregroundColor(.primary)
             Spacer(minLength: 8)
             if let v = trailingValue(c) {
                 Text(v)
-                    .font(.system(size: 15))
+                    .pdFont(15)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
+                .pdFont(13, weight: .semibold)
                 .foregroundColor(Color(uiColor: .tertiaryLabel))
         }
         .contentShape(Rectangle())
@@ -346,7 +348,7 @@ struct SettingsView: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(sel.title)
-                .font(.system(size: 26, weight: .bold))
+                .pdFont(26, weight: .bold)
                 .foregroundColor(.primary)
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
@@ -535,7 +537,7 @@ struct SettingsView: View {
                         .layoutPriority(1)
                     ForEach(chips, id: \.self) { c in
                         Text(c)
-                            .font(.system(size: 11, weight: .semibold))
+                            .pdFont(11, weight: .semibold)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                             .fixedSize()
@@ -544,20 +546,20 @@ struct SettingsView: View {
                     }
                 }
                 Text(detail)
-                    .font(.system(size: 12)).foregroundColor(.secondary)
+                    .pdFont(12).foregroundColor(.secondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 8)
             if current {
                 Text("当前")
-                    .font(.system(size: 12, weight: .semibold))
+                    .pdFont(12, weight: .semibold)
                     .foregroundColor(Theme.cyan)
                     .lineLimit(1)
                     .fixedSize()
             }
             if warn {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12))
+                    .pdFont(12)
                     .foregroundColor(Theme.orange)
             }
             if let p = editable {
@@ -572,7 +574,7 @@ struct SettingsView: View {
                     } label: { Label("删除", systemImage: "trash") }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 17))
+                        .pdFont(17)
                         .foregroundColor(Theme.textDim)
                         .frame(width: 34, height: 34)
                         .contentShape(Rectangle())
@@ -827,9 +829,9 @@ struct SettingsView: View {
                 .frame(width: 126, height: 126)
             HStack(spacing: 6) {
                 Circle().fill(accent).frame(width: 7, height: 7)
-                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
+                Text(title).pdFont(12, weight: .semibold).foregroundColor(.secondary)
                 Text(String(format: "%.2f×", sens))
-                    .font(.system(size: 12, design: .monospaced))
+                    .pdFont(12, design: .monospaced)
                     .foregroundColor(.secondary)
             }
         }
@@ -923,7 +925,7 @@ struct SettingsIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
+            .pdFont(13, weight: .semibold)
             .foregroundColor(Theme.onAccent)
             .frame(width: 29, height: 29)
             .background(
@@ -939,7 +941,7 @@ struct SettingsHeader: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13, weight: .semibold))
+            .pdFont(13, weight: .semibold)
             .foregroundColor(.secondary)
             .textCase(nil)
     }
@@ -959,7 +961,7 @@ struct InfoRow: View {
             Spacer(minLength: 12)
             if warn {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12))
+                    .pdFont(12)
                     .foregroundColor(Theme.orange)
             }
             Text(value)

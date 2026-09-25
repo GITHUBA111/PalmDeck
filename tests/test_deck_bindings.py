@@ -1037,3 +1037,95 @@ class TestDiscoverability(unittest.TestCase):
         self.assertNotIn("只存在于 vJoy", self.c)
         self.assertIn("只在飞行模式里存在", self.c)
         self.assertIn("vJoy", self.c, "对照电脑侧时仍然要点名，不然没法在游戏里找")
+
+
+class TestAccessibility(unittest.TestCase):
+    """动态字号 + VoiceOver 标签（走查第 5 条，方案 `docs/PalmDeck-v4-accessibility.md`）。
+
+    历史问题：全 App 固定 `pt` 字号（`.font(.system(size: N))`，约 130 处），
+    系统字号调多大都不变；方向盘 / 摇杆 / 苦力帽 / 滑条 / 视角板 / 姿态球 / 仪表盘
+    全是自绘，VoiceOver 读不出「现在推到哪了」；编辑态 ✕ / `Aa` 只报 SF Symbol 名。
+
+    修法：视图层统一 `.pdFont(...)`（`@ScaledMetric`，默认字号下外观不变）；
+    座舱 chrome 收口到 `.xxLarge`，文字为主的设置/首启/速览放开到 `.accessibility2`；
+    每个自绘控件补 `accessibilityLabel` + `accessibilityValue`。
+    """
+
+    VIEWS = "mobile/ios/App/App/Native/Views"
+
+    def setUp(self):
+        self.theme = _ios("Views", "Theme.swift")
+        self.app = _ios("PalmDeckApp.swift")
+        self.controls = _ios("Views", "Controls.swift")
+        self.wheel = _ios("Views", "SteeringWheel.swift")
+        self.ball = _ios("Views", "AttitudeBall.swift")
+        self.panel = _ios("Views", "FlightPanel.swift")
+        self.layout = _ios("Views", "Layout.swift")
+        self.widgets = _ios("Views", "Widgets.swift")
+
+    # ---- 工具 & 封顶 ----
+
+    def test_theme_provides_scaled_font(self):
+        self.assertIn("static func pd(_ size: CGFloat", self.theme)
+        self.assertIn("func pdFont(_ size: CGFloat", self.theme)
+        self.assertIn("@ScaledMetric private var size: CGFloat", self.theme,
+                      "视图层要用响应式的 @ScaledMetric，不是一次性缩放")
+
+    def test_root_allows_accessibility_sizes(self):
+        self.assertIn(".palmDynamicType()", self.app, "根视图要放开到无障碍档")
+
+    def test_cockpit_chrome_is_capped(self):
+        cockpit = _ios("Views", "CockpitView.swift")
+        self.assertIn(".palmCockpitType()", cockpit,
+                      "座舱是固定横排 HUD：不封顶会把顶栏 / 状态条挤裂")
+        # 座舱里挂出来的弹窗（组件库 / 速览）要重新放开，不被座舱的天花板关住。
+        self.assertGreaterEqual(cockpit.count(".palmDynamicType()"), 2,
+                                "组件库 / 速览是文字页，要放开到无障碍档")
+        self.assertIn(".palmDynamicType()", _ios("Views", "SettingsView.swift"),
+                      "设置页文字为主、可滚动，要放开（覆盖座舱的收紧）")
+
+    # ---- 不再有裸固定字号 ----
+
+    def test_no_bare_fixed_font_sizes_in_views(self):
+        """View 层不该再有 `.font(.system(size: <数字`（几何比例字号不算固定 pt）。"""
+        import glob
+        offenders = []
+        for path in glob.glob(os.path.join(ROOT, self.VIEWS, "*.swift")):
+            with open(path, encoding="utf-8") as f:
+                if re.search(r"\.font\(\.system\(size: [0-9]", f.read()):
+                    offenders.append(os.path.basename(path))
+        self.assertEqual(offenders, [], "这些文件还有固定字号：%r" % offenders)
+
+    # ---- 自绘控件要有 VoiceOver ----
+
+    def _assert_vo(self, src, label, where):
+        self.assertIn(".accessibilityElement(children: .ignore)", src, where)
+        self.assertIn(".accessibilityLabel(", src, where)
+        self.assertIn('"%s"' % label, src, "%s 读不出中文名" % where)
+        self.assertIn(".accessibilityValue(", src, "%s 读不出当前值" % where)
+
+    def test_stick_hat_pads_have_voiceover(self):
+        for label in ("摇杆", "苦力帽", "视角触摸板", "油门", "滑条"):
+            self.assertIn('"%s"' % label, self.controls,
+                          "Controls.swift 少了 %s 的无障碍名" % label)
+        self.assertGreaterEqual(self.controls.count(".accessibilityValue("), 5,
+                                "摇杆/双极滑条/单极滑条/苦力帽/视角板 都该报值")
+
+    def test_wheel_and_instruments_have_voiceover(self):
+        self._assert_vo(self.wheel, "方向盘", "SteeringWheel")
+        self._assert_vo(self.ball, "姿态球（只读）", "AttitudeBall")
+        self.assertIn(".accessibilityValue(", self.panel)
+        self.assertIn(".accessibilityLabel(title)", self.panel,
+                      "弧表 / 杆位条要用表名当无障碍名")
+
+    def test_canvas_edit_actions_are_labelled(self):
+        self.assertIn('.accessibilityLabel("删除组件")', self.layout)
+        self.assertIn('.accessibilityLabel("重命名组件")', self.layout)
+        self.assertIn(".accessibilityValue(isButtonActive(widget.binding)", self.widgets,
+                      "按键要报按下 / 松开")
+
+    def test_no_fixed_pixel_widths_block_dynamic_type(self):
+        """顶栏那排 68 / 140 / 96 / 64 的固定宽度会跟动态字号打架：
+        收缩后仍以 `minimumScaleFactor` 兜底，保证不挤裂。"""
+        cockpit = _ios("Views", "CockpitView.swift")
+        self.assertIn("minimumScaleFactor", cockpit)

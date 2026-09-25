@@ -23,6 +23,7 @@ struct PalmDeckApp: App {
                 }
             }
             .palmAppearance()
+            .palmDynamicType()
         }
     }
 }

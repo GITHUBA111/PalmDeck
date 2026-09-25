@@ -36,6 +36,9 @@ struct CockpitView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .frame(width: W, height: H, alignment: .top)
+            // 座舱是固定横排 HUD：字号收到 `.xxLarge`，不至于把顶栏 / 状态条 / 编辑条挤裂。
+            // 设置 / 首启 / 速览是文字为主、可滚动，各自用 `.palmDynamicType()` 放开。
+            .palmCockpitType()
         }
         .background(CockpitBackdrop())
         .palmAppearance()
@@ -127,8 +130,8 @@ struct CockpitView: View {
                 connectionChip(height: height)
                 Button { showSettings = true } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "gearshape.fill").font(.system(size: 13))
-                        Text("设置").font(.system(size: 11, weight: .medium))
+                        Image(systemName: "gearshape.fill").pdFont(13)
+                        Text("设置").pdFont(11, weight: .medium)
                     }
                 }
                 .buttonStyle(CardButton(fillWidth: false, height: height))
@@ -141,9 +144,9 @@ struct CockpitView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: layout.editing ? "checkmark.circle.fill" : "square.grid.2x2")
-                            .font(.system(size: 13))
+                            .pdFont(13)
                         Text(layout.editing ? "完成" : "布局")
-                            .font(.system(size: 11, weight: .medium))
+                            .pdFont(11, weight: .medium)
                     }
                 }
                 .buttonStyle(CardButton(active: layout.editing, accent: Theme.orange, fillWidth: false, height: height))
@@ -199,10 +202,10 @@ struct CockpitView: View {
                     Circle().fill(Theme.green).frame(width: 7, height: 7)
                         .glow(Theme.green, radius: 3)
                     Text(ctrl.savedHostForUI)
-                        .font(.system(size: 11, design: .monospaced))
+                        .pdFont(11, design: .monospaced)
                         .foregroundColor(Theme.green)
                     Text(String(format: "%.0fHz", s.hz))
-                        .font(.system(size: 10, design: .monospaced))
+                        .pdFont(10, design: .monospaced)
                         .foregroundColor(Theme.textFaint)
                 }
             }
@@ -219,11 +222,11 @@ struct CockpitView: View {
                     if s.link == .connecting { ProgressView().scaleEffect(0.6).tint(Theme.cyan) }
                     else {
                         Image(systemName: !discovery.found.isEmpty ? "wifi" : "wifi.slash")
-                            .font(.system(size: 12))
+                            .pdFont(12)
                             .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                     }
                     Text(s.link == .connecting ? "连接中…" : (!discovery.found.isEmpty ? "一键连接" : "连接"))
-                        .font(.system(size: 11, weight: .medium))
+                        .pdFont(11, weight: .medium)
                         .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                 }
             }
@@ -276,7 +279,7 @@ struct CockpitView: View {
     private var presetNoteRow: some View {
         if layout.editing && !presetNote.isEmpty {
             Text(presetNote)
-                .font(.system(size: 12, weight: .medium))
+                .pdFont(12, weight: .medium)
                 .foregroundColor(Theme.orange)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
@@ -299,7 +302,7 @@ struct CockpitView: View {
         HStack(spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
+                    Text("添加：").pdFont(12).foregroundColor(Theme.orange)
                     libraryButton("按键", .button, nil)
                     libraryButton("触摸板", .pad, .look)
                     libraryButton("摇杆", .stick, .look)
@@ -338,7 +341,7 @@ struct CockpitView: View {
                 } label: { Label("撤销上一次改动", systemImage: "arrow.uturn.backward") }
                     .disabled(!layout.canUndo(mode: s.mode))
             } label: {
-                Image(systemName: "ellipsis.circle").font(.system(size: 15))
+                Image(systemName: "ellipsis.circle").pdFont(15)
             }
             .buttonStyle(CardButton(fillWidth: false, height: 30))
             .frame(width: 40)
@@ -388,7 +391,7 @@ struct CockpitView: View {
                 HStack(spacing: 8) {
                     Image(systemName: !discovery.found.isEmpty ? "wifi" : "exclamationmark.triangle.fill")
                     Text(!discovery.found.isEmpty ? "点此连接电脑 \(discovery.found.first!.ip)" : "未连接电脑（先在电脑启动 PalmDeck）")
-                        .font(.system(size: 12, weight: .medium))
+                        .pdFont(12, weight: .medium)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 4)
@@ -415,7 +418,7 @@ struct CardButton: ButtonStyle {
         let pressed = configuration.isPressed
         let fill = (active || pressed) ? accent : Theme.panel
         let base = configuration.label
-            .font(.system(size: 12, weight: .semibold))
+            .pdFont(12, weight: .semibold)
             .foregroundColor(active ? Theme.onAccent : (pressed ? accent : Theme.textDim))
             .lineLimit(2)
             .minimumScaleFactor(0.5)
@@ -471,7 +474,7 @@ struct LibrarySheet: View {
                     Section {
                         Label("\(kind.label)是只读显示，不绑定轴或按键：弧表/杆位条读的是本机发出去的杆位。",
                               systemImage: "gauge")
-                            .font(.system(size: 12))
+                            .pdFont(12)
                             .foregroundColor(Theme.textDim)
                     }
                 } else if kind.bindingOptions.isEmpty {
@@ -480,7 +483,7 @@ struct LibrarySheet: View {
                     Section {
                         Label("「\(kind.label)」\(kind.fixedBindingNote)，这里不用选绑定。",
                               systemImage: "pin")
-                            .font(.system(size: 12))
+                            .pdFont(12)
                             .foregroundColor(Theme.textDim)
                     }
                 } else {
@@ -495,7 +498,7 @@ struct LibrarySheet: View {
                         Section {
                             Label("第 11–16 号键只在飞行模式里存在（电脑侧那只 vJoy 手柄）。开车与手柄模式用的是 Xbox 虚拟手柄，只有 A/B/X/Y、LB/RB、视图/菜单、L3/R3 十个键，选它不会生效。",
                                   systemImage: "exclamationmark.triangle")
-                                .font(.system(size: 12))
+                                .pdFont(12)
                                 .foregroundColor(Theme.amber)
                         }
                     }
@@ -515,6 +518,8 @@ struct LibrarySheet: View {
                 binding = newKind.bindingOptions.first ?? newKind.defaultBinding
             }
         }
+        // 表单可滚动，放开到无障碍档（覆盖座舱 chrome 的收紧）。
+        .palmDynamicType()
     }
 }
 
@@ -560,7 +565,7 @@ struct CockpitTutorialView: View {
                     dismiss()
                 } label: {
                     Text("开始使用")
-                        .font(.system(size: 18, weight: .bold))
+                        .pdFont(18, weight: .bold)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(PrimaryButton())
@@ -568,19 +573,20 @@ struct CockpitTutorialView: View {
             }
         }
         .palmAppearance()
+        .palmDynamicType()
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 24)).foregroundColor(Theme.cyan)
+                    .pdFont(24).foregroundColor(Theme.cyan)
                     .rotationEffect(.degrees(-45))
                 Text("PalmDeck 座舱速览")
-                    .font(.system(size: 24, weight: .heavy)).foregroundColor(Theme.text)
+                    .pdFont(24, weight: .heavy).foregroundColor(Theme.text)
             }
             Text("60 秒看懂每个区域，第一次上手不抓瞎")
-                .font(.system(size: 13)).foregroundColor(Theme.textDim)
+                .pdFont(13).foregroundColor(Theme.textDim)
         }
         .padding(.bottom, 4)
     }
@@ -588,12 +594,12 @@ struct CockpitTutorialView: View {
     private func section(icon: String, title: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 16)).foregroundColor(Theme.cyan)
+                .pdFont(16).foregroundColor(Theme.cyan)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(Theme.cyan.opacity(0.15)))
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
-                Text(text).font(.system(size: 12)).foregroundColor(Theme.textDim)
+                Text(title).pdFont(15, weight: .semibold).foregroundColor(Theme.text)
+                Text(text).pdFont(12).foregroundColor(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

@@ -106,7 +106,7 @@ struct AttitudeBall: View {
                             var deg = Int(d.rounded()) % 360
                             if deg < 0 { deg += 360 }
                             let label = deg == 0 ? "N" : deg == 90 ? "E" : deg == 180 ? "S" : deg == 270 ? "W" : "\(deg)"
-                            ctx.draw(Text(label).font(.system(size: 8, weight: .bold, design: .monospaced))
+                            ctx.draw(Text(label).font(.pd(8, weight: .bold, design: .monospaced))
                                         .foregroundColor(Theme.instrLine.opacity(0.85)),
                                      at: CGPoint(x: x, y: tapeY + 20))
                         }
@@ -127,6 +127,10 @@ struct AttitudeBall: View {
             }
             .frame(width: d, height: d)
             .position(x: geo.size.width/2, y: geo.size.height/2)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("姿态球（只读）")
+            .accessibilityValue(String(format: "横滚 %+.0f°，俯仰 %+.0f°，航向 %+.0f°",
+                                       s.smRoll * 90, s.smPitch * 90, s.smYaw * 180))
         }
     }
 }

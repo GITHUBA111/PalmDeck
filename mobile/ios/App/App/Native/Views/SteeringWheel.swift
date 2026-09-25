@@ -130,5 +130,8 @@ struct SteeringWheel: View {
             // 外部改值（如弹簧回中）时同步角度
             if !dragging { angleDeg = v * maxDeg }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("方向盘")
+        .accessibilityValue(String(format: "%.0f°，满舵 %.0f°", angleDeg, maxDeg))
     }
 }

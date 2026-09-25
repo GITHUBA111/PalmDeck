@@ -43,6 +43,9 @@ struct ArcGauge: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(String(format: "%.0f%%%@", max(0, min(1, value)) * 100, unit.isEmpty ? "" : " \(unit)"))
     }
 }
 
@@ -69,12 +72,15 @@ struct BarGauge: View {
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
             .overlay(alignment: .top) {
                 Text(title)
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .pdFont(7, weight: .bold, design: .monospaced)
                     .foregroundColor(Theme.textFaint)
                     .lineLimit(1).minimumScaleFactor(0.5)
                     .padding(.top, 1)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(String(format: "%+.0f%%", max(-1, min(1, value)) * 100))
     }
 }
 

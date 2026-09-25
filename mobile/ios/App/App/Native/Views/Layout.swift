@@ -418,13 +418,13 @@ struct WidgetCanvas: View {
         if store.widgets(mode: mode).isEmpty {
             VStack(spacing: 7) {
                 Image(systemName: "square.dashed")
-                    .font(.system(size: 30, weight: .light))
+                    .pdFont(30, weight: .light)
                 Text("画布是空的")
-                    .font(.system(size: 13, weight: .semibold))
+                    .pdFont(13, weight: .semibold)
                 Text(store.editing
                      ? "点上方「添加：」放一个组件；拖动移动、拖右下角缩放、✕ 删除"
                      : "点顶栏「布局」开始添加，或进「⋯」恢复默认布局")
-                    .font(.system(size: 11))
+                    .pdFont(11)
                     .multilineTextAlignment(.center)
             }
             .foregroundColor(Theme.textFaint)
@@ -522,11 +522,12 @@ struct EditableWidget: View {
                     store.remove(id: widget.id, mode: mode)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .pdFont(11, weight: .bold)
                         .foregroundColor(Theme.onAccent)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Theme.red))
                 }
+                .accessibilityLabel("删除组件")
                 .offset(x: -pw / 2 + 12, y: -ph / 2 + 12)
                 // 重命名：名称留给用户（按键就是个序号，含义由用户在游戏里绑）
                 Button {
@@ -534,11 +535,12 @@ struct EditableWidget: View {
                     renaming = true
                 } label: {
                     Image(systemName: "character")
-                        .font(.system(size: 11, weight: .bold))
+                        .pdFont(11, weight: .bold)
                         .foregroundColor(Theme.onAccent)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Theme.orange))
                 }
+                .accessibilityLabel("重命名组件")
                 .offset(x: pw / 2 - 12, y: -ph / 2 + 12)
             }
         }
