@@ -2,6 +2,7 @@ name: build-windows-exe
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     tags:
       - "v*"
@@ -10,7 +11,24 @@ permissions:
   contents: write
 
 jobs:
+  # 先跑测试再打包：测试红了就不出 exe（`build` 里 needs: test）。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 测试零第三方依赖：pyvjoy / vgamepad / evdev / pystray / PIL / qrcode / zeroconf
+      # 全是函数内惰性 import，import 阶段碰不到。需要 swiftc（iOS 纯逻辑）或
+      # sips（亮度）的用例会自动 SkipTest —— 所以这里不装任何包。
+      - name: 跑测试
+        run: python -m unittest discover -s tests -q
+
   build:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,25 +40,152 @@ jobs:
       - name: 安装依赖
         run: pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
 
-      - name: 打包
+      # 版本号只有一处真相源（updater.APP_VERSION）：exe 的文件属性、安装包的文件名、
+      # Release 的说明全从它来。下面几步都拿这个 output 去对账。
+      - name: 读版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $v = python -c "import sys; sys.path.insert(0, '.'); from updater import APP_VERSION; print(APP_VERSION)"
+          if (-not $v) { throw "取不到 updater.APP_VERSION" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "版本：$v"
+
+      # tag 与 APP_VERSION 必须一致。发布用的是 tag_name，而用户机器上「检查更新」
+      # 比的是 exe 自带的 APP_VERSION（updater.check_update_status）。两者错位时最坏的
+      # 结果是**静默**的：exe 自报 4.0.0、Release 标签却是 v0.3.3，于是所有人算出来
+      # 「最新版没我新」→ 永远显示「已是最新」→ 再也不会有人收到更新，而没人看得出来。
+      # 所以宁可在这里把发版拦下来。
+      - name: 校验 tag 与 APP_VERSION 一致
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v', 'V')
+          $v = "${{ steps.ver.outputs.version }}"
+          if ($tag -ne $v) {
+            throw "tag '${{ github.ref_name }}' 与 updater.APP_VERSION '$v' 不一致。自更新是拿 Release 的 tag 与 APP_VERSION 比的，不一致会让用户静默收不到更新。请改成 v$v，或先把 APP_VERSION 提升到 $tag。"
+          }
+          Write-Host "tag 与 APP_VERSION 一致：v$v"
+
+      - name: 打包 exe
         run: pyinstaller --clean --noconfirm packaging/PalmDeck.spec
+
+      # 图标/版本资源是本机（macOS）验不了的部分 —— 只能在这里看。
+      - name: 断言 exe 的图标与版本属性
+        shell: pwsh
+        run: |
+          $info = (Get-Item dist\PalmDeck.exe).VersionInfo
+          Write-Host "ProductName=$($info.ProductName)"
+          Write-Host "FileDescription=$($info.FileDescription)"
+          Write-Host "FileVersion=$($info.FileVersion) / ProductVersion=$($info.ProductVersion)"
+          if ($info.ProductVersion -ne "${{ steps.ver.outputs.version }}") {
+            throw "exe 属性里的版本是 '$($info.ProductVersion)'，期望 '${{ steps.ver.outputs.version }}' —— 版本资源配置没生效"
+          }
+          if (-not $info.ProductName) { throw "文件属性里 ProductName 是空的" }
+          if (-not $info.FileDescription) { throw "文件属性里 FileDescription 是空的" }
+
+      - name: 找 Inno Setup（镜像自带，缺了就装）
+        id: iscc
+        shell: pwsh
+        run: |
+          $cand = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $cand) {
+            choco install innosetup -y --no-progress
+            $cand = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $cand)) { throw "装完 Inno Setup 还是找不到 ISCC.exe" }
+          "iscc=$cand" >> $env:GITHUB_OUTPUT
+          Write-Host "ISCC：$cand"
+
+      - name: 编译安装包
+        shell: pwsh
+        run: |
+          & "${{ steps.iscc.outputs.iscc }}" "/dAppVersion=${{ steps.ver.outputs.version }}" "packaging\PalmDeck.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 编译失败（退出码 $LASTEXITCODE）" }
+          $setup = Get-ChildItem dist\PalmDeck-Setup-*.exe -ErrorAction SilentlyContinue |
+                   Select-Object -First 1
+          if (-not $setup) { throw "没生成 dist\PalmDeck-Setup-*.exe" }
+          Write-Host "安装包：$($setup.Name)（$([math]::Round($setup.Length / 1MB, 1)) MB）"
+
+      # 真端到端：静默装 → 起进程 → 控制台接口有响应 → 静默卸载 → 自启项没了、配置还在。
+      # 这条一次性挡住三类问题：打包缺模块、装错目录、卸载留下失效自启项（§1 里那条老缺陷）。
+      - name: 静默安装冒烟测试
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $setup = (Get-ChildItem dist\PalmDeck-Setup-*.exe | Select-Object -First 1).FullName
+          $dir  = Join-Path $env:LOCALAPPDATA "Programs\PalmDeck"
+          $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+          $cfgDir = Join-Path $env:APPDATA "PalmDeck"
+
+          Write-Host "== 静默安装（带 autostart 任务，好顺带验注册表那条）=="
+          Start-Process -FilePath $setup -Wait -ArgumentList `
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS", "/TASKS=autostart"
+          if (-not (Test-Path "$dir\PalmDeck.exe")) { throw "装完了 $dir 里没有 PalmDeck.exe" }
+          $run = (Get-ItemProperty -Path $runKey -Name PalmDeck -ErrorAction SilentlyContinue).PalmDeck
+          if (-not $run) { throw "勾了自启，但 HKCU Run 里没有 PalmDeck —— .iss 的 [Registry] 没生效" }
+          Write-Host "Run 项：$run"
+
+          Write-Host "== 启动（无托盘，不查更新）=="
+          $env:PALMDECK_NO_UPDATE = "1"
+          $env:PALMDECK_NO_TRAY = "1"
+          $proc = Start-Process -FilePath "$dir\PalmDeck.exe" -PassThru
+          $ok = $false
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            if ($proc.HasExited) { throw "PalmDeck.exe 自己退出了（退出码 $($proc.ExitCode)）—— 多半是缺模块" }
+            try {
+              $r = Invoke-WebRequest "http://127.0.0.1:8080/api/status" -UseBasicParsing -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { $ok = $true; Write-Host "控制台响应：$($r.Content)"; break }
+            } catch { }
+          }
+          if (-not $ok) {
+            Write-Host "---- 日志尾部 ----"
+            Get-Content (Join-Path $cfgDir "palmdeck.log") -Tail 40 -ErrorAction SilentlyContinue
+            throw "30 秒内 http://127.0.0.1:8080/api/status 没响应"
+          }
+          Stop-Process -Id $proc.Id -Force
+          Start-Sleep -Seconds 2
+
+          Write-Host "== 静默卸载 =="
+          $unins = Join-Path $dir "unins000.exe"
+          if (-not (Test-Path $unins)) { throw "没有 unins000.exe —— 这不是个正经安装" }
+          Start-Process -FilePath $unins -Wait -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+          $gone = $false
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            if (-not (Test-Path "$dir\PalmDeck.exe")) { $gone = $true; break }
+          }
+          if (-not $gone) { throw "卸载完 $dir\PalmDeck.exe 还在" }
+          $run = (Get-ItemProperty -Path $runKey -Name PalmDeck -ErrorAction SilentlyContinue).PalmDeck
+          if ($run) { throw "卸载后 HKCU Run 里还留着 PalmDeck —— 开机就会报错（uninsdeletevalue 没生效）" }
+          if (-not (Test-Path $cfgDir)) { throw "%APPDATA%\PalmDeck 被卸载删了 —— 布局/配置应该保留" }
+          Write-Host "冒烟全绿：装得上、起得来、接口有响应、卸得干净且不丢配置"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: PalmDeck-Windows-exe
-          path: dist/PalmDeck.exe
+          name: PalmDeck-Windows
+          path: |
+            dist/PalmDeck.exe
+            dist/PalmDeck-Setup-*.exe
           if-no-files-found: error
 
-      # 仅在打 tag（发版）时创建 GitHub Release，exe 走
-      # https://github.com/GITHUBA111/PalmDeck/releases/latest/download/PalmDeck.exe
-      # 供 Windows 端自动更新下载
+      # 仅在打 tag（发版）时创建 GitHub Release。
+      # exe 走 https://github.com/GITHUBA111/PalmDeck/releases/latest/download/PalmDeck.exe
+      # 供 Windows 端自动更新下载 —— **这个资产名不能改**（updater.py 里写死了）。
+      # 安装包是**额外**给首次安装用的，不参与自动更新。
       - name: 发布 Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: dist/PalmDeck.exe
+          files: |
+            dist/PalmDeck.exe
+            dist/PalmDeck-Setup-*.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

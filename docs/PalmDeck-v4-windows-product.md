@@ -169,16 +169,24 @@ Windows 专属项（`sc query` / `Get-NetFirewallRule` / 提权）**本机无法
 
 ## 6. 边界与不做
 
-- **不做安装包**（Inno Setup / MSI）。要做，得在 Windows 上迭代签名与 UAC 文案，本机验证不了。→ P2。
+- ~~**不做安装包**（Inno Setup / MSI）~~ → **已推翻并落地**：
+  `docs/PalmDeck-v4-windows-installer.md`（Inno Setup 6，用户目录安装、免 UAC、中文向导、
+  卸载删自启项但保留 `%APPDATA%\PalmDeck`）。当初写「本机验证不了」是对的 ——
+  所以验证搬到 **CI 的 windows-latest（静默装 → 启动 → 探活 → 卸载的冒烟测试）**
+  加 G4 真机；签名仍然是「不做」（见下）。
 - **不静默安装驱动**。vJoy / ViGEmBus 是内核驱动，必须用户点「安装」+ 重启，没法塞进 exe。
   doctor 只做「检测 + 打开下载页」。
 - **不给现成文件改名**（`bridge.py` / `start.py` / `hotas.py` / `web/host.html` 全部保留原名）。
   名字统一只在面向用户的字符串里做 —— 改文件名要动 spec、`pack_windows.FILES`、`updater`、
   一堆测试，风险远大于收益。
 - **不做托盘里的设置窗口**。设置仍然只在控制台（浏览器）里做，避免两套 UI 分家。
-- **不在 Windows CI 里跑测试**。`build-windows.yml` 目前只负责打包 exe；加一步
-  `python -m unittest` 得先在 windows-latest 上真验一遍（有几个测试读 Swift 源码、
-  起本地端口、`sc query`），没验过就加等于以后 CI 常年红。→ 待办。
+- **不在 Windows CI 里跑完整测试**（当初的顾虑成立：有几个测试要 Swift 编译器、
+  `sips`、`ast` 读 Swift 源码，windows-latest 上跑不了）。现在的做法是两条：
+  ① `test` job 在 **ubuntu-latest** 上跑全套（`needs: test` 卡住发版）；
+  ② `build` job 在 **windows-latest** 上只跑**能在那台上真跑的那部分** ——
+  打包 → 断言 exe 的版本资源 → 编译安装包 → 静默装 → `PALMDECK_NO_TRAY=1` 起进程 →
+  轮询 `/api/status` → 卸载 → 断言自启项没了、配置还在（见 `tests/test_ci.py`）。
+  「Windows 上从没验过」这个缺口因此缩到**只剩真机 / 真驱动 / 真游戏**（G4 清单）。
 - **不碰 iOS 侧**。
 
 ## 7. 工作量

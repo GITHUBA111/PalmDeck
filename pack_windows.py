@@ -28,6 +28,14 @@ FILES = [
     "README.md",
     "使用说明.txt",
     os.path.join("packaging", "PalmDeck.spec"),
+    # 打安装包用（见 docs/PalmDeck-v4-windows-installer.md）。缺了这些，
+    # 拿到源码 zip 的人在 Windows 上只能打出裸 exe，装不了也卸不干净。
+    os.path.join("packaging", "PalmDeck.iss"),
+    os.path.join("packaging", "ChineseSimplified.isl"),
+    os.path.join("packaging", "PalmDeck.ico"),
+    os.path.join("packaging", "build_installer.bat"),
+    os.path.join("packaging", "make_icon.py"),
+    os.path.join("packaging", "version_info.py"),
 ]
 DIRS = ["web", "vendor"]
 

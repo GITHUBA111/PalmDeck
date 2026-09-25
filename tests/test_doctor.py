@@ -54,8 +54,8 @@ class TestDoctorCore(unittest.TestCase):
         for cid in ("driver.vjoy", "driver.vigembus", "firewall"):
             self.assertEqual(kinds[cid], "info", f"{cid} 在非 Windows 上应当是 info")
         self.assertNotIn("error", [
-            c["id"] for c in rep["checks"] if c["level"] == "error"
-        ], "macOS 上不该出现故障项（除了没有虚拟设备的 backend）")
+            c["level"] for c in rep["checks"]
+        ], "macOS 上不该出现故障项（report() 不传 backend 时后端应为 info）")
 
     def test_backend_error_has_guidance(self):
         rep = doctor.report({"backend": "none", "device": ""})
@@ -204,7 +204,8 @@ class TestTrayAndPackaging(unittest.TestCase):
         self.assertIn('f"PalmDeck v{APP_VERSION}', text)
         self.assertIn('"自检…"', text)
         self.assertIn("def notify_doctor(", text)
-        self.assertIn("http_url(\"#doctor\")", text)
+        # 自检入口与「打开控制台」走同一条路（应用窗口模式），#doctor 片段不能丢
+        self.assertIn('open_console("#doctor")', text)
 
     def test_doctor_is_packaged(self):
         import pack_windows

@@ -18,25 +18,46 @@ git push -u origin main
 
 > 已经写好了 `.gitignore`，`node_modules` / `Pods` / `.DS_Store` / 打包中间产物都不会被传上去。
 
-## 二、云端打包 exe（无需 Windows 机器）
+## 二、云端打包（无需 Windows 机器）
 
 工作流在 `.github/workflows/build-windows.yml`，已写好：
 
 1. 打开仓库 → **Actions** 标签
 2. 左侧选 **build-windows-exe** → 右侧 **Run workflow**（`workflow_dispatch` 已开启，直接点绿按钮）
-3. 等 1–2 分钟，运行完成 → 页面底部 **Artifacts** 下载 `PalmDeck-Windows-exe`
-4. 解压得到 **`PalmDeck.exe`**（已内置 Python + 全部依赖，目标电脑免装 Python）
+3. 等十几分钟（要跑完整测试、打 exe、编译安装包，还会真装一遍再卸掉），
+   运行完成 → 页面底部 **Artifacts** 下载 `PalmDeck-Windows`（里面有**两个**文件）
+4. 解压得到：
+   - **`PalmDeck-Setup-<版本>.exe`** —— 给玩家用的安装包（中文向导、开始菜单、卸载项、可选开机自启）
+   - **`PalmDeck.exe`** —— 免安装单文件版（两者都能用；exe 已内置 Python + 全部依赖）
 
-> 打 tag（如 `v1.0`）推送也会自动触发同样打包。
+> 打 tag（如 `v1.0`）推送也会自动触发同样打包，并自动创建 Release（两个文件都会附上）。
+> **tag 必须等于 `updater.APP_VERSION`**（例如 APP_VERSION = `4.0.0` 就必须打 `v4.0.0`）。
+> 自更新比的是「Release 的 tag」和「exe 里的 APP_VERSION」：tag 打成 `v0.3.3` 却装着
+> 自报 `4.0.0` 的 exe，所有用户都会被判成「已是最新」——**静默地永远收不到更新**。
+> 工作流里有一步会拦（`校验 tag 与 APP_VERSION 一致`），不一致直接失败，宁可不发版。
+> **`PalmDeck.exe` 这个资产名不能改**：Windows 端的自动更新直链写死了它
+> （`updater.py` 的 `GITHUB_EXE`）；安装包是**额外**给首次安装用的，不参与自动更新。
+>
+> 工作流里 `test` job 先跑（ubuntu-latest，不需要 Windows），**测试红了不会出包**。
 
-## 三、exe 使用（目标电脑）
+## 三、使用（目标电脑）
 
-1. 装一次 **vJoy**（飞行模拟用虚拟摇杆）+ **ViGEmBus**（开车/普通游戏用虚拟手柄），重启
-2. 双击 `PalmDeck.exe`
-3. 手机同一 Wi-Fi，App 自动发现（Bonjour）或手动填 IP
-4. 游戏里把 vJoy 设备绑定一次
+装一次 **vJoy**（飞行模拟用虚拟摇杆）+ **ViGEmBus**（开车/普通游戏用虚拟手柄），重启。
+
+然后二选一：
+
+- **安装包**：双击 `PalmDeck-Setup-<版本>.exe` →（SmartScreen 拦就「更多信息 → 仍要运行」）
+  → 装到 `%LocalAppData%\Programs\PalmDeck`，免 UAC、中文向导。
+  卸载在「设置 → 应用」里，会删掉自启项但保留 `%APPDATA%\PalmDeck`（布局不丢）。
+- **免安装**：直接双击 `PalmDeck.exe`。
+
+之后的步骤一样：
+1. 右下角托盘出现 PalmDeck 图标，控制台独立窗口自动弹出
+2. 手机同一 Wi-Fi，App 自动发现（Bonjour）或手动填 IP
+3. 游戏里把 vJoy / Xbox 设备绑定一次
 
 > 唯一绕不开的就是 vJoy/ViGEmBus 内核驱动，必须装一次 + 重启，无法内置进 exe。
+> 装完缺什么，控制台「自检」页会逐条说清楚（也能直接开 `http://127.0.0.1:8080/api/doctor`）。
 
 ## 备注
 

@@ -10,16 +10,20 @@
 | `PalmDeck-v3-cockpit-design.review.md` | 座舱设计的审查报告（13 条 open issue） | 配套 — 待逐条修订 |
 | `PalmDeck-v4-game-profiles.md` | **方案（待评审）**：游戏预设 —— 电脑侧轴映射表 + App 侧手感 + 布局，一键切游戏 | G0–G2 已落地；G3 降级；G4 待真机验收 |
 | `PalmDeck-v4-binding-filter.md` | **组件库绑定按类型收敛**：按键只列按键、滑条只列轴，固定通道组件不再给假下拉 | 已落地 |
+| `PalmDeck-v4-rc-mode2.md` | **遥控器双杆（Mode 2）**：新增「总距/尾桨杆」控件（X=yaw、Y=throttle 保持）+ 官方内置布局；协议/电脑侧不动 | 已落地 |
 | `PalmDeck-v4-accessibility.md` | **动态字号 + 无障碍标签**（走查第 5 条）：`.pdFont` 随系统字号、自绘控件补 VoiceOver | 已落地 |
 | `PalmDeck-v4-connect-banner-stable.md` | **连接提示横幅不掉高**：点按「连接电脑」不再把画布组件“顶”得重排（走查反馈） | 已落地 |
 | `PalmDeck-v4-instant-recenter.md` | **脚舵 / 视角 松手立即回正**：滑条与视角板瞬回 0（走查反馈） | 已落地 |
 | `PalmDeck-v4-windows-product.md` | **Windows 端产品化**：新增 `palmdeck_doctor.py` 唯一自检真相源（驱动/防火墙/端口/依赖），控制台「自检」页 + 一键修复，删孤儿 `open_firewall.bat` | 已落地 |
+| `windows-acceptance-checklist.md` | **Windows 真机验收清单（G4）**：vJoy/ViGEmBus → 自检全绿 → 虚拟设备 → 真 iPhone 配对 → 游戏内绑定（WARDOGS/ETS2）→ failsafe → 打包运维，逐条留证据 | **待执行** |
+| `PalmDeck-v4-windows-installer.md` | **方案**：Windows 端「软件化」—— Inno Setup 安装包（中文向导/开始菜单/卸载/可选自启）+ exe 图标与版本资源 + 控制台独立窗口；**同时保留 portable exe 与原地自替换** | **已落地**（S0–S5 + 托盘图标统一）；真机部分待 G4 |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
 
 ## 关系
 
 - **新功能/改造先写方案**：按 `PalmDeck-proposal-template.md` 落成文档，评审通过再动代码。
   当前待评审：`PalmDeck-v4-game-profiles.md`（游戏预设，G0–G4 分阶段）。
+  （`PalmDeck-v4-windows-installer.md` 已落地，从等待评审里移出；剩下的验证卡点是 G4 真机。）
 - **`PalmDeck-v4-redesign.md` 为当前总纲**：产品只剩 Windows 常驻服务 + iOS App，
   手机 Web 座舱（`web/index.html`）已删除；服务端 `/` 一律指向控制台 `web/host.html`。
   下文关于 `web/index.html` 的座舱描述仅作历史参考。
@@ -68,7 +72,7 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
   `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现，
   也会拦住无后缀的全局手感键（G1 起手感参数按模式分键）。
-- `Views/`：`Theme`（**浅/深双主题**（`Color.pd(浅,深)` 动态解析 + `AppAppearance` 外观枚举 + `.palmAppearance()` 修饰器）+ **动态字号** `pdFont` / `Font.pd`（`@ScaledMetric`）与 `palmDynamicType()` / `palmCockpitType()` 封顶 + 模拟器 HUD 组件：`CockpitBackdrop` 渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕。仪表专用色（`instr*`/`hud*`）是固定值，不随主题变——姿态球在白底上仍是一块黑表盘）、`CockpitView`（顶栏 + 底部状态条（轴格由 `HudReadout` 按模式给，见交互文档 §12.9））、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`FlightPanel`（只读飞行仪表盘：`ArcGauge`/`BarGauge`/`FlightPanel`）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
+- `Views/`：`Theme`（**只浅色**（深色模式连同 `AppAppearance` / `Color.pd(浅,深)` 已在「只浅色」一轮删除，见 `docs/PalmDeck-v4-light-only.md`）+ **动态字号** `pdFont` / `Font.pd`（`@ScaledMetric`）与 `palmDynamicType()` / `palmCockpitType()` 封顶 + 模拟器 HUD 组件：`CockpitBackdrop` 渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕。仪表专用色（`instr*`/`hud*`）是固定值，不随浅色调色板变——姿态球在白底上仍是一块黑表盘）、`CockpitView`（顶栏 + 底部状态条（轴格由 `HudReadout` 按模式给，见交互文档 §12.9））、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/总距-尾桨杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`FlightPanel`（只读飞行仪表盘：`ArcGauge`/`BarGauge`/`FlightPanel`）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
 v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `GamepadDeck` 已整份删除，
 三个模式共用一块通用组件画布 `WidgetCanvas`；各模式的默认布局 = 一组基本轴模块
@@ -84,7 +88,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 > `docs/PalmDeck-v4-app-interaction.md` §12.6。
 
 ### 组件系统（模块化/乐高式）
-- 8 类组件：方向盘/滑条/触摸板/按键/摇杆/苦力帽/姿态球/仪表盘。**组件库里只有滑条（轴）与按键（vJoy 键）有绑定下拉**，且下拉只列该类型真正会用的项（`WidgetKind.bindingOptions`）；方向盘/触摸板/摇杆/苦力帽/姿态球渲染时走写死通道，弹窗改为一行「固定发…」说明；仪表盘只读（见 `docs/PalmDeck-v4-binding-filter.md`）。
+- 9 类组件：方向盘/滑条/触摸板/按键/摇杆/总距-尾桨杆/苦力帽/姿态球/仪表盘。**组件库里只有滑条（轴）与按键（vJoy 键）有绑定下拉**，且下拉只列该类型真正会用的项（`WidgetKind.bindingOptions`）；方向盘/触摸板/摇杆/总距-尾桨杆/苦力帽/姿态球渲染时走写死通道，弹窗改为一行「固定发…」说明；仪表盘只读（见 `docs/PalmDeck-v4-binding-filter.md`）。
 - 编辑模式：顶栏组件库添加、拖拽移动（**7pt 内吸画布/其它组件的边与中心线并画出对齐线**，且任何方向至少留 40pt 在画布内、拖不丢）、右下角缩放手柄、✕ 删除、`Aa` 重命名；`⋯` 里清空 / 恢复默认 / 撤销；空画布显示「画布是空的」而不再是一块白板；布局按模式持久化（`palmdeck_widgets_v10`），并可「从电脑拉取」/「上传当前模式到电脑」（WS `layouts_get`/`layouts_put`）。
 - **命名快照只有一种：预设**（P1.5 起，原「布局模板」已并进来）。两种形态：**整机**（模式 + 手感 + 有布局就换）与**布局**（只装组件、不碰手感，且只在自己那个模式下出现）。编辑条上的「存为预设」存的是后者，并在编辑条下面给一行回执。见 `docs/PalmDeck-v4-unified-presets.md`。
 
@@ -105,11 +109,14 @@ python3 -m unittest discover -s tests -t .      # 262 项
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
-| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签）；**`TestConnectBanner`**（连接横幅行高锛死、`connecting` 不收起、`live` 才收、动画）；**`TestInstantRecenter`**（脚舵/视角松手瞬回 0、周期杆保留平滑回中、保持轴仍走单极滑条）；**`TestThemeAppearance`**（只浅色：主题色是常量、`Info.plist` 钉 `UIUserInterfaceStyle=Light`、设置里没有「外观 / 深色」、仪表固定深色） |
+| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（分类少而准（「方向盘」不是顶级分类）、段头黑 / 白名单、同一动作同名、搜索索引与界面同字）与 **`TestDiscoverability`**（顶栏等权、预设行尾 `⋯` 菜单、切模式确认、状态条 / 绑定列表说人话）；**`TestBindingOptions`**（组件库绑定按类型收敛：`axes`↔`bindAxis`、`buttons`↔`tapButton`、换类型归第一个、`.sheet(item:)` 预选）；**`TestAccessibility`**（动态字号封顶 / `.pdFont` 接线 / 自绘控件 VoiceOver 标签）；**`TestConnectBanner`**（连接横幅行高锛死、`connecting` 不收起、`live` 才收、动画）；**`TestInstantRecenter`**（脚舵/视角松手瞬回 0、周期杆保留平滑回中、保持轴仍走单极滑条）；**`TestThemeAppearance`**（只浅色：主题色是常量、`Info.plist` 钉 `UIUserInterfaceStyle=Light`、设置里没有「外观 / 深色」、仪表固定深色） |
 | `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）、**P1.5 迁移**（两个老键合并 / 重名加后缀 / 幂等 / 垃圾 JSON）、`hasShaping = false` 不碰手感；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
 | `tests/test_light_only.py` | 「不要再出现任何深色模式」的**全仓扫描**（11 条）：任何 `.swift` 不得再有 `preferredColorScheme` / `colorScheme` / `Color.pd(` / `AppAppearance` / `palmAppearance`；`Info.plist` 钉 Light；**启动页图片必须是浅底**（`sips` 降采样 + 纯 Python 解码算平均亮度，旧黑底图 0.01 / 新浅底 0.74）；网页控制台 `:root` 底与面为浅色、文字为深色、无 `prefers-color-scheme`、旧深色值已清、二维码仍黑模块白底 |
 | `tests/test_doctor.py` | Windows 端**自检**守卫（25 条）：报告结构 / 等级合法 / id 不重、`palmdeck_doctor` **不许 import bridge**（要能单独跑）、防火墙端口只有 `palmdeck_config` 一处真相源、`.bat` 里不许再写 `New-NetFirewallRule`、`bridge` 两路由 + `note_listener` 记录 bind 失败、`host.html` 自检页与 `#doctor` 直达、托盘带版本号 + 「自检…」、`pack_windows.FILES` / `.spec` 覆盖；另含**真 bind 失败**（TEST-NET-1）仍返回不抛、非 Windows 上不报故障 |
+| `tests/test_ci.py` | **发版链路 + 验收清单**守卫（22 条）：`.github/workflows/build-windows.yml` 必须有独立 `test` job 且 `build`（出 exe / 发 Release）`needs: test` —— 测试红了不许发版；`docs/windows-acceptance-checklist.md`（G4）**逐条对着代码核**：真跑一遍 `palmdeck_doctor.checks()` 拿它**实际输出**的 id 与清单点名的对账（`driver.vjoy` / `listener.*` 都是拼出来的，不能用正则搪）、托盘菜单 / failsafe 提示 / 「更新」tab / `/api/doctor` 的引文、止动点百分比由 `Widgets.swift` 的 `detents` 算出、引用的 `§3.6` 真的存在、不许出现编造出来的 exe 子命令；**安装包那半段**同样对账：CI 真编译 `.iss`、真做「静默装 → 起进程 → 探活 → 卸载」冒烟，Release 必须同时传 exe 与安装包，且 `.iss` 的安装目录 / 自启项键名 / 卸载保留配置三件事与 `start.py` / 冒烟脚本一致 |
+| `tests/test_docs.py` | **现状文档守卫**（7 条）：`docs/README.md` / 根 `README.md` / `使用说明.txt` 不得把已删的 API（`AppAppearance` / `Color.pd(` / `FlightDeck` / `telemetry`…）当成还活着 —— 提可以，但符号 ±120 字内必须说明是「删除 / 不再 / 已移除」（历史方案文档不在范围内）；文档枚举的设置分类必须与 `SettingsCategory` **逐项同序**；「N 类组件」必须等于 `WidgetKind` 的 case 数；「`TestX`（N 条）」的 N 必须等于那个类真的有几个 `def test_` |
+| `tests/test_installer.py` | Windows exe 的「软件式」外壳（38 条）：`PalmDeck.spec` 不许把 `icon=` 写回 `None`、`.ico` 真的含 16/32/48/256 且每帧是合法 PNG/DIB、图标源图仍是产品 App 图标；版本资源由 `updater.APP_VERSION` **现场拼**（spec 里不许出现硬编码版本号）、渲染结果跟着版本号走、且必须是 PyInstaller 能 `eval` 的**裸表达式**（不能有 `import`）、文件属性六个字段与 `Translation` 齐全；`packaging/PalmDeck.iss` 的全部约定（装到 `{localappdata}`、免 UAC、中文向导、版本号只能注入、卸载删自启项但保留 `%APPDATA%\PalmDeck`、自启项键名与 `start.py` 逐字一致）、`build_installer.bat` 从 `updater.APP_VERSION` 取版本、`PALMDECK_NO_TRAY` 在 `run_tray()` 之前生效、`open_console()` 优先应用窗口但逐层回退、托盘图标就是产品图标（且 spec 真把它打进包）|
 
 不引入 Xcode unit-test target —— 被测对象全是**纯函数 / 纯状态**，
 手写 target 要同时改 `project.pbxproj` 的 target/scheme/构建设置，

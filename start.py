@@ -143,15 +143,14 @@ def notify_existing() -> bool:
 
 
 def lock_command_loop() -> None:
-    """已有实例监听锁端口：收到 'open' 就打开浏览器控制台。"""
-    import webbrowser
+    """已有实例监听锁端口：收到 'open' 就打开控制台。"""
     while _lock_sock is not None:
         try:
             conn, _ = _lock_sock.accept()
             data = conn.recv(16)
             conn.close()
             if data == b"open":
-                webbrowser.open(http_url())
+                open_console()
         except OSError:
             return
 
@@ -204,8 +203,94 @@ def http_url(frag: str = "") -> str:
         return f"http://127.0.0.1:8080/{frag}"
 
 
+# 能用 `--app=<url>` 打开的浏览器（Edge 优先：Win10/11 自带）。
+# 打开的窗口没有地址栏 / 标签栏 / 后退键，观感接近原生程序 —— 这就是 O3-lite。
+_APP_MODE_BROWSERS = ("msedge.exe", "chrome.exe")
+_APP_PATHS_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
+# 注册表被精简 / App Paths 缺失时的兜底位置（相对各环境变量）
+_BROWSER_FALLBACKS = (
+    ("ProgramFiles(x86)", r"Microsoft\Edge\Application\msedge.exe"),
+    ("ProgramFiles", r"Microsoft\Edge\Application\msedge.exe"),
+    ("ProgramFiles", r"Google\Chrome\Application\chrome.exe"),
+    ("ProgramFiles(x86)", r"Google\Chrome\Application\chrome.exe"),
+    ("LOCALAPPDATA", r"Google\Chrome\Application\chrome.exe"),
+)
+
+
+def _browser_exe() -> "str | None":
+    """找一个能用应用窗口模式打开的浏览器；找不到返回 None（退回默认浏览器）。"""
+    if os.name != "nt":
+        return None
+    # 1) App Paths：不管装在哪儿都能查到（微软官方推荐的发现方式）
+    try:
+        import winreg
+        for name in _APP_MODE_BROWSERS:
+            for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                try:
+                    with winreg.OpenKey(hive, f"{_APP_PATHS_KEY}\\{name}") as k:
+                        path, _ = winreg.QueryValueEx(k, None)
+                    if path and os.path.isfile(path):
+                        return path
+                except OSError:
+                    continue
+    except Exception:
+        pass
+    # 2) 常见安装位置
+    for env, tail in _BROWSER_FALLBACKS:
+        base = os.environ.get(env)
+        if base:
+            path = os.path.join(base, tail)
+            if os.path.isfile(path):
+                return path
+    # 3) PATH 里能找到也行
+    import shutil
+    for name in _APP_MODE_BROWSERS:
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def open_console(frag: str = "") -> None:
+    """打开网页控制台：优先 Edge/Chrome 的**应用窗口**（无地址栏），否则用默认浏览器。
+
+    绝不让「没装 Edge」变成「控制台打不开」—— 所以每一层失败都往下退。
+    """
+    url = http_url(frag)
+    exe = _browser_exe()
+    if exe:
+        try:
+            # 别用 webbrowser：它可能当成普通标签页打开，也拿不到 --app
+            subprocess.Popen([exe, f"--app={url}"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        except Exception as e:
+            log(f"应用窗口打开失败（{e}），改用默认浏览器")
+    import webbrowser
+    webbrowser.open(url)
+
+
+def _product_icon_path() -> str:
+    """打包后图标在 sys._MEIPASS，源码运行在仓库里 —— 相对路径两边一样。"""
+    base = getattr(sys, "_MEIPASS", None) or HERE
+    return os.path.join(base, "packaging", "PalmDeck.ico")
+
+
 def make_icon_image():
-    """用 PIL 画一个方向盘图标（无外部图片依赖）。"""
+    """托盘图标：优先用**产品图标**（与 exe / 手机同一个），取不到才退回自绘方向盘。
+
+    以前托盘是 PIL 画的一个青色方向盘，跟 exe 图标不是同一个视觉 ——
+    同一台电脑上出现两个 logo，正是「不像一个软件」的症状之一。
+    自绘这条路保留着：源码目录里没生成 .ico 时也不至于托盘空白。
+    """
+    try:
+        from PIL import Image
+        path = _product_icon_path()
+        if os.path.isfile(path):
+            # .ico 里最大那帧是 256，直接缩到托盘尺寸
+            return Image.open(path).convert("RGBA").resize((64, 64), Image.LANCZOS)
+    except Exception as e:
+        log(f"产品图标不可用（{e}），托盘退回自绘图标")
     from PIL import Image, ImageDraw
     size = 64
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -265,13 +350,11 @@ def run_tray() -> None:
         run_headless()
         return
 
-    def open_console(icon, item):  # noqa: ANN001
-        import webbrowser
-        webbrowser.open(http_url())
+    def open_console_item(icon, item):  # noqa: ANN001
+        open_console()
 
     def open_doctor(icon, item):  # noqa: ANN001
-        import webbrowser
-        webbrowser.open(http_url("#doctor"))
+        open_console("#doctor")
 
     def open_log(icon, item):  # noqa: ANN001
         p = os.path.join(appdata_dir(), "PalmDeck", "palmdeck.log")
@@ -302,7 +385,7 @@ def run_tray() -> None:
         icon.stop()
 
     menu = pystray.Menu(
-        pystray.MenuItem("打开控制台", open_console, default=True),
+        pystray.MenuItem("打开控制台", open_console_item, default=True),
         pystray.MenuItem("自检…", open_doctor),
         pystray.MenuItem("检查更新", check_update_manual),
         pystray.MenuItem("打开日志", open_log),
@@ -353,7 +436,12 @@ def main() -> None:
     threading.Thread(target=start_bridge, daemon=True).start()
     threading.Thread(target=lock_command_loop, daemon=True).start()
 
-    # 4. 托盘常驻
+    # 4. 托盘常驻。CI / 无人值守可用 PALMDECK_NO_TRAY=1 跳过（与 PALMDECK_NO_UPDATE 同款式）：
+    # 没这个开关，「装完能启动吗」在自动化里没法验 —— 托盘会让冒烟测试飘。
+    if os.environ.get("PALMDECK_NO_TRAY"):
+        log("PALMDECK_NO_TRAY 已设：不启动托盘，无界面运行")
+        run_headless()
+        return
     run_tray()
 
 
