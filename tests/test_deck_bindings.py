@@ -1177,3 +1177,52 @@ class TestConnectBanner(unittest.TestCase):
                       "连接中再点会发第二次 connect")
         self.assertIn(".allowsHitTesting(!connecting)", self.c,
                       "连接中要挡住点按（但别用 .disabled，会把胶囊压暗）")
+
+
+class TestInstantRecenter(unittest.TestCase):
+    """脚舵（yaw 滑条）与视角板（LookPad）松手必须**立即**回正（走查反馈）。
+
+    历史坑：
+    - `BipolarSlider.onEnded` 只写了 `if abs(value) <= 0.08 { value = 0 }` —— 满舵松手
+      **停在原地**，而文档 §4.2 承诺「脚舵松手回中」，文案与行为分家。
+    - `LookPad` 用 60Hz 指数回中（`returnSpeed = 3.0`，k≈0.05/帧），半衰 ~0.23s、
+      尾巴 ~1.5s，很黏。
+
+    本轮：两个都改成 onEnded 直接归零。方案 `docs/PalmDeck-v4-instant-recenter.md`。
+    """
+
+    def setUp(self):
+        self.c = _ios("Views", "Controls.swift")
+        self.bipolar = self.c.split("struct BipolarSlider", 1)[1] \
+                              .split("/// 单极水平滑条", 1)[0]
+        self.look = self.c.split("struct LookPad", 1)[1]
+        self.stick = self.c.split("struct StickControl", 1)[1] \
+                            .split("/// 双极水平滑条", 1)[0]
+
+    def test_rudder_slider_returns_to_zero(self):
+        on_end = self.bipolar.split(".onEnded", 1)[1].split(".gesture", 1)[0]
+        self.assertIn("value = 0", on_end, "脚舵/滑条松手要立即回中")
+        self.assertNotIn("abs(value) <= 0.08", self.bipolar,
+                         "旧逻辑只在靠近中心才吸 0，满舵松手会留在原地")
+
+    def test_look_pad_returns_to_zero(self):
+        on_end = self.look.split(".onEnded", 1)[1].split(".accessibilityElement", 1)[0]
+        self.assertIn("lookX = 0", on_end)
+        self.assertIn("lookY = 0", on_end)
+
+    def test_look_pad_has_no_slow_timer(self):
+        self.assertNotIn("Timer", self.look, "视角板不该再有 60Hz 回正定时器")
+        self.assertNotIn("returnSpeed", self.look, "returnSpeed 已是死参数")
+
+    def test_stick_keeps_smooth_return(self):
+        """走查只点了脚舵、视角：周期杆的平滑回中不能被顺手改掉。"""
+        self.assertIn("startReturn(speed: Double = 4.5)", self.stick)
+        self.assertIn("if returnToCenter { startReturn() }", self.stick)
+
+    def test_holding_axes_still_use_uni_slider(self):
+        """会「保持」的轴仍走单极滑条（那里 onEnded 不写 0）。"""
+        w = _ios("Views", "Widgets.swift")
+        self.assertIn("case .throttle, .brake, .clutch, .rt:", w)
+        uni = self.c.split("struct UniSlider", 1)[1]
+        on_end = uni.split(".onEnded", 1)[1].split(".gesture", 1)[0]
+        self.assertNotIn("value = 0", on_end, "油门类松手保持，不能回中")

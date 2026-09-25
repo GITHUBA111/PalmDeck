@@ -114,10 +114,10 @@ idle ──connect()──► connecting ──open──► live
 | 组件 | 绑定 | 说明 |
 |---|---|---|
 | 仪表盘 `panel` | 无（只读） | COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 杆位条；读本机平滑杆位，不读游戏遥测、不绑定任何键 |
-| 周期杆 `stick` | `roll` / `pitch` | 2D 摇杆，抓取增量，松手回中 |
-| 总距 `slider` | `throttle` | 单极滑条 |
-| 脚舵 `slider` | `yaw` | 双极滑条 |
-| 视角 `pad` | `look` | 触摸板 |
+| 周期杆 `stick` | `roll` / `pitch` | 2D 摇杆，抓取增量，松手平滑回中 |
+| 总距 `slider` | `throttle` | 单极滑条（松手保持） |
+| 脚舵 `slider` | `yaw` | 双极滑条（松手**立即**回中） |
+| 视角 `pad` | `look` | 触摸板（松手**立即**回正） |
 
 按键完全由用户自己添加、命名、绑定（见 §12.6）。仪表盘是**只读显示**，不带任何游戏语义，
 所以默认留下；不想要就 `✕` 删掉。
@@ -129,8 +129,8 @@ idle ──connect()──► connecting ──open──► live
 | 组件 | 绑定 | 说明 |
 |---|---|---|
 | 方向盘 `wheel` | `roll` | 多圈（可调满舵 180–900°）；回正速度可调（0 = 保持） |
-| 三踏板 `slider` | `clutch` / `brake` / `throttle` | 三根单极滑条 |
-| 视角 `pad` | `look` | 触摸板 |
+| 三踏板 `slider` | `clutch` / `brake` / `throttle` | 三根单极滑条（松手保持） |
+| 视角 `pad` | `look` | 触摸板（松手**立即**回正） |
 
 换档 / 转向灯 / 危险灯……由用户自己加按键、在游戏内自己绑。
 
@@ -156,9 +156,18 @@ idle ──connect()──► connecting ──open──► live
 实现见 `StickControl`、`BipolarSlider`、`CyclicControl`、`CollectiveLever`、`DeckPedal`。
 
 ### 4.2 回中
-- 摇杆 / 周期杆 / 脚舵：松手后用 60Hz 定时器按指数逼近 0（不是瞬跳），到 `|v|<0.004` 归零并停表。
-- 方向盘：按 `wheelReturnSpeed`（°/s）回正；0 = 松手保持。
-- 摇杆是否回中由 `stickReturn` 决定（仅手柄左摇杆可关）。
+
+| 控件 | 松手行为 |
+|---|---|
+| 周期杆 / 摇杆 `StickControl` | 60Hz 平滑回中（指数逼近，`|v|<0.004` 归零）；由 `stickReturn` 决定开不开 |
+| **脚舵** `BipolarSlider`（`roll`/`pitch`/`yaw`） | **立即归零**（瞬回） |
+| **视角** `LookPad` | **立即归零**（瞬回） |
+| 方向盘 `SteeringWheel` | 按 `wheelReturnSpeed`（°/s）回正；0 = 松手保持 |
+| 油门类 `UniSlider`（`throttle`/`brake`/`clutch`/`rt`） | **保持**（不回中） |
+
+> 滑条与视角板是**瞬回**、周期杆是**平滑回中**（走查：脚舵 / 视角要「松手立即回正」，见 §12.20）。
+> 脚舵写 `s.yaw` 后仍会过 `tickSmoothing()` 的 `kYaw = 0.5`（≈80ms）收尾，所以 UDP 上不断崖。
+> 「会保持的轴走 `UniSlider`」是硬约束：没人需要给滑条加「松手保持」开关（§12.20 边界）。
 
 ### 4.3 死区 / 曲线 / 灵敏度
 发送前统一经 `ControllerState.tickSmoothing()`：
@@ -997,6 +1006,33 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 
 ---
 
+## 12.20 脚舵 / 视角 松手立即回正（走查反馈）
+
+**问题**（用户）：**松手立即回正** —— 明确指 **脚舵**（yaw 滑条）与 **视角**（触摸板）。
+
+**根因**（两处，都是「文档承诺了、行为没跟上」）：
+
+| 控件 | 实际代码 | 现象 |
+|---|---|---|
+| 脚舵 `BipolarSlider` | `onEnded`: `if abs(value) <= 0.08 { value = 0 }` | 满舵松手**留在原地**（§4.2 却写着「脚舵松手回中」） |
+| 视角 `LookPad` | 60Hz 指数回中，`returnSpeed = 3.0`（k≈0.05/帧） | 半衰 ≈ 0.23s、**尾巴 ≈ 1.5s** |
+
+**做法**（只动 `Controls.swift` 两个 View）：
+
+1. `BipolarSlider.onEnded` → 直接 `value = 0`（删掉 `≤0.08` 吸附）。这个 View 只服务
+   `roll / pitch / yaw`（会保持的 `throttle/brake/clutch/rt` 走 `UniSlider`），三根都是自回中轴，
+   所以不给假开关。
+2. `LookPad` 去掉 60Hz 定时器与死参数 `returnSpeed`，`onEnded` → `lookX = 0; lookY = 0`。
+
+**没动**：周期杆仍是 60Hz 平滑回中（走查只点了脚舵、视角）；方向盘仍按 `wheelReturnSpeed`。
+**不变量**：脚舵写 `s.yaw` 后仍过 `tickSmoothing()` 的 `kYaw = 0.5`（≈80ms）收尾 —— 瞬回不会
+在 UDP 上引起断崖；`look` 本来就是直发。
+
+**方案**：`docs/PalmDeck-v4-instant-recenter.md`。
+**机器验证**：`tests/test_deck_bindings.py::TestInstantRecenter`（5 条）。
+
+---
+
 ## 13. 不做 / 明确边界
 
 - 不恢复 v3 的“整机倾斜体感”“锁定/校准 HUD”（v4 为触控硬件皮肤）。
@@ -1010,3 +1046,6 @@ translation = (手指位移) - (视图已走的距离)    →  稳态：视图�
 - **连接状态变化不改画布几何（§12.19）**：画布上方那行（连接横幅）高度锛死；
   `idle ↔ connecting` 不改变 `WidgetCanvas` 尺寸。进 / 出编辑模式、存预设回执仍会变
   （用户主动操作，且那行本就是编辑 UI）。
+- **回中分两类（§12.20）**：自回中轴（`roll/pitch/yaw`）滑条与视角板**松手瞬回 0**；
+  会保持的轴（`throttle/brake/clutch/rt`）走 `UniSlider` 保持；周期杆保留平滑回中。
+  不给滑条加「松手保持」开关（要保就用单极滑条）。

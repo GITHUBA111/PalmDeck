@@ -150,6 +150,11 @@
   行高锛死 `deckTopRowH = 32`，`live` 才收成 0 并带 0.22s 动画；连接中 `allowsHitTesting` 挡重复点。
   Catalyst 实测：`idle` 与 `connecting` 下组件区域裁剪 md5 完全一致。方案：
   `docs/PalmDeck-v4-connect-banner-stable.md`；守卫：`tests/test_deck_bindings.py::TestConnectBanner`（5 条）。
+- **脚舵 / 视角 松手立即回正**（走查反馈）—— `BipolarSlider.onEnded` 原来只在
+  `|value| ≤ 0.08` 吸 0，满舵松手**停在原地**（而 §4.2 已写「脚舵松手回中」）；`LookPad` 的
+  60Hz 指数回中尾巴约 1.5s。改成两个都 onEnded 直接归零；周期杆保留 60Hz 平滑回中。
+  脚舵写 `s.yaw` 后仍过 `kYaw = 0.5` 收尾，UDP 不断崖。方案：`docs/PalmDeck-v4-instant-recenter.md`；
+  守卫：`tests/test_deck_bindings.py::TestInstantRecenter`（5 条）。
 
 ## 已存档（方案已保存，未实施）
 - 无。

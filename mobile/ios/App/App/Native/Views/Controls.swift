@@ -172,7 +172,11 @@ struct BipolarSlider: View {
                     .onEnded { _ in
                         onTouch?(false)
                         grabX = 0; grabValue = 0
-                        if abs(value) <= 0.08 { value = 0 }
+                        // 自回中轴（横滚 / 俯仰 / 方向舵）：松手**立即**回正。
+                        // 会「保持」的轴（油门 / 刹车 / 离合 / RT）在 `WidgetView` 里走 `UniSlider`，
+                        // 所以这里不用开关。走查反馈「脚舵松手立即回正」。
+                        // 方案：`docs/PalmDeck-v4-instant-recenter.md`。
+                        value = 0
                     }
             )
         }
@@ -306,20 +310,17 @@ struct HatPad: View {
     }
 }
 
-/// 视角触摸板：手指滑动 → 视角偏移（累计），松手回正。
+/// 视角触摸板：手指滑动 → 视角偏移（累计），松手**立即**回正。
 /// 映射到 lookX/lookY（Rx/Ry）。适合 ETS2 看四周。
 struct LookPad: View {
     @Binding var lookX: Double
     @Binding var lookY: Double
     var accent: Color = Theme.cyan
-    var returnSpeed: Double = 3.0   // 松手回正速度（越大越快）
 
     @State private var dragging = false
     @State private var anchor: CGPoint = .zero   // 按下点
     @State private var baseX: Double = 0
     @State private var baseY: Double = 0
-    @State private var timer: Timer?
-    @State private var lastTick: Double = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -348,7 +349,6 @@ struct LookPad: View {
                     .onChanged { g in
                         if !dragging {
                             dragging = true
-                            stopReturn()
                             anchor = g.startLocation
                             baseX = lookX; baseY = lookY
                         }
@@ -360,7 +360,8 @@ struct LookPad: View {
                     }
                     .onEnded { _ in
                         dragging = false
-                        startReturn()
+                        // 松手**立即**回正（原来是 60Hz 指数缓动，尾巴约 1.5s，太黏）。
+                        lookX = 0; lookY = 0
                     }
             )
         }
@@ -368,26 +369,5 @@ struct LookPad: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("视角触摸板")
         .accessibilityValue(String(format: "左右 %+.0f%%，上下 %+.0f%%", lookX * 100, lookY * 100))
-    }
-
-    private func startReturn() {
-        stopReturn()
-        lastTick = Date().timeIntervalSince1970
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { _ in
-            let now = Date().timeIntervalSince1970
-            let dt = now - lastTick; lastTick = now
-            let k = min(1.0, returnSpeed * dt)
-            lookX += (0 - lookX) * k
-            lookY += (0 - lookY) * k
-            if abs(lookX) < 0.01 && abs(lookY) < 0.01 {
-                lookX = 0; lookY = 0
-                stopReturn()
-            }
-        }
-        RunLoop.main.add(timer!, forMode: .common)
-    }
-
-    private func stopReturn() {
-        timer?.invalidate(); timer = nil
     }
 }
