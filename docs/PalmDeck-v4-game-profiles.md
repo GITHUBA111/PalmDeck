@@ -1,6 +1,6 @@
 # 方案：游戏预设（不同游戏的适配）
 
-**状态**：✅ G0–G2 已落地；G3 降级为暂不做；G4 待真机验收
+**状态**：✅ G0–G2 已落地；E1 / E2 已落地；G3 降级为暂不做；G4 待真机验收
 **影响范围**：电脑侧（`hotas.py` / `palmdeck_config.py` / `bridge.py`）、
 App 侧（`ControllerState.swift` / `Layout.swift` / `SettingsView.swift`）、
 协议（**G3 阶段**加一条 WS 文本消息，热路径 22B 包不动）、文档
@@ -380,8 +380,8 @@ struct GameProfile: Codable, Equatable {  // Model/GameProfile.swift（纯类型
 | **反转 `invX`** | **视游戏而定** | ETS2 有 Steering Axis 反向开关，两边只能开一个 |
 | **方向盘转角 `wheelMaxDeg`** | **900**（默认 540） | 默认 540 是 `ControllerState.swift:97` 定的；真实卡车/ETS2 的 lock-to-lock 是 900°，触发点不对齐时「打满」感觉会怪 |
 | 回正速度 `wheelReturnSpeed` | 720（默认） | 卡车方向盘不应快速回正，可再调低 |
-| 布局 | `DriveDeck`（固定布局） | 已有转灯/危险灯/喇叭/手刹/雨刷/大灯/远光/视角，**本来就是按卡车做的** |
-| 按钮标签 | 沿用 `DriveDeck` 的中文名 | |
+| 布局 | **不绑定**（`widgetsJSON = nil`） | E2 起开车默认走 `defaultDrive()` 通用模块（方向盘/视角板/三踏板 + 序号按键）；预设不强行覆盖用户布局 |
+| 按钮标签 | 用户自定（默认「1…8」） | App 不再硬编码「降档」这类语义（见 §3.9 / E2） |
 
 ETS2 里建议的键位对应（都是 Xbox 手柄侧）：
 
@@ -418,6 +418,11 @@ PalmDeck 的 drive 把**离合踏板送到 LS Y**（§2.7）。
 所以 ETS2 里必须把变速箱设为 **Sequential（序列式）**，把 `Shift Up` 绑到 RB、`Shift Down` 绑到 LB。
 ETS2 的 H-pattern（H 档）**本方案不支持**——那需要 6 个独立按钮 + 离合搭配，
 而且档杆 UI 的「八位置」会变成谎话。
+
+> **E2 起 App 不再规定「哪个键是降档」**：默认开车布局只有「1…8」序号按键，
+> 你把其中两个在 ETS2 里绑成 Shift Up / Shift Down 就行，想用哪两个键都行。
+> 这样就避开了「降档键与欧卡2 默认的 LB/RB 看镜头撞车」这个报障（§3.9）。
+> 下表的 b5/b6 → RB/LB 是**旧版固定卡车皮肤**的行为，仅作参考。
 
 > 这两条都是「按常规」写的，**不是在本项目里验证过的**（我没有 ETS2 环境）。
 > 请你在游戏里对一遍，有出入告诉我改。
@@ -558,6 +563,42 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 
 建议单独一个 commit 删掉（**不混进本方案**）。
 
+### 3.9 通用模块化（E2）：App 不再替游戏拍板按钮语义
+
+**用户报的 bug**：欧卡2 里 **4→3 降档会亮“视角键”**。
+
+**排查结论（复现 + 源码对账，**不是 App 内部代码 bug**）**：
+
+- App 降档 = `pulse(4)` → `X360["b5"] = LEFT_SHOULDER`（LB）；升档 = `pulse(5)` → `b6 = RB`；
+- **欧卡2 默认就把 LB/RB 绑成“向左/右看”**；所以降档与切镜头共用一个物理键；
+- E1 已把 App 自己的“视角”从 `vjoy5` 改走 `hat`（D-pad），App 内部不再撞键；
+  剩下的冲突**纯粹来自 App 替你决定了 LB=降档**。
+
+**更深的问题**：`DriveDeck` 把“左转/右转/危险灯/喇叭……”这类语义硬编码进按钮。
+但同一只虚拟手柄在不同游戏里默认占用完全不同——App 替用户拍板的**每一条语义都可能撞车**，
+而且每换一个游戏就得改一份 App 代码。
+
+**设计修正（E2）**：App **只提供通用模块 + 中性序号**，含义与绑定由用户在游戏里完成。
+
+| 项 | 之前 | 现在 |
+|---|---|---|
+| 按钮标签 | 「降档」「危险灯」 | 「3」「5」（`WidgetBinding.label` → “按钮 N”）；可在编辑态 `Aa` 改名 |
+| 可用模式 | 仅 gamepad | gamepad / drive（`LayoutStore.supportsCustom(mode:)`） |
+| 开车默认 | `DriveDeck` 硬编码 | `defaultDrive()` = 方向盘/视角板/三踏板 + 8 个序号按键 |
+| 固定皮肤 | 唯一可选 | 仍保留，`[布局]` 一键切画布 |
+
+核心代码：`LayoutStore.defaultDrive()` / `supportsCustom`、`CockpitView.deckBody` + `moduleBody`、
+`EditableWidget` 重命名、新键 `palmdeck_drive_custom`。详见
+`docs/PalmDeck-v4-app-interaction.md` §12.6。
+
+**为何不直接把换档换成 X/B 这种“安全键”**：没有任何一组键对**所有**游戏安全
+（欧卡2 的 X/B 是别的功能）。一旦 App 重新拍板，就又把 App 和游戏默认绑死了。
+把选择权交给用户，才是“一套模块适配所有游戏”的唯一自洽做法。
+
+**测试**：`tests/test_deck_bindings.py::TestDefaultDriveLayout`——
+开车默认按钮必须全是序号（`^\d+$`）、不得出现游戏语义词；
+`func_body()` 把 `defaultGamepad()` 与 `defaultDrive()` 的断言隔开。
+
 ---
 
 ## 4. 影响面
@@ -569,6 +610,7 @@ CocoaPods 用的是**本地路径 pod**，指向 `mobile/node_modules/@capacitor
 | 电脑侧 | **G0+G1+G2 不改电脑侧任何文件**。（若将来做 G3：`hotas.py` `remap_vjoy` 改查表、`palmdeck_config.py` 新 `axes_presets`、`bridge.py` WS 分支 + `caps`） |
 | App 侧 | **G1**：`Model/ShapingKeys.swift`（新：键名 + 迁移）、`ControllerState.swift`（`shapingStore` 可注入 + `applyMode`）、`CockpitController.swift`（`setMode` 走 `applyMode`）、`SettingsView.swift`（分组头带当前模式 + 按模式保存说明）；G2：`Model/GameProfile.swift`（新）、`Layout.swift`（模板 → 预设）、`SettingsView.swift`（预设 Section）、`project.pbxproj`（手动登记新文件）；**E1**：`DriveDeck.swift`（视角改走 D-pad + 新增 `DeckHoldButton`）/ `GamepadDeck.swift`（L3·R3）/ `Layout.swift`（gear 标签 + RT 轴）/ `Widgets.swift`（新增 `rt` 轴 + `onlyOnVJoy`）/ `CockpitView.swift`（组件库提示 + 弱引用警告） |
 | 文档 | 本文件、`docs/PalmDeck-v4-app-interaction.md`（持久化键表 + 预设交互）、`docs/PalmDeck-v4-redesign.md`（P8）、`docs/README.md` |
+| App 侧（E2） | `Layout.swift`（`defaultDrive()` + `supportsCustom` + `EditableWidget` 重命名）、`CockpitView.swift`（`deckBody` / `moduleBody` / 顶栏 `[布局]` 条件）、新键 `palmdeck_drive_custom`；`tests/test_deck_bindings.py`（新增 `TestDefaultDriveLayout`） |
 
 ---
 

@@ -34,6 +34,17 @@ def _ios(*parts):
         return f.read()
 
 
+def func_body(src, name):
+    """取 `static func <name>(...)` 的函数体，到下一个顶层 `static func` 或类型结束为止。
+
+    这样给 LayoutStore 加新的默认布局（如 `defaultDrive()`）不会污染
+    对 `defaultGamepad()` 的断言。
+    """
+    after = src.split("static func " + name + "(", 1)[1]
+    m = re.search(r"\n    static func |\n}", after)
+    return after[: m.start()] if m else after
+
+
 def xbox_map():
     """`hotas.py` 里 X360 的 alias → XUSB_BUTTON 后缀。"""
     body = _read("hotas.py").split("X360 = {", 1)[1].split("\n    }", 1)[0]
@@ -161,9 +172,11 @@ class TestDriveDeck(unittest.TestCase):
 
 
 class TestDefaultGamepadLayout(unittest.TestCase):
+    def _body(self):
+        return func_body(_ios("Views", "Layout.swift"), "defaultGamepad")
+
     def test_gear_labels_match_the_pulse_indices(self):
-        src = _ios("Views", "Layout.swift")
-        body = src.split("static func defaultGamepad()", 1)[1].split("/// 画布", 1)[0]
+        body = self._body()
         found = dict(
             (name, label)
             for name, _between, label in re.findall(
@@ -176,17 +189,55 @@ class TestDefaultGamepadLayout(unittest.TestCase):
         self.assertEqual(found.get("gearDown"), "LB", "gearDown → pulse(4) → b5 = LB")
 
     def test_right_trigger_slider_is_bound_to_the_rt_axis(self):
-        src = _ios("Views", "Layout.swift")
-        body = src.split("static func defaultGamepad()", 1)[1].split("/// 画布", 1)[0]
+        body = self._body()
         self.assertIn('.make(.slider, .rt,', body, "RT 滑条绑到了 throttle —— Xbox 不读 throttle")
         self.assertNotIn('.make(.slider, .throttle,', body)
 
     def test_no_layout_button_uses_a_key_xbox_does_not_have(self):
-        src = _ios("Views", "Layout.swift")
-        body = src.split("static func defaultGamepad()", 1)[1].split("/// 画布", 1)[0]
+        body = self._body()
         nums = [int(n) for n in re.findall(r"\.make\(\.button,\s*\.vjoy(\d+)", body)]
         self.assertTrue(nums)
         self.assertTrue(max(nums) <= 10, "默认布局用了 Xbox 没有的键号：%r" % nums)
+
+
+class TestDefaultDriveLayout(unittest.TestCase):
+    """开车默认布局必须是「无游戏语义」的通用模块。
+
+    用户诉求：App 不该替游戏拍板（如 LB=降档），只给滑块/按键 + 中性序号，
+    具体含义由用户在游戏内绑定。
+    """
+
+    def _body(self):
+        return func_body(_ios("Views", "Layout.swift"), "defaultDrive")
+
+    def test_buttons_are_generic_numbers(self):
+        body = self._body()
+        labels = re.findall(
+            r'\.make\(\.button,\s*\.vjoy\d+,\s*\.r\([^)]*\),\s*label:\s*"([^"]+)"',
+            body,
+        )
+        self.assertGreaterEqual(len(labels), 6, "开车默认布局没有按键：%r" % labels)
+        for label in labels:
+            self.assertRegex(label, r"^\d+$", "开车默认按钮应是无语义序号：%r" % label)
+
+    def test_no_hardcoded_game_semantics(self):
+        body = self._body()
+        for word in ("左转", "右转", "危险灯", "喇叭", "手刹", "雨刷",
+                     "大灯", "远光", "换挡", "升档", "降档"):
+            self.assertNotIn(word, body, "开车默认布局仍硬编码了游戏语义：%s" % word)
+
+    def test_buttons_stay_within_the_xbox_button_set(self):
+        body = self._body()
+        nums = [int(n) for n in re.findall(r"\.make\(\.button,\s*\.vjoy(\d+)", body)]
+        self.assertTrue(nums)
+        self.assertTrue(max(nums) <= 10, "开车默认布局用了 Xbox 没有的键号：%r" % nums)
+
+    def test_drive_is_wired_into_supports_custom_and_defaults(self):
+        src = _ios("Views", "Layout.swift")
+        self.assertIn("case .gamepad, .drive: return true", src,
+                      "supportsCustom 没有把 drive 算进去")
+        self.assertIn("case .drive:   return defaultDrive()", src,
+                      "defaults(mode:) 没给 drive 走 defaultDrive()")
 
 
 class TestWidgetLibrary(unittest.TestCase):

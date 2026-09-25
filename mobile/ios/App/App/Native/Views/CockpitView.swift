@@ -8,6 +8,7 @@ struct CockpitView: View {
     @StateObject private var layout = LayoutStore()
     @StateObject private var profiles = GameProfileStore()
     @AppStorage("palmdeck_gamepad_custom") private var gamepadCustom = false
+    @AppStorage("palmdeck_drive_custom") private var driveCustom = false
     @State private var showLibrary = false
     @State private var showTutorial = false
     @State private var naming = false
@@ -25,22 +26,7 @@ struct CockpitView: View {
 
             VStack(spacing: gap) {
                 topBar(height: topH)
-                if s.mode == .gamepad {
-                    gamepadBody(W: W, H: bodyH)
-                        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-                } else if s.mode == .heli {
-                    // 飞行模式：真机硬件皮肤（P4）
-                    FlightDeckView(s: s, ctrl: ctrl)
-                        .frame(width: W, height: bodyH)
-                        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-                        .overlay(alignment: .top) { notConnectedBanner }
-                } else {
-                    // 开车模式：真机硬件皮肤（P5）
-                    DriveDeck(s: s, ctrl: ctrl)
-                        .frame(width: W, height: bodyH)
-                        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
-                        .overlay(alignment: .top) { notConnectedBanner }
-                }
+                deckBody(W: W, H: bodyH)
                 statusStrip
             }
             .padding(.horizontal, 8)
@@ -141,9 +127,13 @@ struct CockpitView: View {
                 }
                 .buttonStyle(CardButton(fillWidth: false, height: height))
                 .frame(width: 40)
-                if s.mode == .gamepad {
+                if LayoutStore.supportsCustom(mode: s.mode) {
                     Button {
-                        if !layout.editing { gamepadCustom = true }   // 编辑即切到自定义组件
+                        if !layout.editing {
+                            // 编辑即切到自定义组件
+                            if s.mode == .gamepad { gamepadCustom = true }
+                            else if s.mode == .drive { driveCustom = true }
+                        }
                         layout.editing.toggle()
                         Haptics.press()
                     } label: {
@@ -217,56 +207,53 @@ struct CockpitView: View {
         }
     }
 
-    // MARK: 游戏手柄（硬件皮肤 / 自定义组件）
-    private func gamepadBody(W: CGFloat, H: CGFloat) -> some View {
+    // MARK: 座舱主体（固定皮肤 / 自定义组件）
+    @ViewBuilder
+    private func deckBody(W: CGFloat, H: CGFloat) -> some View {
+        switch s.mode {
+        case .heli:
+            // 飞行模式：真机硬件皮肤（P4）；heli 不做自定义布局
+            FlightDeckView(s: s, ctrl: ctrl)
+                .frame(width: W, height: H)
+                .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
+                .overlay(alignment: .top) { notConnectedBanner }
+        case .gamepad:
+            moduleBody(mode: .gamepad, custom: gamepadCustom, W: W, H: H) {
+                ZStack {
+                    // 真机手柄皮肤（P6）
+                    GamepadDeck(s: s, ctrl: ctrl)
+                    Text("手柄模式 · 轴已停（不会干扰电脑键鼠）")
+                        .font(.system(size: 11)).foregroundColor(Theme.textFaint)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .allowsHitTesting(false)
+                }
+            }
+        case .drive:
+            moduleBody(mode: .drive, custom: driveCustom, W: W, H: H) {
+                // 开车模式：真机硬件皮肤（P5）；可切自定义模块
+                DriveDeck(s: s, ctrl: ctrl)
+            }
+        }
+    }
+
+    /// 固定皮肤 ⇄ 自定义模块画布。两种支持自定义布局的模式（gamepad / drive）共用。
+    @ViewBuilder
+    private func moduleBody<Fixed: View>(mode: CockpitMode, custom: Bool, W: CGFloat, H: CGFloat,
+                                         @ViewBuilder fixed: () -> Fixed) -> some View {
         ZStack {
-            if gamepadCustom {
-                // 自定义组件（给开火/投弹/地图等加触控键）
-                WidgetCanvas(store: layout, mode: s.mode, s: s, ctrl: ctrl)
+            if custom {
+                // 自定义组件（给任意游戏加触控键；按键就是个序号，含义自己绑）
+                WidgetCanvas(store: layout, mode: mode, s: s, ctrl: ctrl)
                     // 应用模板 / 撤销 / 恢复默认是整表替换，用 revision 强制重建画布，
                     // 否则 EditableWidget 的 @State dragStart 会残留到新布局上。
                     .id(layout.revision)
             } else {
-                // 真机手柄皮肤（P6）
-                GamepadDeck(s: s, ctrl: ctrl)
-                Text("手柄模式 · 轴已停（不会干扰电脑键鼠）")
-                    .font(.system(size: 11)).foregroundColor(Theme.textFaint)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .allowsHitTesting(false)
+                fixed()
             }
-
-            // 编辑时：组件库条
-            if layout.editing {
-                VStack(spacing: 0) {
-                    HStack(spacing: 6) {
-                        Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
-                        libraryButton("按键", .button, nil)
-                        libraryButton("触摸板", .pad, .look)
-                        libraryButton("摇杆", .stick, .look)
-                        libraryButton("方向盘", .wheel, .roll)
-                        libraryButton("滑条", .slider, nil)
-                        libraryButton("苦力帽", .hat, .look)
-                        libraryButton("姿态球", .attitude, .roll)
-                        Spacer(minLength: 0)
-                        Button("存为模板") {
-                            tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
-                            naming = true
-                        }
-                        .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
-                        Button("完成") { layout.editing = false; Haptics.press() }
-                            .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel.opacity(0.97)))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.orange.opacity(0.7), lineWidth: 1))
-                    .padding(.horizontal, 6)
-                    .padding(.top, 2)
-                    Spacer(minLength: 0)
-                }
-            }
+            if layout.editing { editBar }
         }
         .frame(width: W, height: H)
+        .hudPanel(corner: 10, accent: Theme.cyan.opacity(0.5))
         .overlay(alignment: .top) { if !layout.editing { notConnectedBanner } }
         .alert("存为模板", isPresented: $naming) {
             TextField("模板名称", text: $tplName)
@@ -282,6 +269,37 @@ struct CockpitView: View {
             }
         } message: {
             Text("快照当前布局（\(layout.widgets(mode: s.mode).count) 个组件），名称最多 \(LayoutStore.maxNameLength) 个字符；可在设置 → 布局里切换。")
+        }
+    }
+
+    /// 编辑态下的顶部工具条（加组件 / 存模板 / 完成）。
+    private var editBar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text("添加：").font(.system(size: 12)).foregroundColor(Theme.orange)
+                libraryButton("按键", .button, nil)
+                libraryButton("触摸板", .pad, .look)
+                libraryButton("摇杆", .stick, .look)
+                libraryButton("方向盘", .wheel, .roll)
+                libraryButton("滑条", .slider, nil)
+                libraryButton("苦力帽", .hat, .look)
+                libraryButton("姿态球", .attitude, .roll)
+                Spacer(minLength: 0)
+                Button("存为模板") {
+                    tplName = "布局 \(layout.customTemplates(mode: s.mode).count + 2)"
+                    naming = true
+                }
+                .buttonStyle(CardButton(accent: Theme.orange, fillWidth: false, height: 30))
+                Button("完成") { layout.editing = false; Haptics.press() }
+                    .buttonStyle(CardButton(active: true, accent: Theme.cyan, fillWidth: false, height: 30))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel.opacity(0.97)))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.orange.opacity(0.7), lineWidth: 1))
+            .padding(.horizontal, 6)
+            .padding(.top, 2)
+            Spacer(minLength: 0)
         }
     }
 

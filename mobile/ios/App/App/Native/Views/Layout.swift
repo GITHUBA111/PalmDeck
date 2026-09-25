@@ -54,11 +54,13 @@ final class LayoutStore: ObservableObject {
         // 只在「从未存过该模式」时播种内置默认。
         // 用 == nil（而不是 isEmpty），否则用户主动「清空」的空白布局会在重启后被默认布局覆盖。
         //
-        // 只播种 .gamepad：heli/drive 在 P4/P5 之后走固定硬件皮肤，
-        // 全仓库唯一的 WidgetCanvas 在 CockpitView 的 gamepad 分支里，
-        // 给它们播种等于往 UserDefaults 写一份永远没人读的数据。
+        // 播种 .gamepad 与 .drive：两者都能切到「自定义模块布局」
+        // （`CockpitView.moduleBody`）。heli 仍是固定硬件皮肤，不播种。
         if layouts[CockpitMode.gamepad.rawValue] == nil {
             layouts[CockpitMode.gamepad.rawValue] = LayoutStore.defaultGamepad()
+        }
+        if layouts[CockpitMode.drive.rawValue] == nil {
+            layouts[CockpitMode.drive.rawValue] = LayoutStore.defaultDrive()
         }
     }
 
@@ -294,16 +296,22 @@ final class LayoutStore: ObservableObject {
 
     // MARK: 默认布局
 
-    /// 只有手柄模式会渲染组件画布（`CockpitView` 的 `gamepadBody`），
-    /// 其余模式返回空数组。
+    /// 哪些模式支持「自定义模块布局」。
     ///
-    /// v3 时期 heli/drive 各有一套精细的滑块/按键布局，P4/P5 换成固定硬件皮肤后
-    /// 就没有任何渲染路径了；数据留在 git 历史里（`git show <v0.3.2>:.../Layout.swift`），
-    /// 不再放进二进制，免得和皮肤里的控件重复两套真相。
+    /// gamepad / drive 都能切到组件画布（`CockpitView.moduleBody`）；
+    /// heli 仍是固定硬件皮肤、不做自定义布局（见 `docs/PalmDeck-v4-app-interaction.md` §13）。
+    static func supportsCustom(mode: CockpitMode) -> Bool {
+        switch mode {
+        case .gamepad, .drive: return true
+        case .heli: return false
+        }
+    }
+
     static func defaults(mode: CockpitMode) -> [DeckWidget] {
         switch mode {
         case .gamepad: return defaultGamepad()
-        case .heli, .drive: return []
+        case .drive:   return defaultDrive()
+        case .heli:    return []
         }
     }
 
@@ -325,6 +333,31 @@ final class LayoutStore: ObservableObject {
             .make(.button, .vjoy7,    .r(0.04, 0.82, 0.11, 0.09), label: "视图"),
             .make(.button, .vjoy8,    .r(0.16, 0.82, 0.11, 0.09), label: "菜单"),
             .make(.button, .fire,     .r(0.30, 0.85, 0.12, 0.09), label: "开火"),
+        ]
+    }
+
+    /// 开车默认布局（通用模块）。
+    ///
+    /// **刻意不写游戏语义**：按钮就叫「1…8」这类序号，具体在游戏里绑成升/降档、
+    /// 转向灯、喇叭……全由用户自己决定。理由是同一只虚拟手柄在不同游戏里
+    /// 默认占用完全不同（如欧卡2 把 LB/RB 默认绑成“向左/右看”），
+    /// App 一旦替用户拍板“LB=降档”，降档就会连带切镜头。
+    /// 按钮的绑定也可随时在「布局」里改（见 `CockpitView` 的「布局」按钮）。
+    static func defaultDrive() -> [DeckWidget] {
+        [
+            .make(.wheel,  .roll,     .r(0.05, 0.06, 0.50, 0.52), label: "方向盘"),
+            .make(.pad,    .look,     .r(0.80, 0.06, 0.16, 0.26), label: "视角"),
+            .make(.slider, .clutch,   .r(0.05, 0.64, 0.16, 0.30), label: "离合"),
+            .make(.slider, .brake,    .r(0.23, 0.64, 0.16, 0.30), label: "刹车"),
+            .make(.slider, .throttle, .r(0.41, 0.64, 0.16, 0.30), label: "油门"),
+            .make(.button, .vjoy1,    .r(0.62, 0.36, 0.11, 0.13), label: "1"),
+            .make(.button, .vjoy2,    .r(0.75, 0.36, 0.11, 0.13), label: "2"),
+            .make(.button, .vjoy3,    .r(0.62, 0.51, 0.11, 0.13), label: "3"),
+            .make(.button, .vjoy4,    .r(0.75, 0.51, 0.11, 0.13), label: "4"),
+            .make(.button, .vjoy5,    .r(0.62, 0.66, 0.11, 0.13), label: "5"),
+            .make(.button, .vjoy6,    .r(0.75, 0.66, 0.11, 0.13), label: "6"),
+            .make(.button, .vjoy7,    .r(0.62, 0.81, 0.11, 0.13), label: "7"),
+            .make(.button, .vjoy8,    .r(0.75, 0.81, 0.11, 0.13), label: "8"),
         ]
     }
 }
@@ -360,6 +393,8 @@ struct EditableWidget: View {
     var ctrl: CockpitController
 
     @State private var dragStart: WRect?
+    @State private var renaming = false
+    @State private var nameDraft = ""
 
     private var r: WRect { widget.rect }
 
@@ -420,9 +455,36 @@ struct EditableWidget: View {
                         .background(Circle().fill(Theme.red))
                 }
                 .offset(x: -pw / 2 + 12, y: -ph / 2 + 12)
+                // 重命名：名称留给用户（按键就是个序号，含义由用户在游戏里绑）
+                Button {
+                    nameDraft = widget.title
+                    renaming = true
+                } label: {
+                    Image(systemName: "character")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(Theme.orange))
+                }
+                .offset(x: pw / 2 - 12, y: -ph / 2 + 12)
             }
         }
         .frame(width: pw, height: ph)
         .position(x: px + pw / 2, y: py + ph / 2)
+        .alert("重命名组件", isPresented: $renaming) {
+            TextField("名称", text: $nameDraft)
+                .onChange(of: nameDraft) { v in
+                    if v.count > 12 { nameDraft = String(v.prefix(12)) }
+                }
+            Button("取消", role: .cancel) { }
+            Button("确定") {
+                var nw = widget
+                nw.label = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                store.update(nw, mode: mode)
+                Haptics.success()
+            }
+        } message: {
+            Text("留空则恢复默认（如「按钮 3」）。名称只存本机，不影响发出去的键位。")
+        }
     }
 }

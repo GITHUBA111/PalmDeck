@@ -122,12 +122,21 @@ idle ──connect()──► connecting ──open──► live
 
 档杆档位 `R N 1 2 3 4 5 6`，默认 N(=index 2)。**P7 起持久化**（`palmdeck_gear`）。
 
+**起开车也能切自定义模块**（见 §12.6）：顶栏 `[布局]` 把 `palmdeck_drive_custom` 置 true，
+皮肤换成 `WidgetCanvas`，默认布局 `defaultDrive()` = 方向盘 / 视角板 / 三踏板 +
+8 个**无游戏语义的序号按键**。固定卡车皮肤仍保留，开关可随时切回。
+
+> 为何不再把「左转/降档」这类字硬编码进按钮：同一只虚拟手柄在不同游戏里默认占用完全不同，
+> App 替用户拍板的每一条语义都可能与游戏默认撞车（如欧卡2 默认 LB=向左看）。
+> 具体症状与修法见 §12.6。
+
 ### 3.4 手柄 gamepad — `GamepadDeck` / `WidgetCanvas`
 - 默认硬件皮肤 `GamepadDeck`：左摇杆(roll/pitch) · 右摇杆(look) · 十字键(hat) ·
   ABXY(vjoy1-4) · LB/RB(vjoy5/6) · 视图/菜单(vjoy7/8) · L3/R3(vjoy9/10)。
   （**不是 LT/RT**：Xbox 的 LT/RT 是模拟轴 `lt`/`rt`，不在按键表里；
   `X360["b9"] = LEFT_THUMB`、`X360["b10"] = RIGHT_THUMB`。）
 - 开关 `palmdeck_gamepad_custom`：切到 `WidgetCanvas` 自定义组件布局（P3 同步）。
+  开车模式同构地用 `palmdeck_drive_custom`（见 §3.3 / §12.6）。
 - 服务端在 gamepad 停 `thr/lt/rt`，App 停发轴 → **不抢电脑键鼠**。
 
 ---
@@ -228,14 +237,17 @@ y = 0                                              |x| <  dz
 
 ---
 
-## 7. 布局编辑与模板（仅 gamepad）
+## 7. 布局编辑与模板（gamepad / drive）
 
 ### 7.1 编辑
 
-- 入口：顶栏 `[布局]`；首次点开自动把 `palmdeck_gamepad_custom=true`（避免“编辑了却看不到”）。
+- 入口：顶栏 `[布局]`（仅 `LayoutStore.supportsCustom(mode:)` 为真的模式出现，即 gamepad / drive）；
+  首次点开自动把该模式的自定义开关置 true（`palmdeck_gamepad_custom` / `palmdeck_drive_custom`），
+  避免“编辑了却看不到”。
 - 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球；
   有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定。
-- 画布操作：拖动移动、右下角手柄缩放、`✕` 删除。
+- 画布操作：拖动移动、右下角手柄缩放、左上 `✕` 删除、右上 `Aa` **重命名**
+  （名称留空回落绑定的默认名，如「按钮 3」；名称只存本机，不改变发出去的键位）。
 - **组件库条右侧**：`存为模板`（快照当前布局，弹命名框）／ `完成`。
 - 同步：`layouts_get` / `layouts_put`（WS 控制面）；服务端下发 → `LayoutStore.applyServer`。
 - 存储键 `palmdeck_widgets_v10`（`{mode: [DeckWidget]}`）。
@@ -290,7 +302,7 @@ y = 0                                              |x| <  dz
 | G8 | 档位不持久化，切模式归零 | `DriveDeck` `@State gearIndex` | 中 | ✅ P7.5 落盘 |
 | G9 | 手感参数三模式共用一份 | `ControllerState` 全局键 | **高** | ✅ **G1** 按模式分键 |
 | G9 | 模式单击即切（误触风险） | `setMode` 无防抖 | 低 | 记录，暂不改 |
-| G10 | `LayoutStore` 仍为 heli/drive 生成默认布局（已不用） | `Layout.swift` defaults | 低 | 记录，暂不改 |
+| G10 | `LayoutStore` 仍为 heli 生成默认布局（heli 无自定义布局） | `Layout.swift` defaults | 低 | 记录，暂不改 |
 | G11 | `haveCenter/paused` 已删，无校准流程 | — | — | 已解决 |
 
 > 图例：✅ 表示已在 P7 落地（构建通过）。
@@ -306,6 +318,7 @@ y = 0                                              |x| <  dz
 | `palmdeck_host` | String | "" | 上次电脑 IP |
 | `palmdeck_mode` | String | heli | 上次模式 |
 | `palmdeck_gamepad_custom` | Bool | false | 手柄用自定义布局 |
+| `palmdeck_drive_custom` | Bool | false | 开车用自定义模块布局（**§12.6 新增**） |
 | `palmdeck_widgets_v10` | Data | defaults | 组件布局 |
 | `palmdeck_layout_templates_v1` | Data | `{}` | 布局模板 `{mode: [LayoutTemplate]}`（不含内置「默认」） |
 | `palmdeck_layout_undo_v1` | Data | `{}` | 撤销槽 `{mode: [DeckWidget]}`，单格/按模式 |
@@ -421,9 +434,46 @@ ETS2 又要求**死区 0 / 线性灵敏度 / 900° 满舵**，与飞机的 0.06 
 
 ---
 
+## 12.6 通用模块化：App 不再替游戏拍板按钮语义
+
+**触发 bug**：欧卡2 里 **4→3 降档会连带亮“视角键”**。排查结论（见 `docs/PalmDeck-v4-game-profiles.md` §3.8）：
+
+- App 侧降档 = `pulse(4)` → `X360["b5"] = LEFT_SHOULDER`（LB），升档 = `pulse(5)` → `b6 = RB`；
+- 欧卡2 **默认就把 LB/RB 绑成“向左/右看”**；于是降档与切镜头共用一个物理键；
+- E1 已把 App 的“视角”从 `vjoy5` 改走 `hat`（D-pad），App 内部不再撞键；
+  **剩下的冲突纯粹来自“App 替用户决定了 LB=降档”**。
+
+**设计修正（本版）**：App **只提供通用模块**（滑块 / 按键 / 摇杆 / 方向盘 / 触摸板……），
+按钮**默认就是中性序号**（`WidgetBinding.label` → “按钮 N”，`defaultDrive()` 用 “1…8”），
+**不写任何游戏语义**；要叫“升档/雨刷”由用户在编辑态用 `Aa` 重命名，
+要发哪个键由用户在 `LibrarySheet` 里选。于是“撞键”从“App 的 bug”变成“用户的选择”，
+且任何新游戏都无需改 App。
+
+**落地范围**：
+
+- `LayoutStore.supportsCustom(mode:)`：gamepad / drive 为 true（heli 仍固定皮肤）。
+- `LayoutStore.defaultDrive()`：方向盘 / 视角板 / 三踏板 + 8 个序号按键（无语义）。
+- `CockpitView`：`gamepadBody` → `deckBody` + 通用 `moduleBody(mode:custom:fixed:)`，
+  固定皮肤与画布共用同一套编辑条 / 存模板 / 未连接横幅；顶栏 `[布局]` 按 `supportsCustom` 显示。
+- `EditableWidget`：编辑态新增 `Aa` 重命名（存 `DeckWidget.label`，留空回落默认名）。
+- 新增持久化键 `palmdeck_drive_custom`（§10）。
+
+**不改的部分**：`DriveDeck` / `GamepadDeck` 固定皮肤仍在，作为“开箱即用”的默认外观；
+`WidgetBinding` 与发出去的键位不变；电脑侧协议一字未动。
+
+**回归守则**（`tests/test_deck_bindings.py`）：
+
+- 新增 `TestDefaultDriveLayout`：开车默认按钮必须全是 `^\d+$`（无游戏语义），
+ 且不得出现“左转/右转/危险灯/喇叭/手刹/雨刷/大灯/远光/换挡/升档/降档”等词；
+- `func_body()` 把 `defaultGamepad()` 与 `defaultDrive()` 的断言隔开，避免新默认布局污染旧断言。
+
+---
+
 ## 13. 不做 / 明确边界
 
 - 不恢复 v3 的“整机倾斜体感”“锁定/校准 HUD”（v4 为触控硬件皮肤）。
 - 不做手机端游戏遥测回读（见 `docs/TODO.md`）。
-- `gamepad` 之外的模式不做自定义布局（硬件皮肤固定，保证真机手感一致）。
+- **只有 heli 不做自定义布局**：`LayoutStore.supportsCustom(mode:)` 只对 gamepad / drive 为 true，
+  heli 仍是固定硬件皮肤（保证真机手感一致）。**App 不为任何游戏硬编码按钮语义**——
+  只提供通用模块 + 中性序号，含义与绑定由用户在游戏内完成（见 §12.6）。
 - 不引入第三方依赖 / 不改电脑侧协议。
