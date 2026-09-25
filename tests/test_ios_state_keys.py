@@ -22,6 +22,10 @@ MODEL = os.path.join(ROOT, "mobile", "ios", "App", "App", "Native", "Model")
 SOURCES = [
     "CockpitMode.swift",
     "AxisCurve.swift",
+    # ControllerState.wireAxes 走 AxisMap 真值表；Packet.pack 必须用它
+    "AxisMap.swift",
+    "PacketFormat.swift",
+    "Packet.swift",
     "ShapingKeys.swift",
     # ControllerState 现在 conformity `ShapingTarget`（G2），该协议在 GameProfile.swift
     "GameProfile.swift",

@@ -98,6 +98,36 @@ for k in ShapingKeys.legacyBools {
 }
 expect(scoped(clean, ShapingKeys.dz, .gamepad) == nil, "没进过的模式不写——默认值由属性兜底")
 
+// MARK: - 5. wireAxes = 真正发出去的 8 个轴（仪表条与 Packet 同源）
+//
+// 底部仪表条从“按模式拍字段”改成读 `s.wireAxes` 之后，需要钉住两件事：
+//   1) `wireAxes` 就是 `AxisMap` 真值表的输出（不是又一份手写映射）；
+//   2) `Packet.pack` 用的就是这一份（否则“屏幕上显示的 = 发出去的”靠不住）。
+
+let wire = ControllerState(shapingStore: DictStore())
+wire.applyMode(.drive)
+wire.throttle = 0.4
+wire.clutch = 0.6
+wire.lt = 0.25
+wire.rt = 1.0                                  // 开车时这个值会被丢掉
+wire.hat = 3
+wire.btnMask = 0b101
+
+let expected = AxisMap.resolve(mode: .drive, collective: wire.collective, throttle: wire.throttle,
+                              clutch: wire.clutch, smRoll: wire.smRoll, smPitch: wire.smPitch,
+                              smYaw: wire.smYaw, lookX: wire.lookX, lookY: wire.lookY,
+                              rt: wire.rt, lt: wire.lt)
+expect(wire.wireAxes == expected, "wireAxes 必须就是 AxisMap 真值表的输出")
+expect(wire.wireAxes.yaw == 0, "开车不发 Rz（仪表条不该再显示「方向」）")
+expect(abs(wire.wireAxes.pitch - 0.6) < 1e-12, "开车 pitch 槽 = 离合，实际 \(wire.wireAxes.pitch)")
+expect(abs(wire.wireAxes.rt - 0.4) < 1e-12, "开车 rt 槽 = 油门（忽略 rt 输入）")
+expect(abs(wire.wireAxes.lt - 0.25) < 1e-12, "开车 lt 槽 = 刹车")
+
+let packed = Packet.pack(wire)
+let direct = PacketFormat.encode(hat: wire.hat, axes: wire.wireAxes, buttons: wire.btnMask)
+expect(packed == direct, "Packet.pack 必须走 s.wireAxes，不能自己再算一遍真值表")
+expect(packed.count == 22, "包长应为 22 字节，实际 \(packed.count)")
+
 // MARK: - 跑
 
 if failures.isEmpty {

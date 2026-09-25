@@ -189,6 +189,26 @@ final class ControllerState: ObservableObject {
 
     /// 总距（应用反转后）
     var collective: Double { invColl ? (1 - throttle) : throttle }
+
+    /// 这一帧真正会发出去的 8 个轴（= `AxisMap` 真值表的唯一调用点之一）。
+    ///
+    /// `Packet.pack` 与底部仪表条**都读这里**：「屏幕上显示的就是发出去的」
+    /// 靠的就是同一个值，而不是两边各算一遍（两边各算就又会分家）。
+    var wireAxes: AxisOutputs {
+        AxisMap.resolve(
+            mode: mode,
+            collective: collective,
+            throttle: throttle,
+            clutch: clutch,
+            smRoll: smRoll,
+            smPitch: smPitch,
+            smYaw: smYaw,
+            lookX: lookX,
+            lookY: lookY,
+            rt: rt,
+            lt: lt
+        )
+    }
 }
 
 /// G2：`GameProfileApplier` 把预设的手感参数写回本对象。

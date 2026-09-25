@@ -56,13 +56,14 @@ v4 为**纯原生 SwiftUI**（`@main`），协议与电脑侧完全一致，不�
   | `PacketFormat.swift` | 22 字节包 `<2sBB8hH` 的偏移 / 小端序 / `[-32767,32767]` 标度 |
   | `CockpitMode.swift` | 模式枚举 + `infantry → gamepad` 旧值兼容 |
   | `ShapingKeys.swift` | 手感参数的键名（`palmdeck_dz` → `palmdeck_dz.<mode>`）+ 旧键一次性迁移 |
-  | `Packet.swift` | 只做「`ControllerState` → 纯数据」的适配，调上面两个 |
+  | `Packet.swift` | 只做「`ControllerState` → 纯数据」的适配：`PacketFormat.encode(axes: s.wireAxes)`，轴真值表只在 `wireAxes` 算一处 |
+  | `HudReadout.swift` | 底栏状态条「按模式显示哪几格」：吃 `AxisOutputs`（= 发出去的那 8 个轴），开车不显「方向」、手柄不显油门/刹车 |
   | `GameProfile.swift` | **G2** 游戏预设：`GameProfile`（模式+手感+轴表名+布局）、内置 WARDOGS / 欧洲卡车模拟、`GameProfileStore`、`GameProfileApplier`（应用顺序）。纯类型，可脱离 App 单测 |
 
   注意：曲线数学、轴真值表、包字节布局三者**都不允许**在别处再写一遍。
   `tests/test_ios_axis.py` 会拦住 `pow(` / `func shape(` 的重复实现，
   也会拦住无后缀的全局手感键（G1 起手感参数按模式分键）。
-- `Views/`：`Theme`（**浅/深双主题**（`Color.pd(浅,深)` 动态解析 + `AppAppearance` 外观枚举 + `.palmAppearance()` 修饰器）+ 模拟器 HUD 组件：`CockpitBackdrop` 渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕。仪表专用色（`instr*`/`hud*`）是固定值，不随主题变——姿态球在白底上仍是一块黑表盘）、`CockpitView`（顶栏状态条 + 底部状态条 ROL/PIT/YAW/THR/LINK/MODE/SRC）、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`FlightPanel`（只读飞行仪表盘：`ArcGauge`/`BarGauge`/`FlightPanel`）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
+- `Views/`：`Theme`（**浅/深双主题**（`Color.pd(浅,深)` 动态解析 + `AppAppearance` 外观枚举 + `.palmAppearance()` 修饰器）+ 模拟器 HUD 组件：`CockpitBackdrop` 渐变+微光晕+HUD 网格、`hudPanel` 仪表面板/四角括号、`HudCell` 数据单元、`CornerBrackets`、`glow` 光晕。仪表专用色（`instr*`/`hud*`）是固定值，不随主题变——姿态球在白底上仍是一块黑表盘）、`CockpitView`（顶栏 + 底部状态条（轴格由 `HudReadout` 按模式给，见交互文档 §12.9））、`AttitudeBall`（PFD 姿态球）、`Controls`（摇杆/双极滑条/单极滑条/苦力帽/视角板）、`SteeringWheel`（触摸方向盘，多圈+可调回正速度）、`FlightPanel`（只读飞行仪表盘：`ArcGauge`/`BarGauge`/`FlightPanel`）、`Layout`（`LayoutStore`+`WidgetCanvas` 可拖/缩放/删除）、`Widgets`（组件类型/绑定/渲染）、`PreflightView`。
 
 v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `GamepadDeck` 已整份删除，
 三个模式共用一块通用组件画布 `WidgetCanvas`；各模式的默认布局 = 一组基本轴模块
@@ -88,7 +89,7 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 140 项
+python3 -m unittest discover -s tests -t .      # 146 项
 ```
 
 其中三个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：

@@ -34,6 +34,8 @@ SOURCES = [
     "CockpitMode.swift",
     "PacketFormat.swift",
     "ShapingKeys.swift",
+    # 底部仪表条按模式取字段（吃的就是 AxisMap 的输出）
+    "HudReadout.swift",
 ]
 
 TEST_SRC = os.path.join(HERE, "ios", "AxisCoreTests.swift")

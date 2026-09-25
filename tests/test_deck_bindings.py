@@ -476,5 +476,49 @@ class TestNoIdleRepaint(unittest.TestCase):
         self.assertNotRegex(tick, r"\bself\.[a-zA-Z]+ =|\bstate\.(link|hz|transport|lastError) =[^=]")
 
 
+class TestStatusStripFollowsTheMode(unittest.TestCase):
+    """底部仪表条显示的必须是**真正发出去**的那几个量。
+
+    历史坑：三个模式共用一套写死的 `ROL/PIT/YAW/THR`。开车模式真值表里 Rz 恒 0
+    （不发），手柄模式的 thr/lt/rt 也全清零 —— 屏幕上却照旧摆着「方向 / 油门」。
+    跟 E1 修的是同一类：界面说的和发出去的对不上。
+    """
+
+    def setUp(self):
+        self.cockpit = _ios("Views", "CockpitView.swift")
+        self.hud = _ios("Model", "HudReadout.swift")
+
+    def test_strip_reads_the_wire_values(self):
+        self.assertIn("HudReadout.axis(mode: s.mode, out: s.wireAxes)", self.cockpit,
+                      "仪表条必须按模式取字段，而且吃的是 s.wireAxes（发出去的那份）")
+
+    def test_no_hardcoded_aviation_cells(self):
+        for tag in ('label: "ROL"', 'label: "PIT"', 'label: "YAW"', 'label: "THR"'):
+            self.assertNotIn(tag, self.cockpit, "状态条不该再写死 %s" % tag)
+
+    def test_no_degree_sign_on_normalized_sticks(self):
+        self.assertNotIn('"%+.1f°"', self.cockpit,
+                         "杆位是 -1…1 的归一化值，不是角度，不能带 °")
+        self.assertIn("static func bipolar", self.hud)
+
+    def test_drive_drops_the_yaw_cell(self):
+        body = self.hud.split("case .drive:", 1)[1].split("case .gamepad:", 1)[0]
+        self.assertNotIn('label: "方向"', body, "开车模式不发 Rz，不该有「方向」格")
+
+    def test_gamepad_drops_throttle_and_brake(self):
+        pad = self.hud.split("case .gamepad:", 1)[1]
+        for banned in ("油门", "刹车", "总距"):
+            self.assertNotIn('label: "%s"' % banned, pad,
+                             "手柄模式 thr/lt/rt 恒 0，不该有「%s」格" % banned)
+
+    def test_the_truth_table_is_resolved_in_exactly_one_place(self):
+        packet = _ios("Model", "Packet.swift")
+        state = _ios("Model", "ControllerState.swift")
+        self.assertIn("axes: s.wireAxes", packet, "Packet.pack 要走 s.wireAxes")
+        self.assertNotIn("AxisMap.resolve", packet,
+                         "真值表只能算一处（ControllerState.wireAxes），否则显示/发送会各算一遍")
+        self.assertIn("var wireAxes: AxisOutputs", state)
+
+
 if __name__ == "__main__":
     unittest.main()

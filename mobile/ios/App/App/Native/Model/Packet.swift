@@ -9,22 +9,8 @@ enum Packet {
     static let size = PacketFormat.size
 
     static func pack(_ s: ControllerState) -> Data {
-        PacketFormat.encode(
-            hat: s.hat,
-            axes: AxisMap.resolve(
-                mode: s.mode,
-                collective: s.collective,
-                throttle: s.throttle,
-                clutch: s.clutch,
-                smRoll: s.smRoll,
-                smPitch: s.smPitch,
-                smYaw: s.smYaw,
-                lookX: s.lookX,
-                lookY: s.lookY,
-                rt: s.rt,
-                lt: s.lt
-            ),
-            buttons: s.btnMask
-        )
+        // 轴真值表只走 `s.wireAxes` 一处 —— 底部仪表条读的也是它，
+        // 否则「界面显示的」和「真正发出去的」又要各算一遍。
+        PacketFormat.encode(hat: s.hat, axes: s.wireAxes, buttons: s.btnMask)
     }
 }

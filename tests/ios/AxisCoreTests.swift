@@ -210,6 +210,73 @@ func testAllOutputsInRange() {
     }
 }
 
+// MARK: - HudReadout：底部仪表条按模式取字段（与 AxisMap 同源）
+
+func testHudReadoutLabelsFollowTheMode() {
+    // 开车模式不发 Rz（真值表里 yaw 恒 0）⇒ 仪表条不该出现「方向」格。
+    let drive = HudReadout.axis(mode: .drive, out: AxisMap.resolve(
+        mode: .drive, collective: 0, throttle: 0, clutch: 0,
+        smRoll: 0, smPitch: 0, smYaw: 0, lookX: 0, lookY: 0, rt: 0, lt: 0))
+    let driveLabels = drive.map { $0.label }
+    expect(driveLabels == ["转向", "离合", "油门", "刹车"],
+           "开车模式仪表条应为 转向/离合/油门/刹车，得到 \(driveLabels)")
+
+    // 手柄模式 thr/lt/rt 恒 0 ⇒ 一个油门/刹车格都不该有。
+    let pad = HudReadout.axis(mode: .gamepad, out: AxisMap.resolve(
+        mode: .gamepad, collective: 0, throttle: 0, clutch: 0,
+        smRoll: 0, smPitch: 0, smYaw: 0, lookX: 0, lookY: 0, rt: 0, lt: 0))
+    let padLabels = pad.map { $0.label }
+    expect(padLabels == ["摇杆X", "摇杆Y", "视角X", "视角Y"],
+           "手柄模式仪表条应为两个摇杆，得到 \(padLabels)")
+    for banned in ["油门", "刹车", "总距"] {
+        expect(!padLabels.contains(banned), "手柄模式不发 thr/lt，不该显示 \(banned)")
+    }
+
+    // 飞机模式的总距走 collecive（反转后），其余三个是杆值。
+    let heli = HudReadout.axis(mode: .heli, out: AxisMap.resolve(
+        mode: .heli, collective: 0.75, throttle: 0, clutch: 0,
+        smRoll: 0, smPitch: 0, smYaw: 0, lookX: 0, lookY: 0, rt: 0, lt: 0))
+    expect(heli.map { $0.label } == ["横滚", "俯仰", "方向", "总距"],
+           "飞机模式仪表条标签不对：\(heli.map { $0.label })")
+    expect(heli[3].value == "75%", "飞机模式总距应显示 75%，得到 \(heli[3].value)")
+}
+
+func testHudReadoutShowsTheWireValue() {
+    // 开车时 pitch 槽是离合、rt 是油门（rt 真值被忽略）—— 仪表条必须跟着真值表走，
+    // 不能“照输入原样显示”。
+    let o = AxisMap.resolve(mode: .drive, collective: 0.9, throttle: 0.4, clutch: 0.6,
+                            smRoll: -0.5, smPitch: 0.1, smYaw: 0.8,
+                            lookX: 0, lookY: 0, rt: 1.0, lt: 0.25)
+    let cells = HudReadout.axis(mode: .drive, out: o)
+    expect(cells[0].value == HudReadout.bipolar(o.roll), "转向格应等于发出去的 roll")
+    expect(cells[1].value == HudReadout.bipolar(o.pitch), "离合格应等于发出去的 pitch（=离合）")
+    expect(cells[2].value == HudReadout.percent(o.thr), "油门格应等于发出去的 thr")
+    expect(cells[3].value == HudReadout.percent(o.lt), "刹车格应等于发出去的 lt")
+    expect(cells[3].value == "25%", "刹车 0.25 应显示 25%，得到 \(cells[3].value)")
+    // 开车时 rt 输入 1.0 不单独占格（它就是油门）
+    expect(cells.count == 4, "开车模式仪表条固定 4 格，得到 \(cells.count)")
+    // yaw 在开车里恒 0，也不该被任何格式化成非零
+    for c in cells where c.label == "方向" {
+        expect(false, "开车模式不该有「方向」格：\(c.value)")
+    }
+}
+
+func testHudReadoutFormatting() {
+    // 双极轴是归一化杆位，不是角度：不能带 ° （以前写成 %+.1f° 是单位错误）
+    expect(HudReadout.bipolar(0.316) == "+0.32", "双极轴两位小数：\(HudReadout.bipolar(0.316))")
+    expect(HudReadout.bipolar(-1) == "-1.00", "负数带符号：\(HudReadout.bipolar(-1))")
+    expect(HudReadout.bipolar(0) == "+0.00", "零也带符号：\(HudReadout.bipolar(0))")
+    expect(HudReadout.bipolar(-0.00001) == "+0.00",
+           "自回中残留的极小负值不能显示成 -0.00：\(HudReadout.bipolar(-0.00001))")
+    expect(HudReadout.bipolar(-0.006) == "-0.01", "超过显示精度的负值照样带负号")
+    expect(HudReadout.percent(0.75) == "75%", "单极轴走百分比：\(HudReadout.percent(0.75))")
+    expect(HudReadout.percent(1) == "100%", "满值 100%")
+    expect(HudReadout.tone(0) == .quiet, "中位算静止")
+    expect(HudReadout.tone(0.009) == .quiet, "0.009 仍在阈值内")
+    expect(HudReadout.tone(0.011) == .active, "0.011 算有动作")
+    expect(HudReadout.tone(-0.5) == .active, "负向也算有动作")
+}
+
 // MARK: - CockpitMode：兼容层
 
 func testModeParse() {
@@ -435,6 +502,9 @@ testMigrationOnEmptyStoreIsNoop()
 testMigrationLeavesUnrelatedKeysAlone()
 testScopedReadsDoNotBleedAcrossModes()
 testShapingParamsSetWritesOnlyThatMode()
+testHudReadoutLabelsFollowTheMode()
+testHudReadoutShowsTheWireValue()
+testHudReadoutFormatting()
 
 if failures.isEmpty {
     print("OK  \(checks) checks passed")

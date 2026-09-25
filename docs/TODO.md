@@ -80,6 +80,14 @@
   实测 Mac Catalyst：启动页 12~13% → 1.2%，座舱 13~15% → 1.3~1.7%，
   按住方向盘保持角度 1.3~1.4%（顺带姿态刷新从 10Hz 提到满帧，更顺了）。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.8，`TestNoIdleRepaint` 守卫。
+- **状态条按模式取字段（显示的就是发出去的）** —— 底栏原来三个模式共用写死的
+  `ROL/PIT/YAW/THR`：开车模式 `Rz` 恒 0 却在显示「方向」，手柄模式 `thr/lt/rt` 全清零
+  却在显示「油门」，而且 `0.1°` 里的 `0.1` 是归一化杆位、不是角度。
+  现在轴真值表只在 `ControllerState.wireAxes` 算一处，`Packet.pack` 与新的
+  `HudReadout`（纯函数）都读它 —— 开车显示 转向/离合/油门/刹车，
+  手柄显示 摇杆X/摇杆Y/视角X/视角Y。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.9，
+  `TestStatusStripFollowsTheMode` + `AxisCoreTests::testHudReadout*` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。

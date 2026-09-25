@@ -65,15 +65,16 @@ struct CockpitView: View {
     }
 
     // MARK: 底部仪表条
+    /// 轴那几格由 `HudReadout` 按模式给（吃的就是 `s.wireAxes`：真正发出去的值）。
+    /// 以前三个模式都写死 ROL/PIT/YAW/THR，开车模式明明不发 Rz 也在显示「方向」。
     private var statusStrip: some View {
-        HStack(spacing: 0) {
-            HudCell(label: "ROL", value: String(format: "%+.1f°", s.smRoll), accent: axisAccent(s.smRoll))
-            divider
-            HudCell(label: "PIT", value: String(format: "%+.1f°", s.smPitch), accent: axisAccent(s.smPitch))
-            divider
-            HudCell(label: "YAW", value: String(format: "%+.1f°", s.smYaw), accent: axisAccent(s.smYaw))
-            divider
-            HudCell(label: "THR", value: String(format: "%.0f%%", s.throttle * 100), accent: s.throttle > 0.01 ? Theme.green : Theme.textDim)
+        let cells = HudReadout.axis(mode: s.mode, out: s.wireAxes)
+        return HStack(spacing: 0) {
+            ForEach(cells.indices, id: \.self) { i in
+                if i > 0 { divider }
+                HudCell(label: cells[i].label, value: cells[i].value,
+                        accent: cells[i].tone == .active ? Theme.cyan : Theme.textDim)
+            }
             divider
             HudCell(label: "LINK", value: s.link == .live ? String(format: "%.0fHz", s.hz) : linkShort,
                     accent: s.link == .live ? Theme.green : (s.link == .connecting ? Theme.orange : Theme.textFaint))
@@ -99,10 +100,6 @@ struct CockpitView: View {
         case .lost: return "断线"
         case .idle: return "未连"
         }
-    }
-
-    private func axisAccent(_ v: Double) -> Color {
-        abs(v) < 0.01 ? Theme.textDim : Theme.cyan
     }
 
     // MARK: 顶部
