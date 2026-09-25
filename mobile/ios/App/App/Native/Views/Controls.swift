@@ -1,10 +1,20 @@
 import SwiftUI
 
-/// 2D 触摸摇杆。拖动改 binding（roll/pitch），松手按 returnToCenter 回中。
+/// 2D 触摸摇杆。拖动改绑定的两轴，松手按 `returnToCenter` 回中。
+///
+/// 两种用法：
+/// - **周期杆**（默认）：X=横滚、Y=俯仰，两轴都回中；
+/// - **总距/尾桨杆**（`centerY: false`）：X=方向舵（回中）、Y=总距（**保持**）——
+///   对位航模遥控器的左杆（尾桨松手回中、总距停在原地）。
 struct StickControl: View {
-    @Binding var x: Double   // roll
-    @Binding var y: Double   // pitch
+    @Binding var x: Double
+    @Binding var y: Double
     var returnToCenter: Bool = true
+    /// Y 轴是否也跟着回中。左杆（总距）给 `false`：松手只把 X 拉回中点。
+    var centerY: Bool = true
+    /// 无障碍读数用词（自绘控件读不出「推到哪了」，VoiceOver 靠这两句）。
+    var xLabel: String = "横滚"
+    var yLabel: String = "俯仰"
     var accent: Color = Theme.cyan
     var onTouch: ((Bool) -> Void)? = nil
 
@@ -27,9 +37,10 @@ struct StickControl: View {
             lastTick = now
             let k = min(1.0, speed * dt)
             x += (0 - x) * k
-            y += (0 - y) * k
-            if abs(x) < 0.004 && abs(y) < 0.004 {
-                x = 0; y = 0
+            if centerY { y += (0 - y) * k }
+            if abs(x) < 0.004 && (!centerY || abs(y) < 0.004) {
+                x = 0
+                if centerY { y = 0 }
                 stopReturn()
             }
         }
@@ -93,8 +104,12 @@ struct StickControl: View {
                         else if abs(nx) < 0.05 { nx = 0 }
                         if ny > 0.92 { ny = 1 } else if ny < -0.92 { ny = -1 }
                         else if abs(ny) < 0.05 { ny = 0 }
+                        let px = x, py = y
                         x = max(-1, min(1, nx))
                         y = max(-1, min(1, ny))
+                        // 中位咔哒：刚回到中点时给一次轻反馈，闭着眼也知道回没回中
+                        if abs(x) < 0.05 && abs(px) >= 0.05 { Haptics.select() }
+                        if centerY && abs(y) < 0.05 && abs(py) >= 0.05 { Haptics.select() }
                     }
                     .onEnded { _ in
                         dragging = false
@@ -109,7 +124,7 @@ struct StickControl: View {
         // VoiceOver：自绘摇杆本身没有文字，读不出「现在推到哪了」。
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("摇杆")
-        .accessibilityValue(String(format: "横滚 %+.0f%%，俯仰 %+.0f%%", x * 100, y * 100))
+        .accessibilityValue("\(xLabel) \(String(format: "%+.0f%%", x * 100))，\(yLabel) \(String(format: "%+.0f%%", y * 100))")
         .onDisappear { stopReturn() }
     }
 }
@@ -192,11 +207,19 @@ struct UniSlider: View {
     @Binding var value: Double
     var label: String = "油门"
     var accent: Color = Theme.cyan
+    /// 触觉止动位置（归一化 0~1）：滑过时给一次强反馈，松手 ±2.5% 内吸附。
+    /// 直升机总距用它做「总距怠速 / 悬停 / 最大」三个不靠眼睛的参照
+    /// （借航模遥控器的止动档位，v3 网页座舱的老参数）。
+    var detents: [Double] = []
+    /// 棘轮：每滑过 10% 给一次轻反馈 —— 闭着眼也知道总距推到哪了。
+    var ratchet: Bool = false
     var onTouch: ((Bool) -> Void)? = nil
 
     // 确定感：抓取增量（按下不跳值）
     @State private var grabValue: Double = 0
     @State private var grabX: Double = -1
+    /// 上一帧所在的 10% 格，棘轮只在跨格时响，不按帧刷屏。
+    @State private var lastDecile: Int = -1
 
     var body: some View {
         GeometryReader { geo in
@@ -224,17 +247,35 @@ struct UniSlider: View {
                         if grabX < 0 {
                             grabX = g.startLocation.x
                             grabValue = value
+                            lastDecile = Int(value * 10)
                         }
                         let delta = (g.location.x - grabX) / w
                         var v = grabValue + delta
                         // 边界吸附：接近满/空时吸附，保证“到底就是满值”
                         if v > 0.96 { v = 1 }
                         else if v < 0.04 { v = 0 }
-                        value = max(0, min(1, v))
+                        v = max(0, min(1, v))
+                        if v != value {
+                            // 棘轮：每 10% 一格轻反馈
+                            if ratchet {
+                                let d = Int(v * 10)
+                                if d != lastDecile { lastDecile = d; Haptics.select() }
+                            }
+                            // 止动：滑过刻度线时强反馈（不看屏也能定位）
+                            for t in detents where (value - t) * (v - t) < 0 { Haptics.rigidTap() }
+                        }
+                        value = v
                     }
                     .onEnded { _ in
                         onTouch?(false)
                         grabX = -1; grabValue = 0
+                        lastDecile = -1
+                        // 松手吸附到最近止动（±2.5%，v3 网页座舱的老参数）
+                        if let d = detents.min(by: { abs($0 - value) < abs($1 - value) }),
+                           abs(d - value) <= 0.025 {
+                            value = d
+                            Haptics.tap()
+                        }
                     }
             )
         }

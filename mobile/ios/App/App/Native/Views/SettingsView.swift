@@ -469,7 +469,7 @@ struct SettingsView: View {
 
     /// 列表里的一行：一个预设，或内置「默认」（还原点）。
     private struct PresetRow: Identifiable {
-        enum Kind { case profile(GameProfile), restoreDefault }
+        enum Kind { case profile(GameProfile), restoreDefault, rcMode2 }
         let id: String
         let kind: Kind
     }
@@ -480,7 +480,9 @@ struct SettingsView: View {
         let visible = profiles.all.filter { $0.hasShaping || $0.mode == s.mode }
         let machines = visible.filter { $0.hasShaping }.map { PresetRow(id: $0.name, kind: .profile($0)) }
         let layouts = visible.filter { !$0.hasShaping }.map { PresetRow(id: $0.name, kind: .profile($0)) }
-        return machines + layouts + [PresetRow(id: LayoutStore.builtinName, kind: .restoreDefault)]
+        // 「遥控器双杆」只对飞机有意义 —— 它就是总距 + 尾桨那套杆。
+        let builtins = s.mode == .heli ? [PresetRow(id: LayoutStore.rcMode2Name, kind: .rcMode2)] : []
+        return machines + layouts + builtins + [PresetRow(id: LayoutStore.builtinName, kind: .restoreDefault)]
     }
 
     @ViewBuilder private func presetRowView(_ row: PresetRow) -> some View {
@@ -490,6 +492,12 @@ struct SettingsView: View {
                     chips: ["内置", "布局"],
                     detail: "\(s.mode.label) · 出厂布局 · \(LayoutStore.defaults(mode: s.mode).count) 个组件",
                     current: layout.isCurrentDefault(mode: s.mode),
+                    warn: false)
+        case .rcMode2:
+            rowBody(title: LayoutStore.rcMode2Name,
+                    chips: ["内置", "布局"],
+                    detail: "\(s.mode.label) · 双杆 Mode 2（左杆总距+尾桨）· \(LayoutStore.defaultRCMode2().count) 个组件",
+                    current: layout.isCurrentRCMode2(mode: s.mode),
                     warn: false)
         case .profile(let p):
             rowBody(title: p.name,
@@ -588,6 +596,11 @@ struct SettingsView: View {
             profiles.markActive(nil)
             Haptics.press()
             profNote = "已恢复到「\(LayoutStore.builtinName)」布局"
+        case .rcMode2:
+            layout.applyRCMode2(mode: s.mode)
+            profiles.markActive(nil)
+            Haptics.press()
+            profNote = "已切到「\(LayoutStore.rcMode2Name)」布局"
         case .profile(let p):
             applyProfile(p)
         }

@@ -118,6 +118,11 @@ struct CockpitView: View {
     // MARK: 顶部
     private func topBar(height: CGFloat) -> some View {
         ZStack {
+            // 左侧：熄火锁（Throttle Hold）—— 只在飞机（直升机）模式出现
+            HStack(spacing: 6) {
+                if s.mode == .heli { throttleHoldButton(height: height) }
+                Spacer(minLength: 0)
+            }
             // 居中：模式开关（贴顶）
             HStack(spacing: 6) {
                 ForEach(CockpitMode.allCases, id: \.self) { m in
@@ -176,6 +181,25 @@ struct CockpitView: View {
             showSettings = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showTutorial = true }
         }) }
+    }
+
+    /// 熄火锁：对位航模遥控器的 Throttle Hold。锁上时总距**输出**恒 0（手里的滑块保留），
+    /// 冷启动默认锁上 —— 不会带着残留总距把飞机放出去。
+    private func throttleHoldButton(height: CGFloat) -> some View {
+        let locked = s.throttleHold
+        return Button {
+            s.throttleHold.toggle()
+            if s.throttleHold { Haptics.success() } else { Haptics.press() }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: locked ? "lock.fill" : "lock.open.fill").pdFont(13)
+                Text("熄火锁").pdFont(11, weight: .medium).lineLimit(1).minimumScaleFactor(0.7)
+            }
+        }
+        .buttonStyle(CardButton(active: locked, accent: Theme.red, fillWidth: false, height: height))
+        .frame(width: 74)
+        .accessibilityLabel("熄火锁")
+        .accessibilityValue(locked ? "已锁，总距输出为零" : "已解锁，总距正常输出")
     }
 
     /// 切模式：**未连接就直接切**（本机换模式没有代价）；

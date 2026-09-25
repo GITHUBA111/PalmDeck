@@ -6,7 +6,8 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     case slider     // 滑条
     case pad        // 触摸板（视角）
     case button     // 按键
-    case stick      // 2D 摇杆
+    case stick      // 2D 摇杆（周期杆）
+    case collective // 总距/尾桨杆（X=方向舵、Y=总距，Y 松手保持）
     case hat        // 苦力帽
     case attitude   // 姿态球
     case panel      // 飞行仪表盘（只读）
@@ -23,6 +24,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         case .pad: return "触摸板"
         case .button: return "按键"
         case .stick: return "摇杆"
+        case .collective: return "总距/尾桨杆"
         case .hat: return "苦力帽"
         case .attitude: return "姿态球"
         case .panel: return "仪表盘"
@@ -33,7 +35,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     var isReadOnly: Bool { self == .panel }
 
     /// 组件库里「绑定」下拉该给哪些选项。空 = 这个组件不读 `widget.binding`：
-    /// 方向盘 / 触摸板 / 摇杆 / 苦力帽 / 姿态球渲染时各走固定通道，仪表盘只读。
+    /// 方向盘 / 触摸板 / 摇杆 / 总距杆 / 苦力帽 / 姿态球渲染时各走固定通道，仪表盘只读。
     /// 给了下拉就是让人选一个存下去却不生效的值（历史 bug：选「按键」能选「油门」，
     /// 而 `tapButton` 对轴绑定是空实现 ⇒ 按了没反应）。
     var bindingOptions: [WidgetBinding] {
@@ -50,6 +52,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         case .wheel:    return "固定发「横滚/转向」"
         case .pad:      return "固定发「视角」"
         case .stick:    return "固定发「横滚 + 俯仰」"
+        case .collective: return "固定发「方向舵 + 总距（松手保持）」"
         case .hat:      return "固定发「苦力帽 + 视角」"
         case .attitude: return "只显示本机杆位"
         case .panel:    return "只读显示，不绑定"
@@ -62,6 +65,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     var defaultBinding: WidgetBinding {
         switch self {
         case .pad, .stick, .hat: return .look
+        case .collective:        return .yaw
         case .button:            return .vjoy1
         default:                 return .roll
         }
@@ -159,9 +163,15 @@ struct WidgetView: View {
         case .slider:
             switch widget.binding {
             case .throttle, .brake, .clutch, .rt:
+                // 总距（飞机模式的 throttle）带止动 + 棘轮：不看屏也能摸到「悬停」那个点。
+                // 开车模式的油门是线性的，不要止动（0.42 在那里没意义）。
+                let isCollective = s.mode == .heli && widget.binding == .throttle
                 VStack(spacing: 2) {
                     Text(widget.title).pdFont(10).foregroundColor(Theme.textFaint)
-                    UniSlider(value: bindAxis(widget.binding), label: widget.title, accent: sliderColor, onTouch: { ctrl.setTouchActive($0) })
+                    UniSlider(value: bindAxis(widget.binding), label: widget.title, accent: sliderColor,
+                              detents: isCollective ? [0.0, 0.42, 1.0] : [],
+                              ratchet: isCollective,
+                              onTouch: { ctrl.setTouchActive($0) })
                 }
             default:
                 VStack(spacing: 2) {
@@ -177,6 +187,15 @@ struct WidgetView: View {
                 .accessibilityValue(isButtonActive(widget.binding) ? "按下" : "松开")
         case .stick:
             StickControl(x: $s.roll, y: $s.pitch, returnToCenter: s.stickReturn,
+                         onTouch: { ctrl.setTouchActive($0) })
+        case .collective:
+            // 航模遥控器左杆：X = 尾桨（回中），Y = 总距（单极，松手保持）。
+            // 熄火锁在 ControllerState.collective 上生效 —— 没解锁，推满也发不出去。
+            StickControl(x: $s.yaw,
+                         y: Binding(get: { s.throttle * 2 - 1 },
+                                    set: { s.throttle = ($0 + 1) / 2 }),
+                         returnToCenter: s.stickReturn, centerY: false,
+                         xLabel: "方向舵", yLabel: "总距",
                          onTouch: { ctrl.setTouchActive($0) })
         case .hat:
             HatPad(hat: $s.hat, lookX: $s.lookX, lookY: $s.lookY)

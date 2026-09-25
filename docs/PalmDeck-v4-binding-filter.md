@@ -65,14 +65,19 @@ Section("绑定功能") {
 | 方向盘 `.wheel` | `bindAxis(.roll)` 写死 | 忽略 |
 | 触摸板 `.pad` | `lookX` / `lookY` | 忽略 |
 | 摇杆 `.stick` | `$s.roll` / `$s.pitch` | 忽略 |
+| 总距/尾桨杆 `.collective` | `$s.yaw` / `$s.throttle`（单极） | 忽略 |
 | 苦力帽 `.hat` | `hat` / `lookX` / `lookY` | 忽略 |
 | 姿态球 `.attitude` | `smRoll/smPitch/smYaw` | 忽略 |
 | 仪表盘 `.panel` | 只读 | 忽略（已由 `isReadOnly` 拦） |
 
 > 结论：全 App **真正有意义的绑定** = `{roll, pitch, yaw, throttle, brake, clutch, rt}`（滑条）
 > ∪ `{vjoy1…vjoy16, gearUp, gearDown, fire}`（按键）。`look` 虽然有 `isAxis == true`，
-> 但没有任何一个「读 `widget.binding`」的组件会处理它（触摸板/摇杆/苦力帽都是写死通道），
+> 但没有任何一个「读 `widget.binding`」的组件会处理它（触摸板/摇杆/总距-尾桨杆/苦力帽都是写死通道），
 > 所以它也不该出现在下拉里。
+
+> **后补（`docs/PalmDeck-v4-rc-mode2.md`）**：后来新增了 `.collective`「总距/尾桨杆」（X=yaw、Y=单极 throttle、Y 不回中），
+> 它同属固定通道：`bindingOptions` 仍为 `[]`、依旧只有一行 `fixedBindingNote`。
+> 下面 §3 的 Swift 片段是**当时**的样子（`fixedBindingNote` 里还没有 `.collective` 一行），未回填。
 
 ### 2.4 点「按键 / 滑条」弹窗不传类型（`Views/CockpitView.swift:60-68`）
 

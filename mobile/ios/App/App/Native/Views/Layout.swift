@@ -88,6 +88,7 @@ final class LayoutStore: ObservableObject {
         case .pad:    size = .r(0.35, 0.35, 0.20, 0.28)
         case .button: size = .r(0.40, 0.45, 0.12, 0.12)
         case .stick:  size = .r(0.38, 0.35, 0.18, 0.30)
+        case .collective: size = .r(0.06, 0.30, 0.24, 0.40)
         case .hat:    size = .r(0.40, 0.35, 0.12, 0.20)
         case .attitude: size = .r(0.40, 0.10, 0.22, 0.34)
         case .panel:  size = .r(0.30, 0.28, 0.40, 0.28)
@@ -128,6 +129,9 @@ final class LayoutStore: ObservableObject {
     /// 内置还原点名（= 预设列表里那一行只读的「默认」）。
     static var builtinName: String { GameProfileBuiltin.reservedLayoutName }
 
+    /// 「遥控器双杆（Mode 2）」内置还原点名（预设列表里那一行只读的内置布局）。
+    static var rcMode2Name: String { "遥控器双杆" }
+
     /// 把该模式铺回出厂布局（应用前先压撤销槽），= 应用内置「默认」预设。
     func applyDefault(mode: CockpitMode) {
         pushUndo(mode: mode)
@@ -137,6 +141,17 @@ final class LayoutStore: ObservableObject {
     /// 当前布局是否就是出厂默认。
     func isCurrentDefault(mode: CockpitMode) -> Bool {
         sameShape(widgets(mode: mode), LayoutStore.defaults(mode: mode))
+    }
+
+    /// 把该模式铺成「遥控器双杆（Mode 2）」内置布局（应用前先压撤销槽）。
+    func applyRCMode2(mode: CockpitMode) {
+        pushUndo(mode: mode)
+        replaceWidgets(LayoutStore.defaultRCMode2(), mode: mode)
+    }
+
+    /// 当前布局是否就是「遥控器双杆」。
+    func isCurrentRCMode2(mode: CockpitMode) -> Bool {
+        sameShape(widgets(mode: mode), LayoutStore.defaultRCMode2())
     }
 
     /// 当前布局是否等于某个预设带的布局（解码失败 = 不相等）。
@@ -345,6 +360,22 @@ final class LayoutStore: ObservableObject {
             .make(.stick,  .roll,     .r(0.14, 0.38, 0.21, 0.50), label: "周期杆"),
             // 视角：触摸板，写 lookX/lookY
             .make(.pad,    .look,     .r(0.60, 0.54, 0.26, 0.34), label: "视角"),
+        ]
+    }
+
+    /// 遥控器双杆（Mode 2）内置布局：左杆 = 总距 + 尾桨，右杆 = 副翼 + 升降。
+    ///
+    /// 给有航模遥控器肌肉记忆的玩家（WARDOGS / 无人机模拟）。
+    /// **不改**飞机出厂布局（那仍是「真机座舱手」的 `defaultHeli()`）——这是一份可选还原点。
+    /// 左杆的 Y 是**保持型**（渲染时 `centerY: false`），对位遥控器左杆：尾桨松手回中、总距不动。
+    static func defaultRCMode2() -> [DeckWidget] {
+        [
+            // 左杆：X = 尾桨（回中），Y = 总距（单极，松手保持）
+            .make(.collective, .yaw,  .r(0.03, 0.20, 0.32, 0.56), label: "总距/尾桨"),
+            // 右杆：副翼 + 升降
+            .make(.stick,      .roll, .r(0.42, 0.28, 0.28, 0.50), label: "副翼/升降"),
+            // 视角：触摸板，写 lookX/lookY
+            .make(.pad,        .look, .r(0.78, 0.10, 0.18, 0.26), label: "视角"),
         ]
     }
 

@@ -33,6 +33,12 @@ final class ControllerState: ObservableObject {
     @Published var rt: Double = 0          // 右扳机 / 开火
     @Published var clutch: Double = 0      // 开车：离合（0~1），走左摇杆 Y（0 → 中位，1 → -1）
 
+    // ---- 安全锁（借航模遥控器的 Throttle Hold）----
+    /// 熄火锁：锁上后总距**输出**恒为 0（手里的滑块位置保留）。
+    /// 默认锁上 —— 冷启动 / 换模式时不会带着残留总距把飞机放出去；
+    /// 故意不持久化，每次开到 App 都是锁着的（与遥控器开机先上锁一致）。
+    @Published var throttleHold: Bool = true
+
     // ---- 帽 / 按键 ----
     @Published var hat: UInt8 = 255        // 0上 1右 2下 3左 255无
     @Published var btnMask: UInt16 = 0     // bit0..bit9 = b1..b10
@@ -187,8 +193,9 @@ final class ControllerState: ObservableObject {
     /// 方向舵固定死区（不跟随「摇杆死区」滑条：偏航是自回中轴，太大死区会转不动尾桨）。
     static let yawDeadzone = 0.08
 
-    /// 总距（应用反转后）
-    var collective: Double { invColl ? (1 - throttle) : throttle }
+    /// 总距（应用反转后）。熄火锁生效时**输出**恒 0 —— 滑块停在原地，但发出去的
+    /// `thr`（AxisMap 的 `collective` 入口）是怠速。对位航模遥控器的 Throttle Hold。
+    var collective: Double { throttleHold ? 0 : (invColl ? (1 - throttle) : throttle) }
 
     /// 这一帧真正会发出去的 8 个轴（= `AxisMap` 真值表的唯一调用点之一）。
     ///

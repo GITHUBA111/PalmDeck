@@ -25,10 +25,10 @@ PalmDeckApp (@main)
 ├─ PreflightView        启动页：三步引导 + 状态条 + 连接/断开 + 高级(IP/反向)
 │   └─ [进入座舱]  ─────────────►  CockpitView（persisted: palmdeck_entered）
 └─ CockpitView          座舱：顶栏 + 皮肤 + 底栏
-    ├─ 顶栏：模式段(3) · 连接胶囊 · 设置齿轮 · [布局]
+    ├─ 顶栏：模式段(3) · 连接胶囊 · 设置齿轮 · [布局] ·（飞机模式左侧多一个 **熄火锁**）
     ├─ 皮肤：三个模式**共用一块通用组件画布** `WidgetCanvas`（引擎内无任何固定皮肤）
     ├─ 底栏 statusStrip：`HudReadout` 按模式取字段（飞机 横滚/俯仰/方向/总距，开车 转向/离合/油门/刹车，手柄 摇杆X/摇杆Y/视角X/视角Y）· LINK(hz) · MODE · SRC
-    ├─ ⌘ 设置 → SettingsView（双栏：连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 外观 / 帮助）
+    ├─ ⌘ 设置 → SettingsView（双栏：连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 帮助）
     ├─ ⌘ 布局 → LibrarySheet（类型 + 绑定）
     ├─ 首次 → CockpitTutorialView（一次性，可重开）
     └─ 未连接 → notConnectedBanner（顶部胶囊，点击即连）
@@ -115,7 +115,7 @@ idle ──connect()──► connecting ──open──► live
 |---|---|---|
 | 仪表盘 `panel` | 无（只读） | COLL/TRQ 弧表 + 姿态球 + ROL/PIT/YAW 杆位条；读本机平滑杆位，不读游戏遥测、不绑定任何键 |
 | 周期杆 `stick` | `roll` / `pitch` | 2D 摇杆，抓取增量，松手平滑回中 |
-| 总距 `slider` | `throttle` | 单极滑条（松手保持） |
+| 总距 `slider` | `throttle` | 单极滑条（松手保持）；飞机模式带 0.00 / 0.42 / 1.00 止动 + 棘轮 + 松手 ±2.5% 吸附 |
 | 脚舵 `slider` | `yaw` | 双极滑条（松手**立即**回中） |
 | 视角 `pad` | `look` | 触摸板（松手**立即**回正） |
 
@@ -196,7 +196,9 @@ idle ──connect()──► connecting ──open──► live
 | 连接成功 | `success()` | notification |
 | 连接失败 / 无效地址 | `warning()` | notification |
 
-**P7 新增**：总距越过 IDLE/FLY/MAX 卡位 → `tap()`；脚舵/方向盘过中位 → `select()`。
+**卡位 / 棘轮（借航模遥控器）**：飞机总距滑条在 0.00 / 0.42（悬停）/ 1.00 三个止动点——滑过给 `rigidTap()`、每 10% 棘轮给 `select()`、松手 ±2.5% 吸附；周期杆过中位 → `select()`；意外断线 → `warning()`（手动断开不震）。
+**遥控器双杆（Mode 2）**：左杆 =总距/尾桨杆——X（尾桨）过中位给 `select()`，Y（总距）**不回中、无中位概念**，所以不出中位反馈；右杆仍是周期杆。
+**熄火锁（Throttle Hold）**：飞机模式顶栏左侧，锁上后总距**输出**恒 0（滑块位置保留），冷启动默认锁上 —— 不会带着残留总距把飞机放出去。
 **P7 新增**：设置里「触觉反馈」总开关（`palmdeck_haptics`，默认开），关后全部静默。
 
 ---
@@ -259,7 +261,7 @@ y = 0                                              |x| <  dz
 ### 7.1 编辑
 
 - 入口：顶栏 `[布局]`（三个模式都有）。
-- 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球 / 仪表盘；
+- 组件库条（编辑态顶部）：按键 / 触摸板 / 摇杆 / 总距-尾桨杆 / 方向盘 / 滑条 / 苦力帽 / 姿态球 / 仪表盘；
   有默认绑定的直接加，滑条/按键弹 `LibrarySheet` 选绑定（只读的「仪表盘」跳过绑定选择）。
   弹窗里的绑定下拉**只列该类型真正会用的项**（滑条→轴、按键→vJoy 键），且从被点的类型起，
   见 §12.17。
@@ -287,6 +289,15 @@ y = 0                                              |x| <  dz
 - **空画布不是白板**：当前模式一个组件都没有时，画布中间显示「画布是空的」+ 下一步提示
   （编辑态指上方「添加：」，非编辑态指顶栏「布局」/`⋯`）。该层 `allowsHitTesting(false)`。
 - 同步：`layouts_get` / `layouts_put`（WS 控制面）；服务端下发 → `LayoutStore.applyServer`。
+
+> ⚠️ **「上传到电脑」曾经会删组件。** 电脑侧 `palmdeck_layouts.KINDS/BINDINGS` 是一份
+> **白名单**，`_coerce_widget` 对不在清单里的组件直接丢掉；而 `bridge.py` 的 `layouts_put`
+> 又把**校验后**的列表回传，`applyServer` 是**整表替换**本地布局。于是白名单漏一项
+> = 点一下「上传到电脑」就把那个组件删了，而且一声不响。实际被吞过 `panel`（飞机出厂
+> 布局里的仪表盘）、`rt`（右扳机/手刹轴）、`collective`（遥控器双杆左杆）。
+> 现在 `tests/test_layouts.py::KindAndBindingListsMatchTheApp` 直接解析 `Widgets.swift`
+> 的 `WidgetKind`/`WidgetBinding` 做对账；`bridge.py` 在丢弃件数非零时往日志里写警告。
+> **新增 `WidgetKind`/`WidgetBinding` 时必须同步这两份清单**（顺序也建议对齐）。
 - 存储键 `palmdeck_widgets_v10`（`{mode: [DeckWidget]}`）。
 - `CardButton` 读 `@Environment(\.isEnabled)`（不可用时 `opacity 0.35`）——编辑条上的 `放弃` 靠它表达状态。
 

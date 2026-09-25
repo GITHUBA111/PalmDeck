@@ -117,6 +117,9 @@ final class CockpitController: ObservableObject {
             self.state.link = .lost
             self.state.transport = "idle"
             self.pfConnState = self.autoReconnect ? "连接断开，重连中…" : "连接断开"
+            // 意外断线才震：手动断开（autoReconnect=false）不吓人。
+            // 对位航模遥控器的「信号丢失」蜂鸣。
+            if self.autoReconnect { Haptics.warning() }
             guard self.autoReconnect else { return }
             let delay = min(4.0, 0.6 + Double(self.retry) * 0.4)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in

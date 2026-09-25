@@ -1220,3 +1220,157 @@ class TestInstantRecenter(unittest.TestCase):
         uni = self.c.split("struct UniSlider", 1)[1]
         on_end = uni.split(".onEnded", 1)[1].split(".gesture", 1)[0]
         self.assertNotIn("value = 0", on_end, "油门类松手保持，不能回中")
+
+
+class TestCollectiveDetentsAndThrottleHold(unittest.TestCase):
+    """借航模遥控器的两件东西（走查「飞行部分 vs 遥控器」的落地）：
+
+    - **止动 / 棘轮**：玻璃屏没有物理参照，`UniSlider` 滑过刻度线给强反馈、每 10% 给轻反馈，
+      松手 ±2.5% 吸附。只给飞机模式的总距，开车油门保持线性。
+    - **熄火锁（Throttle Hold）**：锁上后总距**输出**恒 0（滑块位置保留），默认锁上 ——
+      冷启动不会带着残留总距（`ControllerState.throttle` 初值 0.35）把飞机放出去。
+    - **断线告警触觉**：意外掉线震一下（手动断开不震），对位遥控器的信号丢失蜂鸣。
+    """
+
+    def setUp(self):
+        self.controls = _ios("Views", "Controls.swift")
+        self.state = _ios("Model", "ControllerState.swift")
+        self.widgets = _ios("Views", "Widgets.swift")
+        self.cockpit = _ios("Views", "CockpitView.swift")
+        self.controller = _ios("Model", "CockpitController.swift")
+
+    def test_uni_slider_has_detents_and_ratchet(self):
+        uni = self.controls.split("struct UniSlider", 1)[1]
+        self.assertIn("var detents: [Double] = []", uni)
+        self.assertIn("var ratchet: Bool = false", uni)
+        self.assertIn("Haptics.rigidTap()", uni, "滑过止动要给强反馈")
+        self.assertIn("Haptics.select()", uni, "棘轮每 10% 给轻反馈")
+        self.assertIn("abs(d - value) <= 0.025", uni, "松手吸附到最近止动（±2.5%）")
+        # 保持型滑条仍然不回中
+        on_end = uni.split(".onEnded", 1)[1].split(".gesture", 1)[0]
+        self.assertNotIn("value = 0", on_end)
+
+    def test_only_heli_collective_gets_detents(self):
+        self.assertIn("let isCollective = s.mode == .heli && widget.binding == .throttle",
+                      self.widgets)
+        self.assertIn("detents: isCollective ? [0.0, 0.42, 1.0] : []", self.widgets,
+                      "0.42 = 悬停止动；开车油门不要止动")
+
+    def test_stick_center_notch(self):
+        stick = self.controls.split("struct StickControl", 1)[1] \
+                            .split("/// 双极水平滑条", 1)[0]
+        self.assertIn("abs(x) < 0.05 && abs(px) >= 0.05 { Haptics.select() }", stick,
+                      "周期杆回到中位要给一次轻反馈")
+
+    def test_throttle_hold_zeroes_collective_output(self):
+        self.assertIn("@Published var throttleHold: Bool = true", self.state,
+                      "熄火锁应默认锁上（冷启动不带残留总距）")
+        self.assertIn("throttleHold ? 0 :", self.state,
+                      "熄火锁要在 collective 出口短路，而不是改滑块值")
+
+    def test_throttle_hold_has_a_button_only_in_heli(self):
+        self.assertIn("if s.mode == .heli { throttleHoldButton(height: height) }", self.cockpit)
+        self.assertIn('.accessibilityLabel("熄火锁")', self.cockpit)
+
+    def test_unexpected_link_loss_buzzes(self):
+        close = self.controller.split("private func handleClose", 1)[1]
+        self.assertIn("if self.autoReconnect { Haptics.warning() }", close,
+                      "意外断线要震一下（手动断开不震）")
+
+
+class TestRCMode2Layout(unittest.TestCase):
+    """官方「遥控器双杆（Mode 2）」内置布局（方案 `docs/PalmDeck-v4-rc-mode2.md`）。
+
+    为什么值得单开一类：航模遥控器的肌肉记忆是「左杆 = 总距 + 尾桨、右杆 = 副翼 + 升降」，
+    而引擎里的 `stick` 是**写死** roll + pitch 的（`Widgets.swift`），仓库里没有任何控件
+    能同时写 yaw 与 throttle。所以这不是一个布局，是**缺一个控件**——本类守的就是这个控件：
+
+    1. `WidgetKind.collective` 存在，且**照旧不给绑定下拉**（它也是固定通道）；
+    2. 它写的两轴是 `yaw` + 单极 `throttle`（`(y+1)/2`），且 **Y 不回中**（尾桨回、总距留）；
+    3. `LayoutStore.defaultRCMode2()` 是三件：总距/尾桨杆 + 副翼/升降杆 + 视角板；
+    4. 它是预设列表里的一行内置布局，**只在飞机模式出现**；
+    5. 不进 `GameProfileBuiltin`（那个文件必须保持 Foundation-only，见 test_ios_profiles）。
+    """
+
+    def setUp(self):
+        self.controls = _ios("Views", "Controls.swift")
+        self.widgets = _ios("Views", "Widgets.swift")
+        self.layout = _ios("Views", "Layout.swift")
+        self.settings = _ios("Views", "SettingsView.swift")
+        self.profiles = _ios("Model", "GameProfile.swift")
+
+    # ---- 控件 ----
+
+    def test_collective_kind_exists_and_says_what_it_sends(self):
+        self.assertIn("case collective // 总距/尾桨杆", self.widgets)
+        self.assertIn('case .collective: return "总距/尾桨杆"', self.widgets)
+        self.assertIn('固定发「方向舵 + 总距（松手保持）」', self.widgets,
+                      "固定通道组件必须说明它到底发什么")
+
+    def test_collective_still_gets_no_binding_dropdown(self):
+        """它和摇杆一样是固定通道：给下拉就是给一个存了不生效的值。"""
+        body = self.widgets.split("var bindingOptions: [WidgetBinding] {", 1)[1].split("\n    }", 1)[0]
+        self.assertNotIn("collective", body)
+
+    def test_collective_stick_writes_yaw_and_unipolar_throttle(self):
+        body = self.widgets.split("// 航模遥控器左杆", 1)[1].split("case .hat:", 1)[0]
+        self.assertIn("StickControl(x: $s.yaw,", body, "X 轴写方向舵")
+        self.assertIn("set: { s.throttle = ($0 + 1) / 2 }", body,
+                      "Y 轴是单极总距：摇杆 -1..1 → 油门 0..1")
+        self.assertIn("get: { s.throttle * 2 - 1 }", body, "反向也要一致，否则一碰就跳")
+        self.assertIn("centerY: false", body, "总距是保持型：松手不能回中")
+
+    def test_stick_control_can_hold_one_axis(self):
+        stick = self.controls.split("struct StickControl", 1)[1] \
+                            .split("/// 双极水平滑条", 1)[0]
+        self.assertIn("var centerY: Bool = true", stick, "默认两轴回中，老调用点不受影响")
+        self.assertIn("if centerY { y += (0 - y) * k }", stick,
+                      "回中定时器只拉 X；Y 是否回中由 centerY 决定")
+        self.assertIn("if abs(x) < 0.004 && (!centerY || abs(y) < 0.004)", stick,
+                      "不回中的轴不能当终止条件，否则定时器永不停")
+        # 中位咔哒只对会回中的轴有意义（总距没有「中位」）
+        self.assertIn("if centerY && abs(y) < 0.05 && abs(py) >= 0.05 { Haptics.select() }", stick)
+        # VoiceOver 读数不能对着总距杆报「横滚/俯仰」
+        self.assertIn('var xLabel: String = "横滚"', stick)
+        self.assertIn('var yLabel: String = "俯仰"', stick)
+        self.assertIn("accessibilityValue(\"\\(xLabel)", stick)
+
+    def test_new_kind_is_placeable_on_the_canvas(self):
+        """`add(kind:)` 的 switch 必须覆盖它，否则「添加到画布」直接编译不过 / 漏尺寸。"""
+        self.assertIn("case .collective: size =", self.layout)
+
+    # ---- 布局与入口 ----
+
+    def test_rc_mode2_is_three_widgets(self):
+        body = func_body(self.layout, "defaultRCMode2")
+        self.assertEqual(body.count(".make("), 3, "双杆 + 一块视角板，别塞仪表盘")
+        self.assertIn(".make(.collective, .yaw", body)
+        self.assertIn(".make(.stick,      .roll", body)
+        self.assertIn(".make(.pad,        .look", body)
+
+    def test_rc_mode2_has_its_own_restore_point(self):
+        self.assertIn('static var rcMode2Name: String { "遥控器双杆" }', self.layout,
+                      "内置还原点名要和 `builtinName` 一样是常量，别在 UI 里散着写")
+        self.assertIn("func applyRCMode2(mode: CockpitMode)", self.layout)
+        self.assertIn("func isCurrentRCMode2(mode: CockpitMode) -> Bool", self.layout)
+        self.assertIn("replaceWidgets(LayoutStore.defaultRCMode2(), mode: mode)", self.layout)
+        # 和「默认」一样先压撤销槽：点错了当场能后悔
+        apply = self.layout.split("func applyRCMode2", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("pushUndo(mode: mode)", apply)
+
+    def test_rc_mode2_is_a_builtin_row_only_in_heli(self):
+        self.assertIn("case profile(GameProfile), restoreDefault, rcMode2", self.settings)
+        self.assertIn("s.mode == .heli ? [PresetRow(id: LayoutStore.rcMode2Name, kind: .rcMode2)] : []",
+                      self.settings, "总距 + 尾桨这套杆只在飞机模式有意义")
+        self.assertIn("layout.isCurrentRCMode2(mode: s.mode)", self.settings)
+        self.assertIn("layout.applyRCMode2(mode: s.mode)", self.settings)
+
+    def test_rc_mode2_does_not_enter_game_profile_builtin(self):
+        """内置布局是 `LayoutStore` 的还原点，不进 `GameProfileBuiltin`。
+
+        `Model/GameProfile.swift` 只有 `import Foundation`，被 `test_ios_profiles.py`
+        单独 `swiftc` 编译；一旦引 `DeckWidget` 就编不过。
+        """
+        self.assertNotIn("RCMode2", self.profiles)
+        self.assertIn('static let reservedLayoutName = "默认"', self.profiles,
+                      "「默认」仍是唯一的保留名")
