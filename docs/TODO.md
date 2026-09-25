@@ -53,6 +53,25 @@
   与三个 `palmdeck_*_custom` 开关）。
   修「欧卡2 降档撞默认 LB/RB 看镜头」的报障：以后「哪个键是降档」由用户自己绑，App 不再拍板。
   规格见 `docs/PalmDeck-v4-app-interaction.md` §12.6、`docs/PalmDeck-v4-game-profiles.md` §3.9。
+- **飞机仪表盘改回只读组件** —— `WidgetKind.panel` / `Views/FlightPanel.swift`
+  （`ArcGauge` 270° 弧表 + `BarGauge` 双极条 + `AttitudeBall`）。
+  **纯显示**：无 `DragGesture` / 无 `@Binding` / 不碰 `btnMask`，只读 `smRoll/smPitch/smYaw`；
+  组件库里选到它时隐藏绑定选择。删除固定皮肤后仪具是靠这个回来的，不是靠皮肤。
+  `tests/test_deck_bindings.py::TestInstrumentPanel` 守卫。
+- **布局编辑「放弃」** —— 进编辑时按模式记一份回滚点（`LayoutStore.editBaseline`，仅内存），
+  一键退回本次编辑前；「完成」/ 顶栏「完成」/ 换模式都会 `commitEditing`。
+  放弃走 `replaceWidgets` 但**故意不压撤销槽**（它本身就是回滚）。
+  `TestEditSession` 守卫。
+- **浅色模式（默认浅色）** —— `Theme` 全色值改成 `Color.pd(浅, 深)`（`UIColor(dynamicProvider:)`），
+  视图层 120 个引用点一行未改；新增 `AppAppearance`（跟随系统/浅色/深色，
+  `palmdeck_appearance`，默认 `.light`）+ `.palmAppearance()`，挂在根视图与三个 presentation。
+  姿态球是真仪表，用固定色 `instr*`/`hud*` 保持深底亮线。
+  规格见 `docs/PalmDeck-v4-app-interaction.md` §12.7，`TestThemeAppearance` 守卫。
+- **切预设把画布擦成白板** —— 内置预设的 `widgetsJSON` 是 nil（它们只是“手感快照”），
+  而 `LayoutStore.applyProfile` 把 nil 当空布局整表替换了。
+  现在 nil / 空数组 / 坏 JSON 一律 = “不带布局”→ 不碰用户画布；
+  唯一例外是该模式当前就是空表，那就铺回该模式默认模块。
+  `TestProfileDoesNotBlankTheCanvas` 守卫。
 
 ## 已存档（方案已保存，未实施）
 - 无。

@@ -99,11 +99,11 @@ struct PreflightView: View {
 
     // MARK: - 状态条
     private var statusDotColor: Color {
-        if s.link == .live { return .green }
-        if s.link == .connecting { return .orange }
-        if s.link == .lost { return .red }
-        if !discovery.found.isEmpty { return .cyan }
-        return .gray
+        if s.link == .live { return Theme.green }
+        if s.link == .connecting { return Theme.orange }
+        if s.link == .lost { return Theme.red }
+        if !discovery.found.isEmpty { return Theme.cyan }
+        return Theme.textFaint
     }
 
     private var statusTitle: String {
@@ -122,11 +122,11 @@ struct PreflightView: View {
     }
 
     private var statusTitleColor: Color {
-        if s.link == .live { return .green }
-        if s.link == .connecting { return .orange }
-        if s.link == .lost { return .red }
-        if !discovery.found.isEmpty { return .cyan }
-        return .gray
+        if s.link == .live { return Theme.green }
+        if s.link == .connecting { return Theme.orange }
+        if s.link == .lost { return Theme.red }
+        if !discovery.found.isEmpty { return Theme.cyan }
+        return Theme.textFaint
     }
 
     private var statusBar: some View {

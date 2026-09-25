@@ -326,6 +326,21 @@ class TestProfileDoesNotBlankTheCanvas(unittest.TestCase):
         self.assertIn("布局保持不动", s, "应用后要给反馈，否则用户以为又坏了")
 
 
+    def test_status_colors_come_from_the_theme(self):
+        """状态点/状态字统一走 Theme。
+
+        系统色（`.cyan` / `.green`…）会跟着系统外观走，浅色底上 `.cyan` 淡得读不出来；
+        Theme 的两套值是按各自底色配过的。
+        """
+        pre = _ios("Views", "PreflightView.swift")
+        for want in ("return Theme.green", "return Theme.orange", "return Theme.red",
+                     "return Theme.cyan", "return Theme.textFaint"):
+            self.assertIn(want, pre, "PreflightView 缺 %s" % want)
+        for banned in ("return .cyan", "return .green", "return .orange",
+                       "return .red", "return .gray"):
+            self.assertNotIn(banned, pre, "系统色 `%s` 在浅色底上对比度不够" % banned)
+
+
 class TestLayoutModuleWiring(unittest.TestCase):
     """三个模式都走通用模块，且都插了默认布局。"""
 
