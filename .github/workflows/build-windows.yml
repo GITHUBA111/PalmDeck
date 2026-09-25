@@ -100,6 +100,9 @@ jobs:
           Remove-Item $out -ErrorAction SilentlyContinue
           $env:PALMDECK_SELFTEST = $out
           Start-Process -FilePath "dist\PalmDeck.exe" -Wait
+          # onefile 的父子进程：-Wait 只等父进程，子进程落盘可能差一拍 —— 等一下再判，
+          # 否则「文件还没写出来」会被误报成「包里缺模块」。
+          for ($i = 0; $i -lt 30 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 500 }
           if (-not (Test-Path $out)) {
             Write-Host "::error::selftest 没写出结果 —— 打包后的 exe 起不来（多半是缺模块）"
             exit 1
@@ -146,8 +149,14 @@ jobs:
       - name: 编译安装包
         shell: pwsh
         run: |
-          & "${{ steps.iscc.outputs.iscc }}" "/dAppVersion=${{ steps.ver.outputs.version }}" "packaging\PalmDeck.iss"
-          if ($LASTEXITCODE -ne 0) { throw "ISCC 编译失败（退出码 $LASTEXITCODE）" }
+          $isccLog = & "${{ steps.iscc.outputs.iscc }}" "/dAppVersion=${{ steps.ver.outputs.version }}" "packaging\PalmDeck.iss" 2>&1 | Out-String
+          Write-Host $isccLog
+          if ($LASTEXITCODE -ne 0) {
+            # ISCC 的报错写在 stdout，而 job 日志要 admin 才看得到 —— 发成注解才算留下证据
+            $tail = ($isccLog -split "`r?`n" | Where-Object { $_ -match "\S" } | Select-Object -Last 12) -join " %0A "
+            Write-Host "::error::ISCC 编译失败（退出码 $LASTEXITCODE）：$tail"
+            exit 1
+          }
           $setup = Get-ChildItem dist\PalmDeck-Setup-*.exe -ErrorAction SilentlyContinue |
                    Select-Object -First 1
           if (-not $setup) { throw "没生成 dist\PalmDeck-Setup-*.exe" }
