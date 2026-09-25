@@ -19,7 +19,7 @@
 | `PalmDeck-v4-console-busy.md` | **控制台长动作：超时 + 忙碌态**：`api()` 加 `AbortController` 超时（默认 30s / 下载 180s），检查更新・下载重启・保存配置・保存布局不再无反应可连点 | 已落地 |
 | `PalmDeck-v4-discovery-rescan.md` | **自动发现：手动「重新搜索」**：`Discovery.restart()` + 起飞页常驻按钮，换 Wi-Fi / 电脑后开机不用退出重进 | 已落地 |
 | `PalmDeck-v4-windows-product.md` | **Windows 端产品化**：新增 `palmdeck_doctor.py` 唯一自检真相源（驱动/防火墙/端口/依赖），控制台「自检」页 + 一键修复，删孤儿 `open_firewall.bat` | 已落地 |
-| `windows-acceptance-checklist.md` | **Windows 真机验收清单（G4）**：vJoy/ViGEmBus → 自检全绿 → 虚拟设备 → 真 iPhone 配对 → 游戏内绑定（WARDOGS/ETS2）→ failsafe → 打包运维，逐条留证据 | **待执行** |
+| `windows-acceptance-checklist.md` | **Windows 真机验收清单（G4）**：vJoy/ViGEmBus → 自检全绿 → 虚拟设备 → 真 iPhone 配对 → 游戏内绑定（WARDOGS/ETS2）→ failsafe → 打包运维 → 连接体验 / 实时看板（最近一轮改动），逐条留证据 | **待执行** |
 | `PalmDeck-v4-windows-installer.md` | **方案**：Windows 端「软件化」—— Inno Setup 安装包（中文向导/开始菜单/卸载/可选自启）+ exe 图标与版本资源 + 控制台独立窗口；**同时保留 portable exe 与原地自替换** | **已落地**（S0–S5 + 托盘图标统一 + O3-full 真窗口）；真机部分待 G4 |
 | `PalmDeck-v4-native-window.md` | **O3-full 真窗口**：控制台从「浏览器假装成窗口」变成 PalmDeck 自己的窗口（pywebview / WebView2）；关闭=最小化回托盘、记忆窗口几何、托盘联动；任何一层不可用自动退回浏览器应用窗口（O3-lite） | 已落地（CI 打包/安装/冒烟已验；窗口真机行为待 G4） |
 | `PalmDeck-proposal-template.md` | **方案模板**：新功能/改造动代码前的统一提案格式（§1 骨架 + §2 已填示例） | 工具 |
@@ -119,7 +119,7 @@ python3 -m unittest discover -s tests -t .      # 262 项
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
 | `tests/test_light_only.py` | 「不要再出现任何深色模式」的**全仓扫描**（11 条）：任何 `.swift` 不得再有 `preferredColorScheme` / `colorScheme` / `Color.pd(` / `AppAppearance` / `palmAppearance`；`Info.plist` 钉 Light；**启动页图片必须是浅底**（`sips` 降采样 + 纯 Python 解码算平均亮度，旧黑底图 0.01 / 新浅底 0.74）；网页控制台 `:root` 底与面为浅色、文字为深色、无 `prefers-color-scheme`、旧深色值已清、二维码仍黑模块白底 |
 | `tests/test_doctor.py` | Windows 端**自检**守卫（25 条）：报告结构 / 等级合法 / id 不重、`palmdeck_doctor` **不许 import bridge**（要能单独跑）、防火墙端口只有 `palmdeck_config` 一处真相源、`.bat` 里不许再写 `New-NetFirewallRule`、`bridge` 两路由 + `note_listener` 记录 bind 失败、`host.html` 自检页与 `#doctor` 直达、托盘带版本号 + 「自检…」、`pack_windows.FILES` / `.spec` 覆盖；另含**真 bind 失败**（TEST-NET-1）仍返回不抛、非 Windows 上不报故障 |
-| `tests/test_ci.py` | **发版链路 + 验收清单**守卫（25 条）：`.github/workflows/build-windows.yml` 必须有独立 `test` job 且 `build`（出 exe / 发 Release）`needs: test` —— 测试红了不许发版；`docs/windows-acceptance-checklist.md`（G4）**逐条对着代码核**：真跑一遍 `palmdeck_doctor.checks()` 拿它**实际输出**的 id 与清单点名的对账（`driver.vjoy` / `listener.*` 都是拼出来的，不能用正则搪）、托盘菜单 / failsafe 提示 / 「更新」tab / `/api/doctor` 的引文、止动点百分比由 `Widgets.swift` 的 `detents` 算出、引用的 `§3.6` 真的存在、不许出现编造出来的 exe 子命令；**安装包那半段**同样对账：CI 真编译 `.iss`、真做「静默装 → 起进程 → 探活 → 卸载」冒烟，Release 必须同时传 exe 与安装包，且 `.iss` 的安装目录 / 自启项键名 / 卸载保留配置三件事与 `start.py` / 冒烟脚本一致 |
+| `tests/test_ci.py` | **发版链路 + 验收清单**守卫（26 条）：`.github/workflows/build-windows.yml` 必须有独立 `test` job 且 `build`（出 exe / 发 Release）`needs: test` —— 测试红了不许发版；`docs/windows-acceptance-checklist.md`（G4）**逐条对着代码核**：真跑一遍 `palmdeck_doctor.checks()` 拿它**实际输出**的 id 与清单点名的对账（`driver.vjoy` / `listener.*` 都是拼出来的，不能用正则搪）、托盘菜单 / failsafe 提示 / 「更新」tab / `/api/doctor` 的引文、止动点百分比由 `Widgets.swift` 的 `detents` 算出、引用的 `§3.6` 真的存在、重连上限 / 连接超时与 `CockpitController` / `NetClient` 对得上、不许出现编造出来的 exe 子命令；**安装包那半段**同样对账：CI 真编译 `.iss`、真做「静默装 → 起进程 → 探活 → 卸载」冒烟，Release 必须同时传 exe 与安装包，且 `.iss` 的安装目录 / 自启项键名 / 卸载保留配置三件事与 `start.py` / 冒烟脚本一致 |
 | `tests/test_docs.py` | **现状文档守卫**（7 条）：`docs/README.md` / 根 `README.md` / `使用说明.txt` 不得把已删的 API（`AppAppearance` / `Color.pd(` / `FlightDeck` / `telemetry`…）当成还活着 —— 提可以，但符号 ±120 字内必须说明是「删除 / 不再 / 已移除」（历史方案文档不在范围内）；文档枚举的设置分类必须与 `SettingsCategory` **逐项同序**；「N 类组件」必须等于 `WidgetKind` 的 case 数；「`TestX`（N 条）」的 N 必须等于那个类真的有几个 `def test_` |
 | `tests/test_window.py` | **O3-full 真窗口**守卫（36 条）：手写假 `webview` 模块验「建窗参数 / 关闭=隐藏回托盘（`closing` 返回 False）/ 唤出带 `#hash` / 退出销毁 / 几何越界丢弃与原子落盘」；可用性探测四态（非 Windows / 没 pywebview / 缺 WebView2 / 全齐）；`start.py` 接线（不可用会退回、托盘跑子线程、`open_console` 先唤窗口）；spec 收了 pywebview、CI 断言 `webview=ok`、`.iss` 的 WebView2 GUID 与 `palmdeck_window._WEBVIEW2_CLIENT` 逐字一致 |
 | `tests/test_installer.py` | Windows exe 的「软件式」外壳（38 条）：`PalmDeck.spec` 不许把 `icon=` 写回 `None`、`.ico` 真的含 16/32/48/256 且每帧是合法 PNG/DIB、图标源图仍是产品 App 图标；版本资源由 `updater.APP_VERSION` **现场拼**（spec 里不许出现硬编码版本号）、渲染结果跟着版本号走、且必须是 PyInstaller 能 `eval` 的**裸表达式**（不能有 `import`）、文件属性六个字段与 `Translation` 齐全；`packaging/PalmDeck.iss` 的全部约定（装到 `{localappdata}`、免 UAC、中文向导、版本号只能注入、卸载删自启项但保留 `%APPDATA%\PalmDeck`、自启项键名与 `start.py` 逐字一致）、`build_installer.bat` 从 `updater.APP_VERSION` 取版本、`PALMDECK_NO_TRAY` 在 `run_tray()` 之前生效、`open_console()` 优先应用窗口但逐层回退、托盘图标就是产品图标（且 spec 真把它打进包）|
@@ -137,6 +137,22 @@ Retina 全屏 PNG 一张 3～5 MB，直接 read 会把几 MB 的 base64 塞进�
 攒到几十张后模型网关会回 `413 Failed to buffer the request body`
 （pi 的上下文管理按 token 算，网关按 byte 卡，两边不是一回事）。
 压完约 100 KB，肉眼判断足够。细节见该 skill 的 `SKILL.md`。
+
+### 本机（macOS）走查易踩的坑
+
+这几件都是环境差异，不是产品 bug，但每次都会白花时间：
+
+- **本机没有 GNU `timeout`**：`timeout 10 curl …` 会 `command not found`。
+  要限时就用工具自带的（`curl --max-time`）、或 `gtimeout`（`brew install coreutils`），
+  别把「命令不存在」当成业务失败。
+- **没有 iOS Simulator**：本机只有命令行工具，UI 只能在 **Mac Catalyst** 上跑（`mac.sh`）。
+  Catalyst 的命中区 / 菜单栏 / 文件选择器与真机不同 —— 真机行为必须 G4 复核
+  （`docs/windows-acceptance-checklist.md`）。
+- **`cliclick` 合成点击会静默不生效**：窗口没前置 / 坐标落在另一块屏 / 未授辅助功能权限时，
+  `cliclick c:x,y` 会返回成功但实际什么都没点到。点完**必须截图确认**，
+  别拿「命令没报错」当「点到了」。
+- **AppleScript 报 `-2741`** 基本是语法问题（漏了 `is`、少了 `end`），不是权限 ——
+  先看脚本，再去排查辅助功能授权。
 
 ### 待办
 见 `docs/TODO.md`。

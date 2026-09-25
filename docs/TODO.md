@@ -1,5 +1,19 @@
 # PalmDeck 待办
 
+## 待办（真机 / 待验）
+
+- **G4 真机验收** —— 唯一的硬卡点，必须 Windows 真机 + 真 iPhone + 游戏。
+  逐条走 `docs/windows-acceptance-checklist.md`（含最近一轮「连接体验 / 实时看板」那节）。
+- **O3-full 退回浏览器时会不会多开窗口** —— 原生窗口（pywebview / WebView2）命中时根本不开浏览器；
+  只有回退到 O3-lite（Edge/Chrome `--app=`）时，托盘上连点「打开控制台」**可能**再开一个应用窗口。
+  要不要做「已经开着就先唤出」得在真 Windows 上先看见才算数 —— macOS 上验不了。
+- **「下载并重启」没有真进度条** —— 服务端 `/api/update/apply` 是同步阻塞（`urlopen timeout=120`），
+  没有 progress 接口。现在只给了「下载中…（最长约 2 分钟）」+ 客户端 180s 超时 + 按不动的按钮。
+  要真进度条得先把 apply 改成异步 + 轮询，成本不小（取舍写在 `docs/PalmDeck-v4-console-busy.md`）。
+- **Windows 专属测试分支没在 Windows 上跑过** —— CI 的 `test` job 为 iOS 纯逻辑测试要 `swiftc`、
+  为启动页亮度要 `sips`，只能跑 macOS（见下）。`test_doctor.py` 里 `sc query` /
+  `Get-NetFirewallRule` 那些分支只有真 Windows 才走到，现在靠 G4 兜。
+
 ## 遥测（Telemetry）
 - **不做**。v4 移除了整套游戏遥测（`telemetry.py` / `bridge.py --telemetry*` / WS `attitude`）。
   姿态球与飞行仪表板只显示本机发往电脑的**平滑杆位**（`smRoll/smPitch/smYaw`），
@@ -219,9 +233,12 @@
   60Hz 指数回中尾巴约 1.5s。改成两个都 onEnded 直接归零；周期杆保留 60Hz 平滑回中。
   脚舵写 `s.yaw` 后仍过 `kYaw = 0.5` 收尾，UDP 不断崖。方案：`docs/PalmDeck-v4-instant-recenter.md`；
   守卫：`tests/test_deck_bindings.py::TestInstantRecenter`（5 条）。
-- **（待办）Windows CI 跑测试**：`build-windows.yml` 现在只打包 exe，没跑 `python -m unittest`。
-  加之前得先在 windows-latest 上真验一遍（`test_doctor.py` 在 Windows 上会走 `sc query` /
-  `Get-NetFirewallRule` 分支），否则可能常年红。
+- **CI 先跑测试再打包**（原「（待办）Windows CI 跑测试」已销） —— 曾经 `build-windows.yml` 只打包 exe、
+  不跑 `python -m unittest`，每次发版都是裸奔。现在有独立 `test` job，`build`（出 exe / 发 Release）
+  `needs: test` —— 测试红了就不出 exe。job 跑在 **macos-latest** 而不是 ubuntu：iOS 纯逻辑测试要 `swiftc`
+  （Linux 镜像其实也带，但编不了 `import Combine` 的源码），启动页要 `sips`，只有 macOS 两样齐全。
+  守卫 `tests/test_ci.py::TestReleaseWorkflowRunsTests`（9 条）。
+  **残留**：win 专属分支未在 win 上跑，见上「待办」。
 - **Windows 端服务产品化（统一自检 / 一键修复）**—— 以前环境问题散在四处：驱动检测只在
   `setup_windows.bat`（`sc query`），防火墙端口在 `open_firewall.bat` 与 `palmdeck_config.py`
   各写一份，而那个 bat 既没人引用也没进过 zip；控制台对“游戏里没设备”只报一句 `backend=none`；

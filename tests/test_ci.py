@@ -176,6 +176,27 @@ class TestChecklistMatchesTheCode(unittest.TestCase):
             self.assertIn(label, self.doc)
             self.assertIn('pystray.MenuItem("%s"' % label, start,
                           "清单提到的托盘菜单项「%s」在 start.py 里不存在" % label)
+    def test_reconnect_cap_quoted_in_checklist_matches_the_code(self):
+        """清单 §8.2 说「重试 3 次、每次 8s 超时」—— 这两个数各只有一处真相源。
+
+        走查报的障就是「连不上一直连」；清单里把这个数写挂了，验收的人就
+        没法判断「到底等多久才算它该停」，而修复本身也没人能复查。
+        """
+        m = re.search(r"重试 (\d+) 次、每次 8s 超时", self.doc)
+        self.assertIsNotNone(m, "清单里要说清自动重试几次、每次超时多久")
+        n = int(m.group(1))
+        ctrl = _read(os.path.join(IOS, "Model", "CockpitController.swift"))
+        self.assertRegex(ctrl, r"private let maxAttempts = %d\b" % n,
+                         "清单写的重试次数与 CockpitController.maxAttempts 对不上")
+        self.assertIn("deadline: .now() + 8, execute: work",
+                      _read(os.path.join(IOS, "Model", "NetClient.swift")),
+                      "清单写的「每次 8s 超时」与 NetClient 的连接超时对不上")
+        # 放弃那一刻的「已试 N 次」= 首次 + n 次重试；代码里是 retry + 1
+        self.assertIn("（已试 %d 次）" % (n + 1), self.doc,
+                      "清单里的「已试 N 次」要把首次尝试也算上")
+        self.assertIn(r"已试 \(retry + 1) 次", ctrl,
+                      "代码里的次数与清单对不上（retry 只数重试，不含首次）")
+
     def test_console_tabs_quoted_in_checklist_exist(self):
         self.assertIn("更新", self.doc)
         self.assertIn('data-tab="update"', _read(HOST_HTML),
