@@ -6,6 +6,58 @@
   与 UDP/WS 上真正送出的值同源；不再有「游戏真实姿态」回读与显示源切换。
 
 ## 已完成
+- **Windows exe 长出「软件样」（S1）** —— 以前 `packaging/PalmDeck.spec` 里是 `icon=None`、
+  没有 `version=`：exe 顶着 PyInstaller 默认图标，右键「属性 → 详细信息」一片空白。
+  玩家看到的第一个东西就是这个。现补上：
+  `packaging/make_icon.py` 从 iOS 产品图标生成多尺寸 `packaging/PalmDeck.ico`（入库，
+  免得让 CI 为了一张图多装一个包）；`packaging/version_info.py` 把 `VSVersionInfo(...)`
+  拼成**裸表达式**（不 import PyInstaller ⇒ macOS 上就能测），spec 现场用
+  `updater.APP_VERSION` 拼出 `build/version_info.txt` 交给 `EXE(version=...)` ——
+  版本号依旧只有一处真相源，不可能出现「程序 v4.0.0、属性写 3.9」。
+  守卫 `tests/test_installer.py`（38 条，探针验过非空转）。
+- **Windows 端整体「软件化」（S0–S5 + O1b）** —— 方案 `docs/PalmDeck-v4-windows-installer.md` 已全部落地：
+  - **安装包**：`packaging/PalmDeck.iss`（Inno Setup 6 + 中文向导 `ChineseSimplified.isl`）。
+    装到 `%LocalAppData%\Programs\PalmDeck`、`PrivilegesRequired=lowest`（全程不弹 UAC）；
+    **必须装用户目录** —— `updater.apply_update()` 靠「下到 exe 旁边再自替换」，装进
+    `Program Files` 会让自动更新**静默失效**（玩家只会觉得「怎么一直是旧版」）。
+    卸载删掉「开机自启」那条（旧版裸 exe 的真实病：exe 删了，Run 项还指着它），
+    但**保留** `%APPDATA%\PalmDeck`（丢布局比留几个日志糟）。
+  - **CI 真验一遍能自动化那部分**（`.github/workflows/build-windows.yml`）：读版本 → 打包 →
+    断言 exe `VersionInfo` → ISCC 编译 → 静默装 → 断言注册表自启项 → `PALMDECK_NO_TRAY=1`
+    起进程 → 轮询 `/api/status` → 卸载 → 断言目录/自启项没了、配置还在 → 传两个 Release 资产
+    （`PalmDeck.exe` 的资产名不能动：`updater.py` 的直链写死了它，安装包是**额外**那份）。
+  - **`PALMDECK_NO_TRAY`**（新增，`start.py`）：没有它，「装完到底能不能起来」在自动化里没法验。
+    必须在 `run_tray()` **之前**判断 —— 写在里面等于没写。
+  - **控制台窗口化**（O3-lite）：`open_console()` 优先用 Edge/Chrome 的 `--app=`（没有地址栏，
+    像个原生窗口），逐层回退到默认浏览器；托盘 / 自检 / 重复双击三个入口都走它。
+  - **托盘图标统一**（O1b）：以前托盘是 PIL 自绘的青色方向盘、exe 是产品图标 ——
+    同一台机器两个 logo。现在优先读打进包的 `packaging/PalmDeck.ico`，自绘降为兜底。
+  - 守卫：`tests/test_installer.py` 38 条 + `tests/test_ci.py` 22 条，**15 条探针**验过会咬
+    （装到需要管理员 / 卸载不删自启项 / 版本号硬编码 / 向导变英文 / CI 忘设 `NO_TRAY`…）。
+  - 诚实记一笔：**macOS 上验不了「向导真的长那样」「注册表真的那样」「卸载真的没删配置」** ——
+    这些靠 CI 的 windows-latest 冒烟 + G4 真机；本机验的是 `.iss` 与 `start.py` 的一致性、
+    `.ico` 字节、版本资源渲染、spec 真跑一遍、开关与回退路径的接线。
+- **把「现状文档」钉在代码上**（`tests/test_docs.py`，7 条守卫）—— 走查时发现索引文档还在描述**早就删了**的东西：
+  `docs/README.md` 的 `Views/` 那行写着「**浅/深双主题**（`Color.pd(浅,深)` + `AppAppearance` 外观枚举 + `.palmAppearance()` 修饰器）」，
+  而深色模式整份删掉已半年；同一句里的设置侧栏写着「7 项」（实际 6 项，"外观"早没了）；
+  交互文档的视图树也还画着 `触觉 / 外观 / 帮助`。
+  索引文档是新人第一份读物，它说还有双主题，新人就会去找 `AppAppearance` —— 找不到，然后开始怀疑自己。
+  现已修正（只该说「只浅色」+ 指向 `docs/PalmDeck-v4-light-only.md`），并加三道守卫：
+  ① `docs/README.md` / 根 `README.md` / `使用说明.txt` **不得把已删 API 当成还活着**
+  （提可以，但符号 ±120 字内必须写明是「删除 / 不再 / 已移除」；判据只看符号周围——
+  索引文档有些行是整段话，整行匹配会被同一行里的「可拖 / 缩放 / **删除**」蒙混过去，实测踩到）；
+  ② 文档枚举的设置分类必须与 `SettingsCategory` **逐项同序**；
+  ③ 文档里每一句「`TestX`（N 条）」的 N，必须等于那个类真的有几个 `def test_`
+  （这类数字最容易漂：加一条测试没人会回头改文档，读的人却拿它当覆盖面依据；
+  同时管根 `README.md` / 使用说明里的表格行，但不算「N 条**断言**」—— 循环生成的 assert 数不出来）。
+  历史方案文档（light-only / redesign / TODO…）不在范围内：它们写的就是「当时是什么」。
+- **修掉「上传到电脑就删组件」** —— 电脑侧 `palmdeck_layouts.KINDS/BINDINGS` 白名单漏了
+  `panel`（飞机出厂布局的仪表盘）、`rt`（右扳机轴）、`collective`（遥控器双杆左杆）。
+  `_coerce_layout` 静默丢弃非法项，而 `layouts_put` 会把校验后的列表回传、
+  `LayoutStore.applyServer` 整表替换 → 一次上传即永久丢失（实测 5 件上传只剩 2 件）。
+  两份清单补全，加 `tests/test_layouts.py::KindAndBindingListsMatchTheApp`
+  （解析 `Widgets.swift` 枚举对账 + 白名单逐项存得下去 + 两套出厂布局回归），
+  `bridge.py` 在丢弃件数非零时写警告日志。
 - **拆除 Capacitor 壳子（G0a）** —— v3 是「WebView 里跑网页座舱」，v4 改成纯 SwiftUI
   但壳子只拆了一半。删掉 `App/App/public/`（84 KB `cap sync` 产物）、
   `PalmDeckUdpPlugin.swift`（全仓库唯一 `import Capacitor`）、
@@ -124,6 +176,7 @@
   纯逻辑测试 `tests/test_ios_snap.py` + 接线守卫 `TestDragSnappingIsWired`。
 - **设置页一致性 / 可发现性**（P2，方案 `docs/PalmDeck-v4-consistency.md`）—— 只改文案与分组，
   不动数据 / 协议 / 存储键 / 画布：侧栏 **8 → 7**（`连接 / 预设 / 布局 / 操纵与手感 / 触觉 / 外观 / 帮助`，
+  ——「外观」后来在「只浅色」一轮删除，现为 **6 项**，见本文件上面的条目），
   两个滑条的「方向盘」并进「操纵与手感」并标出**它是全局项**）；段头说得出这一组是什么
   （模式→**编辑**、清空→**重置**、`undoSection` 补头、触觉头/项不再重复同一个词）；
   **同一个动作一个名字**（「清空当前模式」→「清空画布」、「高级设置」→「设置」、
@@ -184,7 +237,9 @@
 - **拆方案待施工（按已定顺序）**：~~**E1**~~（已施工）→ ~~**G1**~~（已施工）
   → ~~**G2**~~（已施工）→ ~~**E2**~~（已施工）→ ~~**P1.5**~~（已施工）→ ~~**P2**~~（已施工）
   → **G4**（WARDOGS / 欧洲卡车模拟两个预设）。
-  取证与理由见 `docs/PalmDeck-v4-game-profiles.md`。
+  取证与理由见 `docs/PalmDeck-v4-game-profiles.md`；**真机验收逐条按 `docs/windows-acceptance-checklist.md` 走**
+  （清单里的自检项 id / 界面文案 / 章节号已被 `tests/test_ci.py::TestChecklistMatchesTheCode`
+  锁在代码上，清单漂了会红）。
 - **G2 起预设 = 模式 + 手感 + 轴表名 + 布局**：`GameProfileStore`（P1.5 起是 `palmdeck_game_profiles_v2`，
   老键 `…_v1` / `palmdeck_layout_templates_v1` 一次性迁移后只读），
   内置 WARDOGS / 欧洲卡车模拟。G4 的「两个预设」其实是**把 §3.6 的定义坐实**——
