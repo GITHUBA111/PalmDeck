@@ -217,6 +217,13 @@ struct CockpitView: View {
         ctrl.setMode(m); Haptics.press()
     }
 
+    /// 顶栏连接胶囊的文字：连接中 = 取消，失败过 = 重试。
+    private var connectChipTitle: String {
+        if s.link == .connecting { return "取消连接" }
+        if ctrl.connectFailed { return "重试" }
+        return discovery.found.isEmpty ? "连接" : "一键连接"
+    }
+
     /// 顶栏连接胶囊：已连显示 IP + Hz + 绿灯；未连显示“连接”按钮
     @ViewBuilder
     private func connectionChip(height: CGFloat) -> some View {
@@ -239,19 +246,24 @@ struct CockpitView: View {
             .frame(width: 140)
         } else {
             Button {
-                if let d = discovery.found.first { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
+                // 连接中再点 = 取消（连不上时别一直转）；否则发起连接。
+                if s.link == .connecting { ctrl.cancelConnect() }
+                else if let d = discovery.found.first { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
                 else if !ctrl.savedHostForUI.isEmpty { ctrl.connect(host: ctrl.savedHostForUI) }
                 else { showSettings = true }
                 Haptics.tap()
             } label: {
                 HStack(spacing: 5) {
-                    if s.link == .connecting { ProgressView().scaleEffect(0.6).tint(Theme.cyan) }
-                    else {
+                    if s.link == .connecting {
+                        Image(systemName: "xmark.circle.fill")
+                            .pdFont(12)
+                            .foregroundColor(Theme.orange)
+                    } else {
                         Image(systemName: !discovery.found.isEmpty ? "wifi" : "wifi.slash")
                             .pdFont(12)
                             .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                     }
-                    Text(s.link == .connecting ? "连接中…" : (!discovery.found.isEmpty ? "一键连接" : "连接"))
+                    Text(connectChipTitle)
                         .pdFont(11, weight: .medium)
                         .foregroundColor(!discovery.found.isEmpty ? Theme.green : Theme.textFaint)
                 }

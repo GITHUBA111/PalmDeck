@@ -14,6 +14,8 @@
 | `PalmDeck-v4-accessibility.md` | **动态字号 + 无障碍标签**（走查第 5 条）：`.pdFont` 随系统字号、自绘控件补 VoiceOver | 已落地 |
 | `PalmDeck-v4-connect-banner-stable.md` | **连接提示横幅不掉高**：点按「连接电脑」不再把画布组件“顶”得重排（走查反馈） | 已落地 |
 | `PalmDeck-v4-instant-recenter.md` | **脚舵 / 视角 松手立即回正**：滑条与视角板瞬回 0（走查反馈） | 已落地 |
+| `PalmDeck-v4-connect-cancel.md` | **连接可取消 / 重连有上限**：连不上不再无限重连——「连接中」可取消，尝试 6 次后自动停并给「重试」 | 已落地 |
+| `PalmDeck-v4-monitor-live.md` | **控制台「输入监测」实时化**：监测页激活时 10Hz 轮询，`last_ms` 改写为「上包 X ms 前」（它是包间隔，不是延迟） | 已落地 |
 | `PalmDeck-v4-windows-product.md` | **Windows 端产品化**：新增 `palmdeck_doctor.py` 唯一自检真相源（驱动/防火墙/端口/依赖），控制台「自检」页 + 一键修复，删孤儿 `open_firewall.bat` | 已落地 |
 | `windows-acceptance-checklist.md` | **Windows 真机验收清单（G4）**：vJoy/ViGEmBus → 自检全绿 → 虚拟设备 → 真 iPhone 配对 → 游戏内绑定（WARDOGS/ETS2）→ failsafe → 打包运维，逐条留证据 | **待执行** |
 | `PalmDeck-v4-windows-installer.md` | **方案**：Windows 端「软件化」—— Inno Setup 安装包（中文向导/开始菜单/卸载/可选自启）+ exe 图标与版本资源 + 控制台独立窗口；**同时保留 portable exe 与原地自替换** | **已落地**（S0–S5 + 托盘图标统一 + O3-full 真窗口）；真机部分待 G4 |

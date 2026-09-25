@@ -643,6 +643,13 @@ struct SettingsView: View {
                 } label: {
                     Label("断开连接", systemImage: "wifi.slash")
                 }
+            } else if s.link == .connecting {
+                // 连不上时能在这里停：别让人只能干等它自己放弃。
+                Button(role: .destructive) {
+                    ctrl.cancelConnect(); Haptics.tap()
+                } label: {
+                    Label("取消连接", systemImage: "xmark.circle")
+                }
             } else {
                 let list = discovery?.found ?? []
                 if !list.isEmpty {
@@ -660,6 +667,13 @@ struct SettingsView: View {
                         ctrl.connect(host: ctrl.savedHostForUI); Haptics.tap()
                     } label: {
                         Label("连接上次的 \(ctrl.savedHostForUI)", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+                if ctrl.connectFailed, !ctrl.savedHostForUI.isEmpty {
+                    Button {
+                        ctrl.connect(host: ctrl.savedHostForUI); Haptics.tap()
+                    } label: {
+                        Label("重试连接 \(ctrl.savedHostForUI)", systemImage: "arrow.clockwise")
                     }
                 }
                 if list.isEmpty && ctrl.savedHostForUI.isEmpty {

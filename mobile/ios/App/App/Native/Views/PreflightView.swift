@@ -108,6 +108,7 @@ struct PreflightView: View {
     private var statusTitle: String {
         if s.link == .live { return "已连接  \(ctrl.savedHostForUI)" }
         if s.link == .connecting { return "正在连接…" }
+        if ctrl.connectFailed { return "连不上电脑" }
         if s.link == .lost { return "连接失败" }
         if !discovery.found.isEmpty { return "发现 \(discovery.found.count) 台电脑" }
         return "正在搜索电脑…"
@@ -147,25 +148,34 @@ struct PreflightView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.glass))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.glassBorder, lineWidth: 1))
         .onTapGesture {
-            if s.link != .live, let d = discovery.best {
+            // 连接中不重复发起（要停在连接中请按「取消」）；已连接也不重连。
+            guard s.link != .live, s.link != .connecting else { return }
+            if let d = discovery.best {
                 ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp); Haptics.tap()
             }
         }
     }
 
     private var statusButton: some View {
-        Button(s.link == .live ? "断开" : (s.link == .connecting ? "…" : "连接")) {
+        Button(statusButtonTitle) {
             if s.link == .live { ctrl.disconnect() }
-            else if s.link != .connecting {
-                if let d = discovery.best { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
-                else { ctrl.connect(host: host) }
-            }
+            else if s.link == .connecting { ctrl.cancelConnect() }   // 连不上时能停下，别一直转
+            else if let d = discovery.best { ctrl.connect(host: d.ip, ws: d.ws, udp: d.udp) }
+            else { ctrl.connect(host: host) }
             Haptics.tap()
         }
         .buttonStyle(CardButton(active: false,
-                                accent: s.link == .live ? Theme.red : Theme.cyan,
+                                accent: s.link == .live ? Theme.red
+                                      : (s.link == .connecting ? Theme.orange : Theme.cyan),
                                 fillWidth: false, height: 34))
         .frame(width: 76)
+    }
+
+    private var statusButtonTitle: String {
+        if s.link == .live { return "断开" }
+        if s.link == .connecting { return "取消" }
+        if ctrl.connectFailed { return "重试" }
+        return "连接"
     }
 
     // MARK: - 三步卡片

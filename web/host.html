@@ -314,6 +314,8 @@
       if (name === "logs") loadLogs();
       if (name === "doctor") loadDoctor();
       if (name === "layouts" && !$("layoutJson").value) loadLayout($("layoutMode").value);
+      // 「输入监测」要看实时轴条：这个页激活时把轮询提到 10Hz，切走即停。
+      setMonitorFast(name === "monitor");
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
     }
     document.querySelectorAll(".tabs button").forEach((b) => {
@@ -373,7 +375,8 @@
       $("backend").textContent = s.backend || "—";
       $("profile").textContent = s.axis_profile || "—";
       $("phones").textContent = (s.phones ?? 0);
-      $("hz").textContent = (s.hz ?? 0) + " Hz" + (s.last_ms != null ? " · " + s.last_ms + "ms" : "");
+      $("hz").textContent = (s.hz ?? 0) + " Hz"
+        + (s.last_ms != null ? " · 上包 " + s.last_ms + "ms 前" : "");
       $("transport").textContent = s.transport || "idle";
       $("dropped").textContent = s.dropped_udp ?? 0;
       $("ip").textContent = (s.ip || "—") + " · HTTP " + (s.http || "—") + " · WS " + (s.ws || "—") + " · UDP " + (s.udp || "—");
@@ -396,6 +399,11 @@
         $("copyLink").onclick = () => navigator.clipboard.writeText(link);
       }
       $("copy").onclick = () => navigator.clipboard.writeText(s.ip || "");
+    }
+    let monitorFast = null;   // 监测页激活时的 10Hz 轮询（1Hz 看板看不出输入是否跟随）
+    function setMonitorFast(on) {
+      if (on && !monitorFast) monitorFast = setInterval(tick, 100);
+      else if (!on && monitorFast) { clearInterval(monitorFast); monitorFast = null; }
     }
     async function tick() {
       try {
@@ -630,7 +638,7 @@
       const hash = location.hash.replace("#", "");
       if (hash && $("tab-" + hash)) activateTab(hash);
       else loadDoctor();
-      setInterval(tick, 1000);
+      setInterval(() => { if (!monitorFast) tick(); }, 1000);
       setInterval(() => { if ($("tab-logs").classList.contains("active")) loadLogs(); }, 2000);
       setInterval(() => {
         if ($("tab-doctor").classList.contains("active")) loadDoctor();
