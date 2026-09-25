@@ -79,6 +79,7 @@ struct PreflightView: View {
                     stepCard(3, "gamecontroller", "进座舱直接玩",
                              "在游戏里把 PalmDeck 当虚拟手柄绑一次即可")
                     if !discovery.found.isEmpty { discoveredList }
+                    rescanRow
                     advanced
                     Spacer(minLength: 0)
                 }
@@ -268,6 +269,20 @@ struct PreflightView: View {
         guard !h.isEmpty else { return }
         ctrl.connect(host: h)
         Haptics.tap()
+    }
+
+    /// 手动重搜：首轮没搜到（电脑后开机 / 刚换 Wi-Fi）时不用退出重进。
+    private var rescanRow: some View {
+        Button {
+            discovery.restart(); Haptics.tap()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.clockwise").pdFont(11)
+                Text("重新搜索").pdFont(12)
+            }
+            .foregroundColor(Theme.cyan)
+        }
+        .buttonStyle(.plain)
     }
 
     /// 扫描到的所有电脑（点一下连接）

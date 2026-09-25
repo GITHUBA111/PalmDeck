@@ -106,3 +106,58 @@ class TestMonitorRefreshesFast(unittest.TestCase):
     def test_last_ms_is_labeled_as_packet_age(self):
         self.assertIn("上包", self.html,
                       "last_ms 是包间隔 / 挂机时长，写成裸 `ms` 会被当成延迟")
+
+
+class TestLongActionsHaveAnEscapeHatch(unittest.TestCase):
+    """控制台的长请求不能无限期「点了没反应」。
+
+    方案 `docs/PalmDeck-v4-console-busy.md`。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = _read("web", "host.html")
+
+    def test_api_has_a_timeout_and_a_busy_helper(self):
+        self.assertIn("function busy(btn, label, on)", self.html)
+        self.assertIn("new AbortController()", self.html, "fetch 要有可中断的 signal")
+        self.assertIn("ctl.abort()", self.html)
+        self.assertIn("请求超时", self.html)
+
+    def test_apply_update_is_busy_and_bounded(self):
+        body = self.html.split('$("applyUp").onclick', 1)[1].split("};", 1)[0]
+        self.assertIn('busy($("applyUp"), "下载中…", true)', body)
+        self.assertIn("180000", body, "下载最坏 120s，客户端超时要盖过它")
+        self.assertIn('$("applyUp").disabled = !info.can_self_update || !LATEST', body,
+                      "退出忙碌后要按「真有新版」重算 disabled，不能无脑点亮")
+
+    def test_check_and_save_are_busy(self):
+        for btn, label in (("checkUp", "检查中…"), ("saveCfg", "保存中…"),
+                           ("layoutSave", "保存中…")):
+            self.assertIn('busy($("%s"), "%s", true)' % (btn, label), self.html)
+
+    def test_doctor_endpoints_get_a_longer_timeout(self):
+        self.assertIn('api("/api/doctor", undefined, 60000)', self.html)
+        self.assertIn("}, 60000);", self.html, "自检修复可能跑几十秒 PowerShell")
+
+
+class TestDiscoveryRescan(unittest.TestCase):
+    """首轮没搜到要能重搜，不用退出重进。
+
+    方案 `docs/PalmDeck-v4-discovery-rescan.md`。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.disc = _ios("Model", "Discovery.swift")
+        cls.pre = _ios("Views", "PreflightView.swift")
+
+    def test_restart_clears_and_starts_again(self):
+        body = self.disc.split("func restart()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("stop()", body)
+        self.assertIn("found = []", body, "重搜要先清掉旧结果，否则永远显示上一次的")
+        self.assertIn("start()", body)
+
+    def test_preflight_has_a_rescan_button(self):
+        self.assertIn('Text("重新搜索")', self.pre)
+        self.assertIn("discovery.restart()", self.pre)

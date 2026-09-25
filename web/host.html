@@ -300,10 +300,30 @@
       const t = $("toast"); t.textContent = msg; t.classList.add("show");
       clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1800);
     }
-    async function api(path, opts) {
-      const r = await fetch(path, opts);
-      if (!r.ok) throw new Error(await r.text().catch(() => r.status));
-      return r.json();
+    async function api(path, opts, timeoutMs = 30000) {
+      // 没有超时的 fetch 会让按钮永远停在「检查中…」——用户分不清在忙还是死了。
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), timeoutMs);
+      try {
+        const r = await fetch(path, Object.assign({ signal: ctl.signal }, opts || {}));
+        if (!r.ok) throw new Error(await r.text().catch(() => r.status));
+        return r.json();
+      } catch (e) {
+        if (e && e.name === "AbortError") throw new Error("请求超时（" + Math.round(timeoutMs / 1000) + "s）");
+        throw e;
+      } finally { clearTimeout(timer); }
+    }
+    // 忙碌态：一个长请求期间按住按钮并换文案，避免「点了没反应」还能连点。
+    function busy(btn, label, on) {
+      if (!btn) return;
+      if (on) {
+        btn.dataset.idleText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = label;
+      } else {
+        if (btn.dataset.idleText !== undefined) { btn.textContent = btn.dataset.idleText; delete btn.dataset.idleText; }
+        btn.disabled = false;
+      }
     }
     function fmt(v, d) { return (v == null || isNaN(v)) ? (d || "—") : v; }
 
@@ -426,7 +446,7 @@
     const DOC_ICON = { ok: "✓", warn: "!", error: "×", info: "·" };
     async function loadDoctor() {
       let rep;
-      try { rep = await api("/api/doctor"); }
+      try { rep = await api("/api/doctor", undefined, 60000); }
       catch (e) { $("docSummary").textContent = "自检失败：" + e.message; return; }
       const s = rep.summary || {};
       const bad = (s.error || 0) + (s.warn || 0);
@@ -457,7 +477,7 @@
         const r = await api("/api/doctor/fix", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id }),
-        });
+        }, 60000);
         toast(r.message || (r.ok ? "已处理" : "没处理成"));
         if (r.needs_recheck) {
           // 提权 / 装驱动 / pip 都要等一会儿：连续重查 15 次（每 2s）
@@ -516,11 +536,13 @@
         if (String(v) !== String(CONFIG[k])) patch[k] = v;
       });
       if (!Object.keys(patch).length) return toast("没有改动");
+      busy($("saveCfg"), "保存中…", true);
       try {
         const res = await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
         CONFIG = res.config; renderConfig();
         toast("已保存" + (Object.keys(patch).some((k) => RESTART.includes(k)) ? "（部分项需重启生效）" : ""));
       } catch (e) { toast("保存失败：" + e.message); }
+      finally { busy($("saveCfg"), "", false); }
     };
     $("reloadCfg").onclick = loadConfig;
 
@@ -563,17 +585,21 @@
       let layout;
       try { layout = JSON.parse($("layoutJson").value || "[]"); }
       catch (e) { return toast("JSON 无效：" + e.message); }
+      busy($("layoutSave"), "保存中…", true);
       try {
         const r = await api("/api/layouts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: $("layoutMode").value, layout }) });
         toast("已保存 " + (r.layout ? r.layout.length : 0) + " 个组件");
         loadLayout($("layoutMode").value);
       } catch (e) { toast("保存失败：" + e.message); }
+      finally { busy($("layoutSave"), "", false); }
     };
     $("layoutReset").onclick = async () => {
       const mode = $("layoutMode").value;
       if (!confirm("重置 " + mode + " 布局为 App 内置默认？")) return;
-      try { await fetch("/api/layouts?mode=" + mode, { method: "DELETE" }); toast("已重置"); loadLayout(mode); }
+      busy($("layoutReset"), "重置中…", true);
+      try { await api("/api/layouts?mode=" + mode, { method: "DELETE" }); toast("已重置"); loadLayout(mode); }
       catch (e) { toast("重置失败：" + e.message); }
+      finally { busy($("layoutReset"), "", false); }
     };
 
     // ---------- update ----------
@@ -589,6 +615,7 @@
     }
     $("checkUp").onclick = async () => {
       $("latestVer").textContent = "检查中…";
+      busy($("checkUp"), "检查中…", true);
       try {
         const r = await api("/api/update/check");
         LATEST = r.latest || "";
@@ -600,11 +627,20 @@
                                             : `<span class="bad">${r.message || "检查失败"}</span>`;
         $("applyUp").disabled = !info.can_self_update || !LATEST;
       } catch (e) { $("latestVer").textContent = "检查失败：" + e.message; }
+      finally { busy($("checkUp"), "", false); }
     };
     $("applyUp").onclick = async () => {
       if (!confirm("下载新版本并重启 PalmDeck？")) return;
-      try { const r = await api("/api/update/apply", { method: "POST" }); toast(r.ok ? "正在重启到 v" + r.version + "…" : (r.error || "失败")); }
-      catch (e) { toast("更新失败：" + e.message); }
+      busy($("applyUp"), "下载中…", true);
+      $("latestVer").innerHTML = '<span class="ok">下载中…（最长约 2 分钟，完成后自动重启）</span>';
+      try {
+        const r = await api("/api/update/apply", { method: "POST" }, 180000);
+        toast(r.ok ? "正在重启到 v" + r.version + "…" : (r.error || "失败"));
+      } catch (e) { toast("更新失败：" + e.message); }
+      finally {
+        busy($("applyUp"), "", false);
+        $("applyUp").disabled = !info.can_self_update || !LATEST;
+      }
     };
 
     // ---------- logs ----------

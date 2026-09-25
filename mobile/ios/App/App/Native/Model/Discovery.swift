@@ -67,6 +67,16 @@ final class Discovery: NSObject, ObservableObject, NetServiceBrowserDelegate, Ne
         browser = nil
     }
 
+    /// 手动「重新搜索」：清掉旧结果再起一轮（换 Wi-Fi / 电脑后开机时用，
+    /// 6s 兜底提示重新计时）。
+    func restart() {
+        stop()
+        found = []
+        services = []
+        statusText = "搜索中…"
+        start()
+    }
+
     // MARK: - NetServiceBrowserDelegate
 
     func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
