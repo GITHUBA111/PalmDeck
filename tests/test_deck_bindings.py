@@ -632,5 +632,51 @@ class TestDeleteAndAddAreUndoable(unittest.TestCase):
                          "拖拽是高频调用，压撤销槽会打断手势")
 
 
+class TestDragSnappingIsWired(unittest.TestCase):
+    """吸附规则本身在 `Model/Snap.swift`（有 swiftc 单测）。
+
+    这里只钉**接线**：拖动分支真的走了 Snap、松手/退出编辑会收线、
+    缩放**不**吸（本次不做）、对齐线不落盘。
+    """
+
+    def setUp(self):
+        self.layout = _ios("Views", "Layout.swift")
+        self.edit = self.layout.split("struct EditableWidget", 1)[1]
+        self.move = self.edit.split("// 缩放", 1)[0]
+        self.resize = self.edit.split("// 缩放", 1)[1].split("// 删除", 1)[0]
+
+    def test_snap_is_resolved_in_exactly_one_place(self):
+        self.assertEqual(self.layout.count("Snap.drag("), 1,
+                         "吸附只能由 dragOutcome 一处算（别分散到手势里）")
+
+    def test_move_gesture_snaps_and_reports_guides(self):
+        self.assertIn("dragOutcome(from: st", self.move)
+        self.assertIn("store.setGuides(x: o.guideX, y: o.guideY)", self.move)
+
+    def test_guides_are_cleared_when_the_drag_ends(self):
+        self.assertIn("store.clearGuides()", self.move, "松手必须收线")
+
+    def test_leaving_edit_mode_clears_the_guides(self):
+        self.assertIn("if !editing { clearGuides() }", self.layout,
+                      "退出编辑不能让一条对齐线留在画布上")
+
+    def test_guides_are_not_persisted(self):
+        save = self.layout.split("private func saveUndo()", 1)[1].split("\n    }", 1)[0]
+        self.assertNotIn("guide", save, "对齐线只是瞬时提示，不该进存储")
+
+    def test_resize_does_not_snap(self):
+        self.assertNotIn("Snap", self.resize, "本次只做拖动吸附，缩放不接")
+
+    def test_canvas_draws_the_guides(self):
+        canvas = self.layout.split("struct WidgetCanvas", 1)[1].split("/// 单个可编辑组件", 1)[0]
+        self.assertIn("store.guidesX", canvas)
+        self.assertIn("store.guidesY", canvas)
+        self.assertIn("allowsHitTesting(false)", canvas)
+
+    def test_others_exclude_the_dragged_widget(self):
+        self.assertIn("filter { $0.id != widget.id }", self.layout,
+                      "“其它组件”不能含自己，否则会被自己吸住")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -30,7 +30,12 @@ final class LayoutStore: ObservableObject {
     /// 模板名长度上限
     static let maxNameLength = 16
 
-    @Published var editing = false
+    @Published var editing = false {
+        didSet { if !editing { clearGuides() } }   // 退出编辑别留一条线
+    }
+    /// 拖动中要显示的对齐线（归一化坐标；空 = 不显示）。**不落盘**，只是一帧的提示。
+    @Published private(set) var guidesX: [Double] = []
+    @Published private(set) var guidesY: [Double] = []
     /// 各模式组件列表（key = `CockpitMode.rawValue`）
     @Published private var layouts: [String: [DeckWidget]] = [:]
     /// 与电脑同步的状态提示（设置页显示）
@@ -68,6 +73,19 @@ final class LayoutStore: ObservableObject {
     }
 
     func widgets(mode: CockpitMode) -> [DeckWidget] { layouts[mode.rawValue] ?? [] }
+
+    /// 拖动中的对齐线。值没变就不发布（同 §12.8：没变就别惊动整棵视图树）。
+    func setGuides(x: Double?, y: Double?) {
+        let nx = x.map { [$0] } ?? []
+        let ny = y.map { [$0] } ?? []
+        if guidesX != nx { guidesX = nx }
+        if guidesY != ny { guidesY = ny }
+    }
+
+    func clearGuides() {
+        if !guidesX.isEmpty { guidesX = [] }
+        if !guidesY.isEmpty { guidesY = [] }
+    }
 
     private func setWidgets(_ list: [DeckWidget], mode: CockpitMode) {
         layouts[mode.rawValue] = list
@@ -438,9 +456,34 @@ struct WidgetCanvas: View {
                     EditableWidget(widget: w, store: store, mode: mode,
                                    canvas: CGSize(width: W, height: H), s: s, ctrl: ctrl)
                 }
+                // 吸附对齐线：只在真吸上时出现（那条边就是信息本身）
+                ForEach(store.guidesX.indices, id: \.self) { i in
+                    vGuide(store.guidesX[i] * W, W: W, H: H)
+                }
+                ForEach(store.guidesY.indices, id: \.self) { i in
+                    hGuide(store.guidesY[i] * H, W: W, H: H)
+                }
                 emptyHint
             }
         }
+    }
+
+    /// 竖向对齐线（1pt，贯穿画布）。不提交互：它只是个提示。
+    private func vGuide(_ x: Double, W: Double, H: Double) -> some View {
+        Rectangle().fill(Theme.cyan.opacity(0.85))
+            .frame(width: 1, height: H)
+            .frame(width: W, height: H, alignment: .topLeading)
+            .offset(x: x)
+            .allowsHitTesting(false)
+    }
+
+    /// 横向对齐线
+    private func hGuide(_ y: Double, W: Double, H: Double) -> some View {
+        Rectangle().fill(Theme.cyan.opacity(0.85))
+            .frame(width: W, height: 1)
+            .frame(width: W, height: H, alignment: .topLeading)
+            .offset(y: y)
+            .allowsHitTesting(false)
     }
 
     /// 空画布提示。
@@ -483,6 +526,21 @@ struct EditableWidget: View {
 
     private var r: WRect { widget.rect }
 
+    /// 拖动落点 = 起点 + 位移 → 吸附（吸边/中线）→ 夹取（至少留 40pt 在画布里）。
+    /// 规则全在 `Snap`（纯函数、有 swiftc 单测），这里只做坐标换算与接线。
+    /// `others` 必须排除自己，否则会被自己吸住、怎么拖都不动。
+    private func dragOutcome(from st: WRect, translation: CGSize,
+                             W: Double, H: Double) -> Snap.Outcome {
+        Snap.drag(Snap.Rect(x: st.x + translation.width / W,
+                            y: st.y + translation.height / H,
+                            w: st.w, h: st.h),
+                  others: store.widgets(mode: mode)
+                      .filter { $0.id != widget.id }
+                      .map { Snap.Rect(x: $0.rect.x, y: $0.rect.y,
+                                       w: $0.rect.w, h: $0.rect.h) },
+                  canvas: (w: W, h: H))
+    }
+
     var body: some View {
         let W = canvas.width, H = canvas.height
         let px = r.x * W, py = r.y * H
@@ -506,13 +564,16 @@ struct EditableWidget: View {
                             .onChanged { g in
                                 if dragStart == nil { dragStart = r }
                                 guard let st = dragStart else { return }
+                                let o = dragOutcome(from: st, translation: g.translation, W: W, H: H)
                                 var nw = widget
-                                nw.rect = WRect(x: st.x + g.translation.width / W,
-                                                y: st.y + g.translation.height / H,
-                                                w: st.w, h: st.h)
+                                nw.rect = WRect(x: o.rect.x, y: o.rect.y, w: o.rect.w, h: o.rect.h)
                                 store.update(nw, mode: mode)
+                                store.setGuides(x: o.guideX, y: o.guideY)
                             }
-                            .onEnded { _ in dragStart = nil }
+                            .onEnded { _ in
+                                dragStart = nil
+                                store.clearGuides()
+                            }
                     )
                 // 缩放
                 Circle().fill(Theme.cyan)
