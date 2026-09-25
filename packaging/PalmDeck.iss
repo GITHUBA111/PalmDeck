@@ -104,9 +104,10 @@ Filename: "{app}\{#AppExe}"; Description: "立即启动 {#AppName}"; \
 Type: filesandordirs; Name: "{app}"
 
 [Code]
-; WebView2 Runtime 的 EdgeUpdate client GUID —— 与 palmdeck_window._WEBVIEW2_CLIENT 逐字相同
-; （tests/test_window.py 会对账）。查不到就当「没装」：宁可多装一次 Runtime，
-; 也不要拿一个缺渲染引擎的真窗口去唬玩家。
+// 注意：[Code] 是 Pascal Script —— 注释只能用 // 或 { }，用 ; 会被当成语句、编译直接失败。
+// WebView2 Runtime 的 EdgeUpdate client GUID —— 与 palmdeck_window._WEBVIEW2_CLIENT 逐字相同
+// （tests/test_window.py 会对账）。查不到就当「没装」：宁可多装一次 Runtime，
+// 也不要拿一个缺渲染引擎的真窗口去唬玩家。
 const
   WebView2Client = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 

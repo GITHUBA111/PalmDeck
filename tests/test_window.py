@@ -334,6 +334,13 @@ class PackagingTests(unittest.TestCase):
     def test_ci_prepares_the_webview2_bootstrapper(self):
         self.assertIn("MicrosoftEdgeWebview2Setup.exe", _read(WORKFLOW))
 
+    def test_code_section_uses_pascal_comments(self):
+        # [Code] 是 Pascal Script：注释只能 // 或 { }。写成 ; 会被当语句 → 编译失败
+        # （我们就是这么让 ISCC 报 'BEGIN' expected 的）。
+        code = _read(ISS).split("[Code]", 1)[1]
+        bad = [ln for ln in code.splitlines() if ln.strip().startswith(";")]
+        self.assertEqual(bad, [], "[Code] 里的 ; 注释会被 ISCC 当语句：%r" % bad[:3])
+
 
 class SelfTestTests(unittest.TestCase):
     """`PALMDECK_SELFTEST`：把「包里有没有 pywebview」变成一条可见的断言。"""
