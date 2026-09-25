@@ -17,6 +17,8 @@ FILES = [
     "hotas.py",
     "palmdeck_config.py",
     "palmdeck_layouts.py",
+    # 自检：托盘 / 控制台 / 安装脚本 / 命令行共用（缺了 zip 一启动就 ImportError）
+    "palmdeck_doctor.py",
     "updater.py",
     "start.py",
     "start.bat",

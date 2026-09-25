@@ -155,6 +155,21 @@
   60Hz 指数回中尾巴约 1.5s。改成两个都 onEnded 直接归零；周期杆保留 60Hz 平滑回中。
   脚舵写 `s.yaw` 后仍过 `kYaw = 0.5` 收尾，UDP 不断崖。方案：`docs/PalmDeck-v4-instant-recenter.md`；
   守卫：`tests/test_deck_bindings.py::TestInstantRecenter`（5 条）。
+- **（待办）Windows CI 跑测试**：`build-windows.yml` 现在只打包 exe，没跑 `python -m unittest`。
+  加之前得先在 windows-latest 上真验一遍（`test_doctor.py` 在 Windows 上会走 `sc query` /
+  `Get-NetFirewallRule` 分支），否则可能常年红。
+- **Windows 端服务产品化（统一自检 / 一键修复）**—— 以前环境问题散在四处：驱动检测只在
+  `setup_windows.bat`（`sc query`），防火墙端口在 `open_firewall.bat` 与 `palmdeck_config.py`
+  各写一份，而那个 bat 既没人引用也没进过 zip；控制台对“游戏里没设备”只报一句 `backend=none`；
+  WS/UDP 端口被占时后台线程只留一行 traceback，用户看到的是“手机连不上”。
+  新增 **`palmdeck_doctor.py`**（唯一真相源：Python/依赖/驱动/防火墙/监听端口/局域网逐项体检 +
+  一键修复，防火墙端口从配置读），bridge 加 `/api/doctor` 与 `/api/doctor/fix`（新增
+  `Hub.note_listener` 记录 `serve_*` 的 bind 成败），控制台新增「自检」tab（详情 + 修复按钮 +
+  红色数字 badge，概览页 `backend=none` 时出现「去自检 →」），托盘 tooltip 带版本号、菜单加「自检…」、
+  启动有故障时气泡提醒；删 `open_firewall.bat`，`setup_windows.bat` 瘦成「装依赖 → 调 doctor → 启动」；
+  `pack_windows.FILES` / `PalmDeck.spec` 同步。方案：`docs/PalmDeck-v4-windows-product.md`；
+  守卫：`tests/test_doctor.py`（25 条，含用 TEST-NET-1 地址做**真 bind 失败**的验证）。
+  测试 226 → **251**。
 
 ## 已存档（方案已保存，未实施）
 - 无。

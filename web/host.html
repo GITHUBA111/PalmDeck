@@ -94,6 +94,17 @@
     .tag.live { color:var(--green); border-color:#23543c; }
     .tag.restart { color:var(--amber); border-color:#5a4a1e; }
     pre.logs { margin:0; max-height:60vh; overflow:auto; font-size:12px; line-height:1.5; color:#b9c7da; white-space:pre-wrap; }
+    /* 自检 */
+    .tabs button .badge { display:inline-block; min-width:16px; padding:0 5px; margin-left:6px; border-radius:999px; font-size:11px; background:#5a4a1e; color:var(--amber); }
+    .check { display:flex; align-items:flex-start; gap:12px; padding:11px 0; border-bottom:1px solid #1b2738; }
+    .check:last-child { border-bottom:0; }
+    .check .dot { flex:0 0 22px; height:22px; border-radius:50%; display:grid; place-items:center; font-size:13px; font-weight:700; border:1px solid var(--line); color:var(--muted); }
+    .check .dot.ok { color:var(--green); border-color:#23543c; }
+    .check .dot.warn { color:var(--amber); border-color:#5a4a1e; }
+    .check .dot.error { color:var(--red); border-color:#5c2b28; }
+    .check .body { flex:1; min-width:0; }
+    .check .t { font-size:14px; }
+    .check .d { color:var(--muted); font-size:12.5px; margin-top:3px; line-height:1.5; }
     .toast { position:fixed; right:20px; bottom:20px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; opacity:0; transition:opacity .2s; pointer-events:none; }
     .toast.show { opacity:1; }
     @media (max-width:820px){ .cols-2 { grid-template-columns:1fr; } .field { grid-template-columns:1fr; gap:4px; } }
@@ -118,6 +129,7 @@
 
   <nav class="tabs">
     <button data-tab="overview" class="active">概览</button>
+    <button data-tab="doctor">自检<span class="badge" id="docBadge" style="display:none"></span></button>
     <button data-tab="monitor">输入监测</button>
     <button data-tab="config">配置</button>
     <button data-tab="layouts">布局</button>
@@ -150,6 +162,10 @@
           <div class="row"><span class="k">丢弃 UDP</span><span id="dropped">0</span></div>
           <div class="row"><span class="k">本机地址</span><span id="ip">—</span></div>
           <div class="row" id="errRow" style="display:none"><span class="k">错误</span><span class="err" id="err">—</span></div>
+          <div class="row" id="docHint" style="display:none">
+            <span class="k">没找到虚拟手柄设备</span>
+            <span><button class="action" id="docGo">去自检 →</button></span>
+          </div>
           <h2 style="margin-top:18px">座舱模式</h2>
           <div class="modes">
             <button class="action" data-mode="heli">飞机</button>
@@ -157,6 +173,24 @@
             <button class="action" data-mode="gamepad">游戏手柄</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- 自检 -->
+    <section class="tab" id="tab-doctor">
+      <div class="card">
+        <h2>环境自检 <span class="sub" id="docVersion"></span></h2>
+        <p class="sub" id="docSummary" style="margin:0 0 8px">体检中…</p>
+        <div id="docList"></div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center">
+          <button class="action primary" id="docRerun">重新体检</button>
+          <button class="action" id="docFirewall">一键放行防火墙</button>
+          <span class="sub">在「配置」页改了端口，要回来重新放行一次。</span>
+        </div>
+        <p class="sub" style="margin-top:12px">
+          这份清单是电脑端服务自己跑出来的：缺驱动 / 防火墙没放行 / 端口被占 / 依赖缺失，
+          都会在这里说清楚并给出修法。手机连不上、游戏里没设备，先看这里。
+        </p>
       </div>
     </section>
 
@@ -267,15 +301,20 @@
     function fmt(v, d) { return (v == null || isNaN(v)) ? (d || "—") : v; }
 
     // ---------- tabs ----------
+    function activateTab(name) {
+      document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
+      document.querySelectorAll("section.tab").forEach((x) => x.classList.toggle("active", x.id === "tab-" + name));
+      if (name === "logs") loadLogs();
+      if (name === "doctor") loadDoctor();
+      if (name === "layouts" && !$("layoutJson").value) loadLayout($("layoutMode").value);
+      if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    }
     document.querySelectorAll(".tabs button").forEach((b) => {
-      b.onclick = () => {
-        document.querySelectorAll(".tabs button").forEach((x) => x.classList.remove("active"));
-        document.querySelectorAll("section.tab").forEach((x) => x.classList.remove("active"));
-        b.classList.add("active");
-        $("tab-" + b.dataset.tab).classList.add("active");
-        if (b.dataset.tab === "logs") loadLogs();
-        if (b.dataset.tab === "layouts" && !$("layoutJson").value) loadLayout($("layoutMode").value);
-      };
+      b.onclick = () => activateTab(b.dataset.tab);
+    });
+    window.addEventListener("hashchange", () => {
+      const n = location.hash.replace("#", "");
+      if (n && $("tab-" + n)) activateTab(n);
     });
 
     // ---------- status ----------
@@ -333,6 +372,8 @@
       $("errRow").style.display = err ? "" : "none";
       $("err").textContent = err;
       renderAxes(s.axes); renderButtons(s.buttons || 0); renderHat(s.hat);
+      // backend 不行的时候，直接把人引到自检页（那里才说得清缺哪样）
+      $("docHint").style.display = backendOk ? "none" : "";
       document.querySelectorAll(".modes button").forEach((b) => {
         b.classList.toggle("on", b.dataset.mode === s.cockpit_mode);
       });
@@ -363,6 +404,60 @@
         catch (e) { toast("切换失败：" + e.message); }
       };
     });
+
+    // ---------- 自检 ----------
+    const DOC_ICON = { ok: "✓", warn: "!", error: "×", info: "·" };
+    async function loadDoctor() {
+      let rep;
+      try { rep = await api("/api/doctor"); }
+      catch (e) { $("docSummary").textContent = "自检失败：" + e.message; return; }
+      const s = rep.summary || {};
+      const bad = (s.error || 0) + (s.warn || 0);
+      const badge = $("docBadge");
+      badge.style.display = bad ? "" : "none";
+      badge.textContent = bad;
+      $("docVersion").textContent = "PalmDeck v" + rep.version + " · " + rep.platform;
+      $("docSummary").innerHTML = s.error
+        ? `<span class="err">有 ${s.error} 项故障要处理</span>`
+        : (s.warn ? `<span class="bad">有 ${s.warn} 项提醒</span>（不影响启动，可能影响某个游戏 / 手机连接）`
+                  : '<span class="ok">一切正常</span>：去手机上打开座舱 App 就行。');
+      $("docList").innerHTML = (rep.checks || []).map((c) => `
+        <div class="check ${c.level}">
+          <span class="dot ${c.level}">${DOC_ICON[c.level] || "·"}</span>
+          <div class="body">
+            <div class="t">${c.title}</div>
+            ${c.detail ? `<div class="d">${c.detail}</div>` : ""}
+          </div>
+          ${c.fix ? `<button class="action" data-fix="${c.fix}">${c.fix_label || "修复"}</button>` : ""}
+        </div>`).join("");
+      $("docList").querySelectorAll("[data-fix]").forEach((b) => {
+        b.onclick = () => fixDoctor(b.dataset.fix, b);
+      });
+    }
+    async function fixDoctor(id, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        const r = await api("/api/doctor/fix", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        toast(r.message || (r.ok ? "已处理" : "没处理成"));
+        if (r.needs_recheck) {
+          // 提权 / 装驱动 / pip 都要等一会儿：连续重查 15 次（每 2s）
+          let n = 0;
+          const t = setInterval(async () => {
+            n++; await loadDoctor();
+            if (n >= 15 || !$("tab-doctor").classList.contains("active")) clearInterval(t);
+          }, 2000);
+        } else {
+          await loadDoctor();
+        }
+      } catch (e) { toast("修复失败：" + e.message); }
+      finally { if (btn) btn.disabled = false; }
+    }
+    $("docRerun").onclick = () => loadDoctor();
+    $("docFirewall").onclick = (e) => fixDoctor("firewall", e.target);
+    $("docGo").onclick = () => activateTab("doctor");
 
     // ---------- config ----------
     const FIELDS = [
@@ -514,8 +609,14 @@
       try { await loadInfo(); } catch (e) {}
       try { await loadConfig(); } catch (e) {}
       await tick();
+      const hash = location.hash.replace("#", "");
+      if (hash && $("tab-" + hash)) activateTab(hash);
+      else loadDoctor();
       setInterval(tick, 1000);
       setInterval(() => { if ($("tab-logs").classList.contains("active")) loadLogs(); }, 2000);
+      setInterval(() => {
+        if ($("tab-doctor").classList.contains("active")) loadDoctor();
+      }, 5000);
     })();
   </script>
 </body>

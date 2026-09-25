@@ -14,7 +14,7 @@
 1. 电脑同时准备：
    - 已装的 **vJoy**（飞机）
    - 再装 [ViGEmBus](https://github.com/ViGEm/ViGEmBus/releases) + `pip install vgamepad`（开车）
-2. 运行 `python bridge.py`，终端应出现 `vjoy+vgamepad` 或至少其中一个
+2. 运行 `python start.py`（托盘常驻）或 `python bridge.py`（前台带窗口），终端应出现 `vjoy+vgamepad` 或至少其中一个
 3. iPhone 打开座舱 App，双手横握（**只支持横屏**），默认是飞机，可切 开车 / 手柄
 4. Steam 里对 WARDOGS **关掉 Steam Input**
 5. 飞机：游戏内 **Settings → Gamepad → HOTAS → Enable HOTAS**  
@@ -42,7 +42,7 @@ cd PalmDeck
 python3 bridge.py
 ```
 
-Windows 可双击 `start.bat`。
+Windows 可双击 `start.bat`（第一次先双击 `setup_windows.bat` 装依赖）。
 
 - 电脑控制台：`http://127.0.0.1:8080/`（分页：概览 / 输入监测 / 配置 / 布局 / 更新 / 日志）
 - 配置页可「**导出/导入配置包**」：一个 JSON 含全部服务配置 + App 三模式布局，
@@ -69,12 +69,14 @@ pip install pyinstaller pyvjoy zeroconf qrcode pystray Pillow
 pyinstaller packaging/PalmDeck.spec
 ```
 
-得到 `dist/PalmDeck.exe`。用户机器仍需先装 vJoy 或 ViGEmBus。
+得到 `dist/PalmDeck.exe`。用户机器仍需先装 vJoy 或 ViGEmBus（装完重启；缺什么由「自检」页指出）。
 
 **`PalmDeck.exe` 是托盘常驻的守护程序**（类似罗技 G HUB）：
 - 双击启动：托盘出现方向盘图标，后台跑桥接，自动开浏览器控制台；**没有黑框窗口**
 - 重复双击 exe：只打开已有实例的控制台（不会重复启动）
-- 托盘菜单：打开控制台 / 检查更新 / 打开日志 / 开机自启 / 退出
+- 托盘菜单：打开控制台 / **自检…** / 检查更新 / 打开日志 / 开机自启 / 退出（悬停看版本号）
+- **自检**（`palmdeck_doctor.py`）：驱动 / 防火墙 / 端口占用 / 依赖 / 局域网地址逐条体检，能一键修的（防火墙放行、驱动下载页、缺依赖）就一键修。四处共用同一份：控制台「自检」页、托盘菜单、`setup_windows.bat`、`python palmdeck_doctor.py --json`
+- 防火墙端口从 `palmdeck_config.py` 读，不再写死在 bat 里；改了端口回自检页重新放行即可
 - **自动更新**：每次启动查 GitHub Release，有新版本自动下载 → 自替换 → 重启
 - 日志文件：`%APPDATA%\PalmDeck\palmdeck.log`
 

@@ -22,6 +22,8 @@ hiddenimports = [
     # 漏了的话打出来的 exe 一启动就 ImportError。
     "palmdeck_config",
     "palmdeck_layouts",
+    # 自检（bridge 与 start.py 都 import）
+    "palmdeck_doctor",
     "updater",
     # 系统托盘（Windows 后端动态 import，需显式收进来）
     "pystray._win32",

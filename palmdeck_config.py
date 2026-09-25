@@ -32,6 +32,11 @@ LIVE_KEYS = ("axis_profile", "failsafe_throttle", "udp_allowlist", "allowlist_tt
 # 需要重启才能生效的键
 RESTART_KEYS = ("host", "http", "ws", "udp", "beacon", "bonjour")
 
+# 广播端口：手机监听这个 UDP 端口来「自动发现」电脑。
+# 不是可配置项（App 侧写死），所以放模块常量 —— 但**只能定义这一处**：
+# bridge.py 用它发广播，palmdeck_doctor.py 用它算防火墙要放行的端口。
+BEACON_PORT = 7774
+
 _ENUMS = {
     "axis_profile": ("hotas", "fbw"),
     "failsafe_throttle": ("hold", "center"),

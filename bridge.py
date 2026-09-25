@@ -29,9 +29,11 @@ from typing import Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
 import palmdeck_layouts as layouts
+import palmdeck_doctor as doctor
 
 from hotas import Hotas
 from palmdeck_config import (
+    BEACON_PORT,
     DEFAULTS,
     LIVE_KEYS,
     RESTART_KEYS,
@@ -55,7 +57,7 @@ def _base_dir() -> str:
 
 WEB_DIR = os.path.join(_base_dir(), "web")
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-BEACON_PORT = 7774  # 手机监听这个 UDP 端口，自动发现电脑
+# 广播端口定义在 palmdeck_config（自检页要拿它算防火墙规则），此处不再重复定义。
 
 
 def _print_qr(text: str) -> None:
@@ -285,6 +287,9 @@ class Hub:
         self.last_udp_mono: Optional[float] = None
         self.last_ws_mono: Optional[float] = None
         self.dropped_udp = 0
+        # 监听端口是否真的起来了（自检页要用）：name → {ok, addr, error}
+        # 注意：不要叫 listeners —— 那个名字已经是「状态订阅回调列表」了。
+        self.listener_state: dict = {}
         self._error_kind = ""
         driver_err = "" if self.hotas.backend != "none" else "未检测到 vJoy / ViGEm / uinput，游戏里不会出现设备"
         if driver_err:
@@ -302,6 +307,17 @@ class Hub:
             "axis_profile": "hotas",
         }
         log(f"HOTAS backend={self.hotas.backend} · {self.hotas.name}")
+
+    def note_listener(self, name: str, ok: bool, addr: str = "", error: str = "") -> None:
+        """记一笔监听结果。`serve_*` 起不来（端口被占）时自检页能直接说出来。
+
+        以前 bind 失败只在后台线程里打一行 traceback，用户看到的是「手机连不上」
+        而不知道为什么。
+        """
+        with self.lock:
+            self.listener_state[name] = {"ok": bool(ok), "addr": addr, "error": error}
+        if not ok:
+            log(f"listener {name} 起不来：{error}")
 
     def snapshot_status(self) -> dict:
         with self.lock:
@@ -329,6 +345,7 @@ class Hub:
             st["buttons"] = self._btn
             st["hat"] = self._hat
             st["dropped_udp"] = self.dropped_udp
+            st["listeners"] = {k: dict(v) for k, v in self.listener_state.items()}
             return st
 
     def broadcast(self, msg: dict) -> None:
@@ -807,8 +824,15 @@ def handle_ws_client(conn: socket.socket, addr) -> None:
 def accept_ws(host: str, port: int) -> None:
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind((host, port))
+    try:
+        srv.bind((host, port))
+    except OSError as exc:
+        # 端口被别的软件占了：说出来，别静悄悄死掉（自检页会显示）
+        srv.close()
+        HUB.note_listener("ws", False, f"{host}:{port}", f"{exc}")
+        return
     srv.listen(16)
+    HUB.note_listener("ws", True, f"{host}:{port}")
     log(f"websocket ws://{host}:{port}")
     while True:
         conn, addr = srv.accept()
@@ -962,6 +986,19 @@ def apply_bundle(obj) -> dict:
             "restart_required": restart_required}
 
 
+def doctor_extra() -> dict:
+    """自检需要、但只有运行时才知道的东西（doctor 不 import bridge，由这里喂）。
+
+    托盘（start.py）与网页控制台都用这一个，不各写一遍。
+    """
+    return {
+        "backend": HUB.hotas.backend or "none",
+        "device": HUB.hotas.name,
+        "ip": lan_ip(),
+        "listeners": HUB.snapshot_status().get("listeners") or {},
+    }
+
+
 class CockpitHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
@@ -980,10 +1017,15 @@ class CockpitHandler(SimpleHTTPRequestHandler):
             "ws": getattr(self.server, "palm_ws", 8765),
         }
 
+    def _doctor_extra(self) -> dict:
+        return doctor_extra()
+
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/api/status":
             return _send_json(self, self._status())
+        if path == "/api/doctor":
+            return _send_json(self, doctor.report(self._doctor_extra()))
         if path == "/api/info":
             return _send_json(self, _info_payload())
         if path == "/api/config":
@@ -1016,6 +1058,11 @@ class CockpitHandler(SimpleHTTPRequestHandler):
         body = _read_json_body(self)
         if body is None:
             return _send_json(self, {"ok": False, "error": "invalid JSON body"}, 400)
+        if path == "/api/doctor/fix":
+            fix_id = str(body.get("id") or "")
+            res = doctor.fix(fix_id, self._doctor_extra())
+            log(f"doctor fix: {fix_id} → {res.get('message')}")
+            return _send_json(self, {"ok": bool(res.get("ok")), **res})
         if path == "/api/config":
             cfg = save_config(body)
             _apply_live_config(cfg)
@@ -1092,7 +1139,13 @@ def failsafe_loop() -> None:
 def serve_udp(host: str, port: int) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, port))
+    try:
+        sock.bind((host, port))
+    except OSError as exc:
+        sock.close()
+        HUB.note_listener("udp", False, f"{host}:{port}", f"{exc}")
+        return
+    HUB.note_listener("udp", True, f"{host}:{port}")
     log(f"udp      udp://{host}:{port}")
     while True:
         try:
@@ -1103,9 +1156,14 @@ def serve_udp(host: str, port: int) -> None:
 
 
 def serve_http(host: str, port: int, ws_port: int) -> None:
-    httpd = ThreadingHTTPServer((host, port), CockpitHandler)
+    try:
+        httpd = ThreadingHTTPServer((host, port), CockpitHandler)
+    except OSError as exc:
+        HUB.note_listener("http", False, f"{host}:{port}", f"{exc}")
+        return
     httpd.palm_http = port
     httpd.palm_ws = ws_port
+    HUB.note_listener("http", True, f"{host}:{port}")
     log(f"console  http://127.0.0.1:{port}/")
     httpd.serve_forever()
 

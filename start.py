@@ -6,8 +6,9 @@ PalmDeck 桌面守护程序（罗技驱动式：托盘常驻 + 后台桥接 + �
   1. 启动时查 GitHub Release，有新版本就自替换重启
   2. 单实例：重复双击 = 打开已有实例的控制台
   3. 后台线程跑 bridge（vJoy / Xbox 虚拟设备 + 手机服务）
-  4. 系统托盘：打开控制台 / 检查更新 / 开机自启 / 退出
-  5. 无控制台窗口（日志写到 %APPDATA%\\PalmDeck\\palmdeck.log）
+  4. 系统托盘：打开控制台 / 自检… / 检查更新 / 打开日志 / 开机自启 / 退出
+  5. 启动自检有故障时气泡提醒一次（缺驱动 / 防火墙 / 端口被占 —— 见 palmdeck_doctor.py）
+  6. 无控制台窗口（日志写到 %APPDATA%\\PalmDeck\\palmdeck.log）
 """
 
 from __future__ import annotations
@@ -195,12 +196,12 @@ def set_autostart(enable: bool) -> None:
 
 
 # ---------------------------------------------------------------- 托盘
-def http_url() -> str:
+def http_url(frag: str = "") -> str:
     try:
         from palmdeck_config import load_config
-        return f"http://127.0.0.1:{load_config()['http']}/"
+        return f"http://127.0.0.1:{load_config()['http']}/{frag}"
     except Exception:
-        return "http://127.0.0.1:8080/"
+        return f"http://127.0.0.1:8080/{frag}"
 
 
 def make_icon_image():
@@ -238,6 +239,24 @@ def run_headless() -> None:
         pass
 
 
+def notify_doctor(icon) -> None:  # noqa: ANN001
+    """启动后如果自检有故障，气泡提醒一次（别让用户自己发现“游戏里没设备”）。"""
+    time.sleep(2.5)  # 等 bridge 把设备 / 监听探完
+    try:
+        import bridge
+        import palmdeck_doctor as doctor
+        rep = doctor.report(bridge.doctor_extra())
+    except Exception:
+        return
+    bad = [c for c in rep["checks"] if c["level"] == "error"]
+    if not bad:
+        return
+    try:
+        icon.notify(f"{bad[0]['title']} —— 点托盘图标 → 自检…", "PalmDeck")
+    except Exception:
+        pass
+
+
 def run_tray() -> None:
     try:
         import pystray
@@ -249,6 +268,10 @@ def run_tray() -> None:
     def open_console(icon, item):  # noqa: ANN001
         import webbrowser
         webbrowser.open(http_url())
+
+    def open_doctor(icon, item):  # noqa: ANN001
+        import webbrowser
+        webbrowser.open(http_url("#doctor"))
 
     def open_log(icon, item):  # noqa: ANN001
         p = os.path.join(appdata_dir(), "PalmDeck", "palmdeck.log")
@@ -277,6 +300,7 @@ def run_tray() -> None:
 
     menu = pystray.Menu(
         pystray.MenuItem("打开控制台", open_console, default=True),
+        pystray.MenuItem("自检…", open_doctor),
         pystray.MenuItem("检查更新", check_update_manual),
         pystray.MenuItem("打开日志", open_log),
         pystray.Menu.SEPARATOR,
@@ -285,7 +309,8 @@ def run_tray() -> None:
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("退出", quit_app),
     )
-    icon = pystray.Icon("PalmDeck", make_icon_image(), "PalmDeck 掌舵舱", menu)
+    icon = pystray.Icon("PalmDeck", make_icon_image(), f"PalmDeck v{APP_VERSION} — 掌舵舱", menu)
+    threading.Thread(target=notify_doctor, args=(icon,), daemon=True).start()
     try:
         icon.run()
     except Exception as e:
