@@ -34,12 +34,21 @@ def platform_ok() -> bool:
     return os.name == "nt"
 
 
+# 最近一次 `import webview` 的失败原因（成功 / 没试过 = 空）。
+# 打包后的 exe 里这个字符串会进日志与 CI 注解 —— 否则「真窗口开不出来」
+# 就只剩一句「没装 pywebview」，玩家和我们都不知道到底是哪一层缺了。
+_IMPORT_ERROR = ""
+
+
 def webview_importable() -> bool:
+    global _IMPORT_ERROR
     try:
         import webview  # noqa: F401
-        return True
-    except Exception:
+    except Exception as e:
+        _IMPORT_ERROR = "%s: %s" % (type(e).__name__, e)
         return False
+    _IMPORT_ERROR = ""
+    return True
 
 
 def webview2_installed() -> bool:
@@ -76,7 +85,8 @@ def unavailable_reason() -> str:
     if not platform_ok():
         return "非 Windows 平台"
     if not webview_importable():
-        return "没装 pywebview"
+        detail = ("（%s）" % _IMPORT_ERROR) if _IMPORT_ERROR else ""
+        return "没装 pywebview" + detail
     if not webview2_installed():
         return "缺 WebView2 Runtime"
     return ""

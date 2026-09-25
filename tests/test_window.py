@@ -158,11 +158,13 @@ class AvailabilityTests(unittest.TestCase):
 
     def tearDown(self):
         pw.platform_ok, pw.webview_importable, pw.webview2_installed = self._saved
+        pw._IMPORT_ERROR = ""
 
     def _probe(self, platform, imp, runtime):
         pw.platform_ok = lambda: platform
         pw.webview_importable = lambda: imp
         pw.webview2_installed = lambda: runtime
+        pw._IMPORT_ERROR = ""
 
     def test_non_windows(self):
         self._probe(False, True, True)
@@ -172,6 +174,14 @@ class AvailabilityTests(unittest.TestCase):
     def test_missing_pywebview(self):
         self._probe(True, False, True)
         self.assertEqual(pw.unavailable_reason(), "没装 pywebview")
+
+    def test_missing_pywebview_says_why(self):
+        # 打包后「真窗口开不出来」得能一眼看到卡在哪一层（CI 注解 / 日志）
+        self._probe(True, False, True)
+        pw._IMPORT_ERROR = "ModuleNotFoundError: No module named 'clr'"
+        self.assertEqual(
+            pw.unavailable_reason(),
+            "没装 pywebview（ModuleNotFoundError: No module named 'clr'）")
 
     def test_missing_webview2_runtime(self):
         self._probe(True, True, False)

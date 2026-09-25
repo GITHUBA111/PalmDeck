@@ -101,12 +101,16 @@ jobs:
           $env:PALMDECK_SELFTEST = $out
           Start-Process -FilePath "dist\PalmDeck.exe" -Wait
           if (-not (Test-Path $out)) {
-            throw "selftest 没写出结果 —— 打包后的 exe 起不来（多半是缺模块）"
+            Write-Host "::error::selftest 没写出结果 —— 打包后的 exe 起不来（多半是缺模块）"
+            exit 1
           }
-          $txt = Get-Content $out -Raw
+          $txt = (Get-Content $out -Raw).Trim()
           Write-Host $txt
           if ($txt -notmatch "webview=ok") {
-            throw "打包后的 exe 里没有 pywebview —— O3-full 真窗口会永远退回浏览器窗口。检查 spec 的 collect_all(\"webview\")。"
+            # 发成注解：job 日志要 admin 才看得到，注解是公开可读的
+            # —— 这是我们排查这张红叉时唯一能拿到的证据。
+            Write-Host "::error::打包后的 exe 里 pywebview 不可用：$txt"
+            exit 1
           }
 
       - name: 找 Inno Setup（镜像自带，缺了就装）
