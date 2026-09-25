@@ -270,7 +270,7 @@ class TestThemeAppearance(unittest.TestCase):
 
     def test_appearance_setting_is_reachable_from_search(self):
         s = _ios("Views", "SettingsView.swift")
-        self.assertIn("case connection, profiles, layout, controls, haptics, wheel, appearance, help", s)
+        self.assertIn("case connection, profiles, layout, controls, haptics, appearance, help", s)
         self.assertIn('case .appearance: return "外观"', s)
         self.assertIn("case .appearance: appearanceSections", s)
         self.assertIn(".init(self, \"外观模式\",", s, "外观没进搜索索引")
@@ -762,3 +762,99 @@ class TestUnifiedPresets(unittest.TestCase):
         src = _ios("Views", "CockpitView.swift")
         self.assertIn('presetName = "布局 \(profiles.custom.filter { !$0.hasShaping && $0.mode == s.mode }.count + 1)"',
                       src, "默认名从头数，别从 2 开始（用户会以为少了一个）")
+
+
+class TestSettingsConsistency(unittest.TestCase):
+    """P2：设置页的「一致性 / 可发现性」。
+
+    这一轮只动文案与分组，不动模型 / 存储 / 协议 —— 所以这里守的也全是「字」：
+
+    1. 同一个东西只叫一个名字（清空画布 / 预设 / 电脑 / 可用电脑）；
+    2. 标题说得出这一组是什么（不拿动作词或空话当头）；
+    3. 分类少而准：只有 2 个滑条的「方向盘」并进「操纵与手感」，
+       且要看得出它是**全局项**（不像旁边那些按模式分）。
+
+    方案与理由：`docs/PalmDeck-v4-consistency.md`。
+    """
+
+    def setUp(self):
+        self.s = _ios("Views", "SettingsView.swift")
+        self.pre = _ios("Views", "PreflightView.swift")
+
+    # ---- 分类 ----
+
+    def test_sidebar_says_presets_not_game_presets(self):
+        self.assertNotIn('return "游戏预设"', self.s,
+                         "侧栏与分区头（「预设」）要同名；P1.5 后它同时装布局预设")
+        self.assertIn('case .profiles: return "预设"', self.s)
+
+    def test_wheel_is_not_a_top_level_category(self):
+        self.assertNotIn("case wheel", self.s, "两个滑条不值得占一个顶级分类")
+        self.assertIn("wheelSection", self.s, "它应该并进「操纵与手感」")
+        body = self.s.split("private var controlsSections", 1)[1]
+        body = body.split("// ---- 方向盘（全局项，不按模式分） ----", 1)[0]
+        self.assertIn("wheelSection", body, "「方向盘」段要在操纵与手感里")
+        entries = self.s.split("case .controls:\n            return [", 1)[1]
+        entries = entries.split("case .haptics:", 1)[0]
+        self.assertIn('"满舵 角度 steering 方向盘 wheel 舵角 圈"', entries,
+                      "搜索索引也要跟着搬（否则搜索结果指向不存在的分类）")
+
+    def test_wheel_section_says_it_is_global(self):
+        body = self.s.split("private var wheelSection", 1)[1].split("// ---- 外观", 1)[0]
+        self.assertIn("全局项", body,
+                      "旁边全是按模式分的，这里是全局的 —— 不说清会一直有人找「为什么改了飞机也变」")
+
+    # ---- 段头 ----
+
+    def test_headers_name_their_content(self):
+        for bad, why in (("电脑侧", "与「连接」页的「电脑」同名"),
+                         ("清空", "动作词不当段头，改「重置」"),
+                         ("参数", "废话标题"),
+                         ("反馈", "与项名「触觉反馈」重复")):
+            self.assertNotIn('SettingsHeader("%s")' % bad, self.s, why)
+        for good in ("编辑", "重置", "撤销", "电脑", "方向盘", "触觉反馈"):
+            self.assertIn('SettingsHeader("%s")' % good, self.s, "缺段头：%s" % good)
+
+    def test_every_layout_section_has_a_header(self):
+        """「撤销」原来是全页唯一一个没头的段（只有 footer）。"""
+        undo = self.s.split("private var undoSection", 1)[1].split("private var controlsSections", 1)[0]
+        self.assertIn('SettingsHeader("撤销")', undo)
+
+    def test_haptics_toggle_does_not_repeat_its_header(self):
+        self.assertIn('Label("开启振动", systemImage: "hand.tap")', self.s)
+
+    # ---- 一个动作一个名字 ----
+
+    def test_clear_says_clear_canvas_here_and_in_cockpit(self):
+        self.assertNotIn("清空当前模式", self.s, "座舱里叫「清空画布」，这里也要同名")
+        self.assertIn('Label("清空画布", systemImage: "trash")', self.s)
+        self.assertIn('Label("清空画布", systemImage: "trash")',
+                      _ios("Views", "CockpitView.swift"))
+
+    def test_no_slash_layout_wording(self):
+        self.assertNotIn("仅布局", self.s, "行尾章与搜索词都是「布局」，按钮别自己发明第三个词")
+        self.assertIn('Label("存为整机预设", systemImage: "plus.circle")', self.s)
+        self.assertIn('Label("存为布局预设", systemImage: "plus.circle")', self.s)
+
+    def test_preflight_uses_settings_and_available_computers(self):
+        self.assertNotIn("高级设置", self.pre, "座舱里叫「设置」")
+        self.assertIn('Text("设置")', self.pre)
+        self.assertNotIn("发现的电脑", self.pre, "设置页叫「可用电脑」")
+        self.assertIn('Text("可用电脑（点一下连接）")', self.pre)
+
+    def test_computer_is_the_noun(self):
+        self.assertNotIn("电脑端已启动", self.s, "名词用「电脑」；「电脑端」只在与 App 对举时用")
+        self.assertIn("确认电脑上的 PalmDeck 已启动", self.s)
+
+    # ---- 搜索索引与界面同字 ----
+
+    def test_search_index_labels_exist_in_the_ui(self):
+        """搜到的词，点进去得能在界面上看到同样的词。"""
+        for label in ("存为整机预设", "存为布局预设", "清空画布", "组件布局",
+                      "默认布局", "触觉反馈", "满舵角度", "回正速度"):
+            self.assertIn('.init(self, "%s"' % label, self.s, "索引里有：%s" % label)
+        for gone in ("自定义组件布局", "预设里恢复默认", "电脑轴映射表", "存为预设\""):
+            self.assertNotIn('.init(self, "%s' % gone, self.s, "界面上没有这个字：%s" % gone)
+
+    def test_empty_search_gives_a_next_step(self):
+        self.assertIn("试试「死区」", self.s, "搜不到时给个例子，别只说「没有」")

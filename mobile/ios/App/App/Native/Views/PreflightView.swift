@@ -205,7 +205,7 @@ struct PreflightView: View {
                 HStack(spacing: 6) {
                     Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
                         .font(.system(size: 11))
-                    Text("高级设置").font(.system(size: 12))
+                    Text("设置").font(.system(size: 12))
                 }
                 .foregroundColor(Theme.textDim)
             }
@@ -264,7 +264,7 @@ struct PreflightView: View {
     /// 扫描到的所有电脑（点一下连接）
     private var discoveredList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("发现的电脑（点一下连接）").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.textDim)
+            Text("可用电脑（点一下连接）").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.textDim)
             ForEach(discovery.found, id: \.ip) { d in
                 let isCurrent = s.link == .live && ctrl.savedHostForUI == d.ip
                 Button {

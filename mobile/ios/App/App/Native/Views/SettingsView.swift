@@ -4,18 +4,17 @@ import SwiftUI
 
 /// 设置分类（左栏）。顺序即显示顺序。
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case connection, profiles, layout, controls, haptics, wheel, appearance, help
+    case connection, profiles, layout, controls, haptics, appearance, help
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .connection: return "连接"
-        case .profiles: return "游戏预设"
+        case .profiles: return "预设"
         case .layout: return "布局"
         case .controls: return "操纵与手感"
         case .haptics: return "触觉"
-        case .wheel: return "方向盘"
         case .appearance: return "外观"
         case .help: return "帮助"
         }
@@ -29,7 +28,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .layout: return "square.grid.2x2.fill"
         case .controls: return "slider.horizontal.3"
         case .haptics: return "hand.tap.fill"
-        case .wheel: return "steeringwheel"
         case .appearance: return "circle.lefthalf.filled"
         case .help: return "questionmark.circle.fill"
         }
@@ -42,7 +40,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .layout: return Color(red: 0.69, green: 0.32, blue: 0.87)       // 紫
         case .controls: return Color(red: 0.20, green: 0.78, blue: 0.35)     // 绿
         case .haptics: return Color(red: 1.00, green: 0.18, blue: 0.33)      // 粉红
-        case .wheel: return Color(red: 1.00, green: 0.58, blue: 0.00)        // 橙
         case .appearance: return Color(red: 0.37, green: 0.36, blue: 0.90)   // 靖蓝
         case .help: return Color(red: 0.56, green: 0.56, blue: 0.58)         // 灰
         }
@@ -64,18 +61,19 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
                 .init(self, "切换预设", "预设 profile 游戏 game 切换 switch 一键 整机 布局"),
                 .init(self, "WARDOGS", "wardogs 飞机 heli 直升机 预设"),
                 .init(self, "欧洲卡车模拟", "ets2 ets 欧洲卡车 卡车 truck 开车 drive 预设"),
-                .init(self, "存为预设", "保存 save 预设 profile 新增 快照 整机 布局"),
-                .init(self, "默认布局", "默认 default 还原 恢复 reset 内置"),
-                .init(self, "电脑轴映射表", "轴 mapping 映射 axis 轴表 hotas fbw 电脑"),
+                .init(self, "存为整机预设", "保存 save 预设 profile 新增 快照 整机 模式 手感 布局"),
+                .init(self, "存为布局预设", "保存 save 预设 profile 新增 快照 布局 组件 widgets"),
+                .init(self, "默认布局", "默认 default 还原 恢复 reset 内置 出厂"),
+                .init(self, "电脑当前轴表", "轴 mapping 映射 axis 轴表 hotas fbw 电脑"),
             ]
         case .layout:
             return [
-                .init(self, "自定义组件布局", "自定义 custom 组件 widget 布局 layout 手柄"),
+                .init(self, "组件布局", "自定义 custom 组件 widget 布局 layout 手柄"),
                 .init(self, "编辑布局", "编辑 edit 拖动 移动 缩放 删除"),
                 .init(self, "放弃本次编辑", "放弃 回滚 撤销 取消 discard cancel revert"),
-                .init(self, "预设里恢复默认", "默认 default 预设 恢复 还原 reset"),
+                .init(self, "默认布局", "默认 default 恢复 restore 还原 reset 出厂 预设"),
                 .init(self, "撤销上一次改动", "撤销 undo 还原 回退 恢复 revert"),
-                .init(self, "清空当前模式", "清空 clear 删除 移除"),
+                .init(self, "清空画布", "清空 clear 删除 移除 画布 canvas"),
                 .init(self, "从电脑拉取布局", "拉取 下载 download fetch 同步 sync 电脑"),
                 .init(self, "上传当前模式到电脑", "上传 upload 同步 sync 电脑"),
             ]
@@ -90,16 +88,14 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
                 .init(self, "俯仰灵敏度", "灵敏度 sensitivity sens 俯仰 pitch 增益 gain 曲线 curve"),
                 .init(self, "摇杆死区", "死区 deadzone dz 抖动 漂移 中位"),
                 .init(self, "响应曲线", "曲线 curve 响应 response 手感 增益 预览"),
+                .init(self, "满舵角度", "满舵 角度 steering 方向盘 wheel 舵角 圈"),
+                .init(self, "回正速度", "回正 return 速度 方向盘 wheel 松手"),
             ]
         case .haptics:
             return [
                 .init(self, "触觉反馈", "触觉 haptics 振动 vibrate taptic 反馈 震动"),
+                .init(self, "开启振动", "开启 启用 开关 触觉 haptics 振动"),
                 .init(self, "试一下振动", "测试 test 振动 试一下 预览"),
-            ]
-        case .wheel:
-            return [
-                .init(self, "满舵角度", "满舵 角度 steering 方向盘 wheel 舵角 圈"),
-                .init(self, "回正速度", "回正 return 速度 方向盘 wheel 松手"),
             ]
         case .appearance:
             return [
@@ -266,6 +262,7 @@ struct SettingsView: View {
                     .font(.system(size: 30, weight: .light))
                     .foregroundColor(Color(uiColor: .tertiaryLabel))
                 Text("没有匹配的设置项").font(.system(size: 14)).foregroundColor(.secondary)
+                Text("试试「死区」「轴表」「预设」").font(.system(size: 12)).foregroundColor(Color(uiColor: .tertiaryLabel))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -362,7 +359,6 @@ struct SettingsView: View {
                 case .layout:     layoutSections
                 case .controls:   controlsSections
                 case .haptics:    hapticsSections
-                case .wheel:      wheelSections
                 case .appearance: appearanceSections
                 case .help:       helpSections
                 }
@@ -423,7 +419,7 @@ struct SettingsView: View {
         profPrompt = nil
     }
 
-    // ---- 游戏预设 ----
+    // ---- 预设 ----
 
     @ViewBuilder private var profilesSections: some View {
         Section {
@@ -431,9 +427,9 @@ struct SettingsView: View {
                     value: pcAxisProfile,
                     mono: true)
         } header: {
-            SettingsHeader("电脑侧")
+            SettingsHeader("电脑")
         } footer: {
-            Text("轴表由电脑端决定（App 暂不能远程改）。预设里的「轴表」只是记录你为该游戏选的那个，用来对照是否一致。不一致时到电脑控制台切换。")
+            Text("轴表由电脑决定（App 暂不能远程改）。预设里的「轴表」只是记录你为该游戏选的那个，用来对照是否一致。不一致时到电脑控制台切换。")
         }
 
         Section {
@@ -461,19 +457,19 @@ struct SettingsView: View {
             Button {
                 profPrompt = ProfPrompt(original: nil, text: "", kind: .machine)
             } label: {
-                Label("将当前状态存为预设（整机）", systemImage: "plus.circle")
+                Label("存为整机预设", systemImage: "plus.circle")
             }
             Button {
                 profPrompt = ProfPrompt(original: nil, text: "", kind: .layout)
             } label: {
-                Label("将当前布局存为预设（仅布局）", systemImage: "plus.circle")
+                Label("存为布局预设", systemImage: "plus.circle")
             }
             .disabled(layout.widgetCount(mode: s.mode) == 0)
         } header: {
             SettingsHeader("预设")
         } footer: {
             if profNote.isEmpty {
-                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机，内置的不可删改。\n\n**整机**（行尾章「整机」）跨模式出现：切模式 + 写手感 + 有布局就换。**仅布局**（「布局」）只装组件、不碰手感，**只在自己那个模式下出现**（它就属于那套面板）。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件。")
+                Text("**切游戏请用这里**：点一下就把模式、手感（反转/死区/灵敏度）与布局一起切到位，不会重建虚拟手柄、不会打断游戏。预设只存本机，内置的不可删改。\n\n**整机**（行尾章「整机」）跨模式出现：切模式 + 写手感 + 有布局就换。**布局**（行尾章「布局」）只装组件、不碰手感，**只在自己那个模式下出现**（它就属于那套面板）。\n\n**内置预设不带布局**：WARDOGS / 欧洲卡车模拟只管模式与手感，不动你摆好的组件。")
             } else {
                 Text(profNote).foregroundColor(Theme.orange)
             }
@@ -643,7 +639,7 @@ struct SettingsView: View {
                     }
                 }
                 if list.isEmpty && ctrl.savedHostForUI.isEmpty {
-                    Text("没搜到电脑。确认电脑端已启动、手机与电脑在同一 Wi-Fi。")
+                    Text("没搜到电脑。确认电脑上的 PalmDeck 已启动、手机与电脑在同一 Wi-Fi。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
@@ -684,19 +680,19 @@ struct SettingsView: View {
                 .disabled(!layout.canDiscardEditing(mode: s.mode))
             }
         } header: {
-            SettingsHeader("模式")
+            SettingsHeader("编辑")
         } footer: {
-            Text("三个模式都用同一套通用组件（引擎内不再有固定皮肤）。开启编辑后，顶部出现组件库；拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。座舱编辑条上的「放弃」可一键回滚到本次编辑开始前。")
+            Text("编辑的是**当前模式**的画布。三个模式都用同一套通用组件（引擎内不再有固定皮肤）；开启编辑后，顶部出现组件库：拖动移动、拖右下角缩放、✕ 删除、Aa 重命名。按键默认只有中性序号，含义由你在游戏里自己绑。座舱编辑条上的「放弃」可一键回滚到本次编辑开始前。")
         }
 
         Section {
             Button(role: .destructive) { layout.clear(mode: s.mode) } label: {
-                Label("清空当前模式", systemImage: "trash")
+                Label("清空画布", systemImage: "trash")
             }
         } header: {
-            SettingsHeader("清空")
+            SettingsHeader("重置")
         } footer: {
-            Text("清空后画布是空的（会有占位提示）。想回到出厂布局？去「预设」里点内置那一行「\(LayoutStore.builtinName)」；两者都会压一道撤销槽，当场能后悔。")
+            Text("只清「\(s.mode.label)」这一个模式的画布（清完会有占位提示）。想回到出厂布局？去「预设」里点内置那一行「\(LayoutStore.builtinName)」；两者都会压一道撤销槽，当场能后悔。")
         }
 
         undoSection
@@ -731,6 +727,8 @@ struct SettingsView: View {
                 Label("撤销上一次改动", systemImage: "arrow.uturn.backward")
             }
             .disabled(!layout.canUndo(mode: s.mode))
+        } header: {
+            SettingsHeader("撤销")
         } footer: {
             Text("回退到上一次**整表操作**之前（应用预设 / 恢复默认 / 清空 / 添加 / 删除）。拖拽与改名不压撤销槽（要保持拖动流畅），这种细粒度反悔用座舱里的「放弃」。")
         }
@@ -781,6 +779,24 @@ struct SettingsView: View {
         } footer: {
             Text("虚线＝1:1 参考；阴影带＝死区；实线＝「死区 + 灵敏度 + 反转」后的真实输出曲线（调滑条即实时变化）。")
         }
+
+        wheelSection
+    }
+
+    // ---- 方向盘（全局项，不按模式分） ----
+    @ViewBuilder private var wheelSection: some View {
+        Section {
+            SliderRow(title: "满舵角度", value: $s.wheelMaxDeg, range: 180...900, step: 90, unit: " 圈",
+                      format: { String(format: "%.1f", $0 / 360) },
+                      parse: { Double($0.replacingOccurrences(of: ",", with: ".")).map { $0 * 360 } },
+                      snapToStep: false)
+            SliderRow(title: "回正速度", value: $s.wheelReturnSpeed, range: 0...1440, step: 60, unit: "°/s",
+                      format: { String(format: "%.0f", $0) })
+        } header: {
+            SettingsHeader("方向盘")
+        } footer: {
+            Text("这两个是**全局项**：三个模式共用（不像上面的灵敏度 / 死区那样按模式分开）。\n\n回正速度为 0°/s 表示松手后保持当前舵角；点数值可直接输入。")
+        }
     }
 
     /// 一路轴的曲线块（图 + 图例）
@@ -804,7 +820,7 @@ struct SettingsView: View {
     @ViewBuilder private var hapticsSections: some View {
         Section {
             Toggle(isOn: $haptics) {
-                Label("触觉反馈", systemImage: "hand.tap")
+                Label("开启振动", systemImage: "hand.tap")
             }
             Button {
                 Haptics.press()
@@ -813,25 +829,9 @@ struct SettingsView: View {
             }
             .disabled(!haptics)
         } header: {
-            SettingsHeader("反馈")
+            SettingsHeader("触觉反馈")
         } footer: {
             Text("抓住控件、模式切换、总距卡位、过中位等会在支持的机型上触发原生 Taptic 振动。")
-        }
-    }
-
-    // ---- 方向盘 ----
-    @ViewBuilder private var wheelSections: some View {
-        Section {
-            SliderRow(title: "满舵角度", value: $s.wheelMaxDeg, range: 180...900, step: 90, unit: " 圈",
-                      format: { String(format: "%.1f", $0 / 360) },
-                      parse: { Double($0.replacingOccurrences(of: ",", with: ".")).map { $0 * 360 } },
-                      snapToStep: false)
-            SliderRow(title: "回正速度", value: $s.wheelReturnSpeed, range: 0...1440, step: 60, unit: "°/s",
-                      format: { String(format: "%.0f", $0) })
-        } header: {
-            SettingsHeader("参数")
-        } footer: {
-            Text("回正速度为 0°/s 表示松手后保持当前舵角；点数值可直接输入。")
         }
     }
 

@@ -90,15 +90,17 @@ v4 **不再有固定皮肤**（E2 续）：`FlightDeck` / `DriveDeck` / `Gamepad
 ### 测试
 
 ```bash
-python3 -m unittest discover -s tests -t .      # 176 项
+python3 -m unittest discover -s tests -t .      # 188 项
 ```
 
-其中四个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑：
+其中四个用 `swiftc` 直接编译 `Native/Model/` 里的**真实源码**（不是副本）来跑；
+`test_deck_bindings.py` 是 SwiftUI 源码接线与守卫，不需要 `swiftc`：
 
 | 文件 | 跑什么 |
 | --- | --- |
 | `tests/test_ios_axis.py` | 1392 条断言：曲线对称性/单调性/死区连续性/夹紧顺序、三模式真值表、包长/偏移/小端序/量化边界；另兼「实现唯一性」守卫（曲线数学、无后缀的全局手感键） |
 | `tests/test_ios_state_keys.py` | 33 条断言，手感参数按模式分键的**接线**：真的 `ControllerState`（存储注入字典替身）→ 迁移跑了没、`applyMode` 换了没、写入有没有只落当前模式 |
+| `tests/test_deck_bindings.py` | SwiftUI **源码接线与守卫**（不需 `swiftc`）：数据包接线、布局读写唯一入口；**P2 的 `TestSettingsConsistency`**（侧栏 7 项、段头黑 / 白名单、同一动作同名、搜索索引与界面同字） |
 | `tests/test_ios_profiles.py` | G2 游戏预设：内置定义、`GameProfile` 编解码往返 / 缺字段回落、存储增删改与上限、**应用顺序**（先切模式→写手感→换布局）、**P1.5 迁移**（两个老键合并 / 重名加后缀 / 幂等 / 垃圾 JSON）、`hasShaping = false` 不碰手感；另守卫 `GameProfile.swift` 已登记进 `project.pbxproj` |
 | `tests/test_ios_snap.py` | 拖拽吸附（P1.7）：边对边 / 中心对中心 / **中心不吸别人的边**、7pt 阈值边界、最近者优先、夹取三种尺寸关系、夹取改落点后撤线、画布为 0 时不产生 NaN |
 
